@@ -45,15 +45,19 @@ public class JwtTokenProvider {
     /** Validates the token is well-formed, unexpired, and actually a refresh token. */
     public Long validateRefreshTokenAndGetUserId(String token) {
         Claims claims = parseClaims(token);
-        if (!TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class))) {
+        if (!TYPE_REFRESH.equals(claims.get(CLAIM_TYPE))) {
             throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
         }
-        return Long.valueOf(claims.getSubject());
+        return parseId(claims);
     }
 
-    /** Used by the request-authentication filter; accepts any well-formed, unexpired token. */
+    /** Used by the request-authentication filter; only access tokens may authenticate requests. */
     public Long validateAndGetUserId(String token) {
-        return Long.valueOf(parseClaims(token).getSubject());
+        Claims claims = parseClaims(token);
+        if (!TYPE_ACCESS.equals(claims.get(CLAIM_TYPE))) {
+            throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
+        }
+        return parseId(claims);
     }
 
     /** Group invite link token; subject is a groupId, not a userId. */
@@ -68,10 +72,22 @@ public class JwtTokenProvider {
      */
     public Long validateInviteTokenAndGetGroupId(String token) {
         Claims claims = parseClaims(token);
-        if (!TYPE_INVITE.equals(claims.get(CLAIM_TYPE, String.class))) {
+        if (!TYPE_INVITE.equals(claims.get(CLAIM_TYPE))) {
             throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
         }
-        return Long.valueOf(claims.getSubject());
+        return parseId(claims);
+    }
+
+    private Long parseId(Claims claims) {
+        try {
+            long id = Long.parseLong(claims.getSubject());
+            if (id > 0) {
+                return id;
+            }
+        } catch (NumberFormatException e) {
+            // A signed token with an invalid subject is still an invalid token.
+        }
+        throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
     }
 
     private String createToken(Long userId, Map<String, Object> claims, long validitySeconds) {

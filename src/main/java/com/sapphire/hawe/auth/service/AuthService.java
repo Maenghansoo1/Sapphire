@@ -10,6 +10,7 @@ import com.sapphire.hawe.auth.dto.TokenResponse;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.security.JwtTokenProvider;
 import com.sapphire.hawe.global.security.TokenErrorCode;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +39,11 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setNickname(request.nickname());
         user.setEmail(request.email());
-        userMapper.insert(user);
+        try {
+            userMapper.insert(user);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(AuthErrorCode.LOGIN_ID_TAKEN);
+        }
 
         return new RegisterResponse(user.getId(), user.getLoginId(), user.getNickname());
     }
