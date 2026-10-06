@@ -35,7 +35,7 @@ public interface GroupMemberMapper {
             + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id AND m.mission_date = CURDATE()) AS stamped_today "
             + "FROM group_members gm JOIN users u ON u.id = gm.user_id "
             + "WHERE gm.group_id = #{groupId} ORDER BY gm.joined_at ASC LIMIT #{limit} OFFSET #{offset}")
-    List<GroupMemberRow> findMembersByGroupId(@Param("groupId") Long groupId, @Param("offset") int offset,
+    List<GroupMemberRow> findMembersByGroupId(@Param("groupId") Long groupId, @Param("offset") long offset,
             @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM group_members WHERE group_id = #{groupId}")

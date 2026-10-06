@@ -18,6 +18,7 @@ import com.sapphire.hawe.group.dto.GroupSummaryResponse;
 import com.sapphire.hawe.group.dto.InviteResponse;
 import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.JoinResponse;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +47,7 @@ public class GroupService {
     public PageResponse<GroupSummaryResponse> listMyGroups(Long userId, int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = clampSize(size);
-        List<GroupSummaryRow> rows = groupMapper.findSummariesByUserId(userId, safePage * safeSize, safeSize);
+        List<GroupSummaryRow> rows = groupMapper.findSummariesByUserId(userId, (long) safePage * safeSize, safeSize);
         long total = groupMapper.countByUserId(userId);
 
         List<GroupSummaryResponse> content = rows.stream()
@@ -103,7 +104,7 @@ public class GroupService {
 
         int safePage = Math.max(page, 0);
         int safeSize = clampSize(size);
-        List<GroupMemberRow> rows = groupMemberMapper.findMembersByGroupId(groupId, safePage * safeSize, safeSize);
+        List<GroupMemberRow> rows = groupMemberMapper.findMembersByGroupId(groupId, (long) safePage * safeSize, safeSize);
         long total = groupMemberMapper.countByGroupId(groupId);
 
         List<GroupMemberResponse> content = rows.stream()
@@ -135,13 +136,18 @@ public class GroupService {
         member.setGroupId(groupId);
         member.setUserId(userId);
         member.setRole(GroupMember.ROLE_MEMBER);
-        groupMemberMapper.insert(member);
+        try {
+            groupMemberMapper.insert(member);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(GroupErrorCode.ALREADY_MEMBER);
+        }
 
         return new JoinResponse(group.getId(), group.getName());
     }
 
     @Transactional
     public void leaveGroup(Long userId, Long groupId) {
+        requireGroup(groupId);
         GroupMember membership = groupMemberMapper.findByGroupIdAndUserId(groupId, userId);
         if (membership == null) {
             throw new BusinessException(GroupErrorCode.NOT_GROUP_MEMBER);

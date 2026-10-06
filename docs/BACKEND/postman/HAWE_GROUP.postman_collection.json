@@ -1,0 +1,2121 @@
+{
+  "info": {
+    "name": "HA'WE - GROUP API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "GROUP API 통합 테스트. 폴더 0~4를 순서대로 Collection Runner로 실행. 서버(http://localhost:8080) 필요."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. 사용자 준비",
+      "item": [
+        {
+          "name": "A 회원가입",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\":\"usera_{{run}}\",\"password\":\"password1\",\"nickname\":\"nicka\",\"email\":\"a_{{run}}@test.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"run\")) pm.collectionVariables.set(\"run\", Date.now().toString(36));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A 로그인",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\":\"usera_{{run}}\",\"password\":\"password1\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenA\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B 회원가입",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\":\"userb_{{run}}\",\"password\":\"password1\",\"nickname\":\"nickb\",\"email\":\"b_{{run}}@test.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B 로그인",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\":\"userb_{{run}}\",\"password\":\"password1\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenB\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C 회원가입",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\":\"userc_{{run}}\",\"password\":\"password1\",\"nickname\":\"nickc\",\"email\":\"c_{{run}}@test.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C 로그인",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\":\"userc_{{run}}\",\"password\":\"password1\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenC\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "A(owner), B(멤버), C(외부인) 생성. 매 실행마다 {{run}} 접미사로 새 계정을 만들어 재실행 가능."
+    },
+    {
+      "name": "1. 정상 시나리오",
+      "item": [
+        {
+          "name": "1-1 그룹 생성 (A)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"우리집\", \"missionPublishTime\": \"09:00\", \"missionDeadlineTime\": \"23:00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"fields\", () => { const j = pm.response.json(); pm.expect(j.missionPublishTime).to.eql(\"09:00\"); pm.expect(j.missionDeadlineTime).to.eql(\"23:00\"); pm.expect(j.name).to.eql(\"우리집\"); });",
+                  "pm.collectionVariables.set(\"groupId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-2 내 그룹 목록 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"1 group, not submitted\", () => { const j = pm.response.json(); pm.expect(j.totalElements).to.eql(1); pm.expect(j.content[0].submittedToday).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-3 그룹 상세 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"name\", () => pm.expect(pm.response.json().name).to.eql(\"우리집\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-4 멤버 목록 (A, 1명)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"owner only\", () => { const j = pm.response.json(); pm.expect(j.totalElements).to.eql(1); pm.expect(j.content[0].role).to.eql(\"owner\"); pm.expect(j.content[0].submissionCountThisMonth).to.eql(0); pm.expect(j.content[0].stampedToday).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-5 초대 링크 발급 (A)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/invite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "invite"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"deep link\", () => pm.expect(pm.response.json().inviteUrl).to.match(/^hawe:\\/\\/join\\?token=.+/));",
+                  "pm.collectionVariables.set(\"inviteToken\", pm.response.json().inviteUrl.split(\"token=\")[1]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-6 초대로 가입 (B)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":\"{{inviteToken}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"joined\", () => pm.expect(pm.response.json().groupId).to.eql(Number(pm.collectionVariables.get(\"groupId\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-7 멤버 목록 (B, 2명)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"2 members\", () => { const j = pm.response.json(); pm.expect(j.totalElements).to.eql(2); pm.expect(j.content.map(m => m.role).sort()).to.eql([\"member\",\"owner\"]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-8 설정 변경: 이름만 (A)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"새 이름\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"name changed, times kept\", () => { const j = pm.response.json(); pm.expect(j.name).to.eql(\"새 이름\"); pm.expect(j.missionPublishTime).to.eql(\"09:00\"); pm.expect(j.missionDeadlineTime).to.eql(\"23:00\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-9 설정 변경: 마감만 (A)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"missionDeadlineTime\": \"22:30\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"deadline changed, name kept\", () => { const j = pm.response.json(); pm.expect(j.missionDeadlineTime).to.eql(\"22:30\"); pm.expect(j.name).to.eql(\"새 이름\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-10 그룹 나가기 (B)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-11 내 그룹 목록 (B, 0개)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"empty\", () => pm.expect(pm.response.json().totalElements).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "순서대로 실행해야 합니다 (앞 요청이 groupId/inviteToken을 저장)."
+    },
+    {
+      "name": "2. 실패 케이스",
+      "item": [
+        {
+          "name": "2-1 토큰 없음",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 or 403\", () => pm.expect([401, 403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-2 잘못된 토큰",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer abc"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code INVALID_TOKEN\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_TOKEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-3 없는 그룹 상세 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "999999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code GROUP_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"GROUP_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-4 비멤버 상세 (C)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code NOT_GROUP_MEMBER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_MEMBER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-5 비멤버 멤버목록 (C)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code NOT_GROUP_MEMBER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_MEMBER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-6 비owner 설정 변경 (B)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"해킹\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code NOT_GROUP_OWNER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_OWNER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-7 비owner 초대 발급 (B)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/invite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "invite"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code NOT_GROUP_OWNER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_OWNER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-8 재가입 (B, 정상 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":\"{{inviteToken}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-9 이미 가입한 멤버가 다시 join (B)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":\"{{inviteToken}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"code ALREADY_MEMBER\", () => pm.expect(pm.response.json().code).to.eql(\"ALREADY_MEMBER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-10 owner 탈퇴 (A)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"code OWNER_CANNOT_LEAVE\", () => pm.expect(pm.response.json().code).to.eql(\"OWNER_CANNOT_LEAVE\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-11 없는 그룹 탈퇴 (A)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/999999/members/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "999999",
+                "members",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code GROUP_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"GROUP_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-12 비멤버 탈퇴 (C)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code NOT_GROUP_MEMBER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_MEMBER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-13 변조 초대 토큰 (C)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":\"abc\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code INVALID_INVITE_TOKEN\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INVITE_TOKEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-14 access 토큰을 초대 토큰으로 사용 (C)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":\"{{tokenB}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code INVALID_INVITE_TOKEN\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INVITE_TOKEN\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "1번 폴더 이후에 실행 (B가 1-10에서 탈퇴한 상태를 전제)."
+    },
+    {
+      "name": "3. 입력값 검증",
+      "item": [
+        {
+          "name": "3-1 이름 공백",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"\",\"missionPublishTime\":\"09:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-2 이름 101자",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"missionPublishTime\": \"09:00\", \"missionDeadlineTime\": \"23:00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-3 시각 형식 위반 (9:00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"9:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-4 시각 범위 초과 (24:00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"24:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-5 필드 누락",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"09:00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-6 깨진 JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-7 join 토큰 공백",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":\"\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-8 PATCH 잘못된 시각 (25:99)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"missionPublishTime\":\"25:99\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-9 PATCH 빈 객체 (변경 없음, 200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. 페이지네이션",
+      "item": [
+        {
+          "name": "4-0 두 번째 그룹 생성 (A)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"09:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-1 page=0&size=1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups?page=0&size=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"1 item, >=2 pages\", () => { const j = pm.response.json(); pm.expect(j.content.length).to.eql(1); pm.expect(j.totalPages).to.be.at.least(2); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-2 page=1&size=1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups?page=1&size=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"second item\", () => pm.expect(pm.response.json().content.length).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-3 size=0 → 기본 20",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups?size=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"size 20\", () => pm.expect(pm.response.json().size).to.eql(20));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-4 size=-5 → 기본 20",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups?size=-5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "-5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"size 20\", () => pm.expect(pm.response.json().size).to.eql(20));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-5 size=1000 → 100",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups?size=1000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "1000"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"size 100\", () => pm.expect(pm.response.json().size).to.eql(100));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-6 page=-1 → 0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups?page=-1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "-1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"page 0\", () => pm.expect(pm.response.json().page).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-7 page=Integer.MAX (오버플로우 방지)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups?page=2147483647&size=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2147483647"
+                },
+                {
+                  "key": "size",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"empty\", () => pm.expect(pm.response.json().content.length).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-8 멤버 목록 page=Integer.MAX",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members?page=2147483647&size=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2147483647"
+                },
+                {
+                  "key": "size",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"empty\", () => pm.expect(pm.response.json().content.length).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
