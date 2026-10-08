@@ -2,12 +2,48 @@
   "info": {
     "name": "HA'WE - GROUP API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "GROUP API 통합 테스트. 폴더 0~4를 순서대로 Collection Runner로 실행. 서버(http://localhost:8080) 필요."
+    "description": "GROUP API 통합 테스트. 폴더 0~4를 순서대로 Collection Runner로 실행. 서버(http://localhost:8080) 필요. Access token은 30분 후 만료되며 만료 전에 자동 재발급됩니다. 0번 폴더를 다시 실행하면 새 계정이 생성됩니다."
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://localhost:8080"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const REFRESH_AFTER_MS = 20 * 60 * 1000;",
+          "for (const user of ['A', 'B', 'C']) {",
+          "  const accessToken = pm.collectionVariables.get('token' + user);",
+          "  const refreshToken = pm.collectionVariables.get('refreshToken' + user);",
+          "  const issuedAt = pm.collectionVariables.get('tokenIssuedAt' + user);",
+          "  if (!accessToken || !refreshToken || !(Date.now() - Number(issuedAt) > REFRESH_AFTER_MS)) continue;",
+          "  try {",
+          "    const response = await pm.sendRequest({",
+          "      url: pm.variables.replaceIn('{{baseUrl}}/api/auth/refresh'),",
+          "      method: 'POST',",
+          "      header: { 'Content-Type': 'application/json' },",
+          "      body: { mode: 'raw', raw: JSON.stringify({ refreshToken }) }",
+          "    });",
+          "    if (response.code !== 200) {",
+          "      console.warn('Token refresh failed for user ' + user, response.code);",
+          "      continue;",
+          "    }",
+          "    const tokens = response.json();",
+          "    if (!tokens.accessToken || !tokens.refreshToken) throw new Error('Missing token in refresh response');",
+          "    pm.collectionVariables.set('token' + user, tokens.accessToken);",
+          "    pm.collectionVariables.set('refreshToken' + user, tokens.refreshToken);",
+          "    pm.collectionVariables.set('tokenIssuedAt' + user, Date.now().toString());",
+          "  } catch (error) {",
+          "    console.warn('Token refresh failed for user ' + user, error);",
+          "  }",
+          "}"
+        ]
+      }
     }
   ],
   "item": [
@@ -104,7 +140,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.collectionVariables.set(\"tokenA\", pm.response.json().accessToken);"
+                  "pm.collectionVariables.set(\"tokenA\", pm.response.json().accessToken);",
+                  "pm.collectionVariables.set(\"refreshTokenA\", pm.response.json().refreshToken);",
+                  "pm.collectionVariables.set(\"tokenIssuedAtA\", Date.now().toString());"
                 ]
               }
             }
@@ -191,7 +229,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.collectionVariables.set(\"tokenB\", pm.response.json().accessToken);"
+                  "pm.collectionVariables.set(\"tokenB\", pm.response.json().accessToken);",
+                  "pm.collectionVariables.set(\"refreshTokenB\", pm.response.json().refreshToken);",
+                  "pm.collectionVariables.set(\"tokenIssuedAtB\", Date.now().toString());"
                 ]
               }
             }
@@ -278,7 +318,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.collectionVariables.set(\"tokenC\", pm.response.json().accessToken);"
+                  "pm.collectionVariables.set(\"tokenC\", pm.response.json().accessToken);",
+                  "pm.collectionVariables.set(\"refreshTokenC\", pm.response.json().refreshToken);",
+                  "pm.collectionVariables.set(\"tokenIssuedAtC\", Date.now().toString());"
                 ]
               }
             }

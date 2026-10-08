@@ -28,11 +28,9 @@
 | accessToken 만료 | 30분 | — |
 | refreshToken 만료 | 14일, refresh 시마다 회전(rotate) 발급 | — |
 | 그룹 초대 | Stateless 토큰(그룹ID를 서명해서 링크에 담음), 만료 7일 | DB 테이블 불필요, 구현 단순 |
-| 제출 | 미션당 1인 1회만 허용 (`ALREADY_SUBMITTED`) | 도장 계산 시 중복 방지 |
 | 스티커 반응 | 토글 방식 (이미 누른 반응 다시 누르면 취소) | 무한정 중복 반응 방지 |
 | 댓글 멘션 | 프론트가 `mentionedUserIds`를 명시적으로 전달 | 서버가 `@닉네임` 텍스트 파싱하는 것보다 안전 (닉네임 중복/특수문자 회피) |
 | 그룹장(owner) 탈퇴 | 일단 금지 (`OWNER_CANNOT_LEAVE`) | 소유권 이전 정책 미정 — 추후 별도 설계 필요 |
-| 제출 이미지 업로드 | `POST .../submissions`가 계속 파일을 직접 받음 (multipart) | 개발=로컬 저장, 운영 전환 시 내부적으로 S3 업로드로 스위칭. API 계약 자체는 안 바뀌게 해서 presigned URL 전환에 따른 프론트 변경을 피함 |
 
 ---
 
@@ -153,50 +151,10 @@ Response 204.
 
 ## 3. Mission & Submission
 
-| Method | Path | 설명 |
-|---|---|---|
-| GET | `/groups/{groupId}/missions/today` | 오늘의 미션 + 내 제출 여부 |
-| POST | `/missions/{missionId}/submissions` | 제출 (multipart/form-data) |
-| GET | `/missions/{missionId}/submissions` | 그룹 피드 |
-| GET | `/submissions/{id}` | 게시물 상세 |
+미션/제출 API는 미션 템플릿(틀) 구조를 도입하면서 별도 문서로 분리했다. 이 문서에서는 다루지 않는다.
 
-### GET /groups/{groupId}/missions/today
-```json
-{ "missionId": 10, "content": "오늘 하루 감사했던 일 하나 남기기", "category": "감성", "submittedByMe": false }
-```
-에러: `MISSION_NOT_PUBLISHED_YET` (404) — 아직 발행 시각 전
-
-### POST /missions/{missionId}/submissions
-`multipart/form-data`
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `image` | file | 첨부 이미지 |
-| `caption` | text | 캡션 |
-
-```json
-// Response 201
-{ "id": 100, "imageUrl": "...", "caption": "...", "submittedAt": "2026-09-28T21:00:00", "isLate": false }
-```
-에러: `ALREADY_SUBMITTED` (409), `MISSION_NOT_FOUND` (404)
-
-### GET /missions/{missionId}/submissions
-- 내가 아직 미제출: **423** `FEED_LOCKED`
-- 제출 완료:
-```json
-{ "content": [
-  { "id": 100, "userId": 1, "nickname": "몽실이", "imageUrl": "...", "caption": "...",
-    "reactionCount": 3, "commentCount": 2, "submittedAt": "..." }
-], "page": 0, "size": 20, "totalPages": 1, "totalElements": 4 }
-```
-
-### GET /submissions/{id}
-```json
-{ "id": 100, "userId": 1, "nickname": "몽실이", "imageUrl": "...", "caption": "...",
-  "submittedAt": "...", "isLate": false,
-  "reactions": [ { "stickerType": "heart", "count": 3 } ],
-  "commentCount": 5 }
-```
-에러: `SUBMISSION_NOT_FOUND` (404)
+- 미션/제출 API 명세: `docs/BACKEND/MISSIONS_API.md`
+- 미션 템플릿 목록: `docs/FEATURE/MISSIONS.md`
 
 ---
 
