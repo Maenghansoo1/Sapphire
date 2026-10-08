@@ -1,27 +1,25 @@
-# Implementation Report: Postman Token Refresh
+# 캐릭터 API 수정 보고
 
-## Files changed
+## 변경 파일과 내용
 
-- `docs/BACKEND/postman/HAWE_GROUP.postman_collection.json`: login scripts now save access and refresh tokens plus issue times for users A, B, and C. A collection pre-request script refreshes any saved access token older than 20 minutes through `POST /api/auth/refresh`, updates all three saved values on HTTP 200, and warns on failure. The collection description explains the 30-minute expiry and account recreation when folder 0 is rerun.
-- `src/test/java/com/sapphire/hawe/global/security/JwtTokenProviderTests.java`: three unit tests cover expired access tokens (`TOKEN_EXPIRED`), valid access tokens, and refresh tokens rejected as access tokens (`INVALID_TOKEN`).
-- `.agent/report.md`: replaced the previous task report with this report.
+- `src/main/java/com/sapphire/hawe/character/dao/CharacterMapper.java`: 사용자 캐릭터 UPDATE의 갱신 행 수를 반환하도록 변경.
+- `src/main/java/com/sapphire/hawe/character/service/CharacterService.java`: 갱신 0행이면 사용자 존재 여부를 확인하고, 존재하지 않을 때 `INVALID_TOKEN`(401)을 반환. 같은 캐릭터를 다시 선택해 갱신 0행이 나오는 경우에는 성공을 유지.
+- `src/main/java/com/sapphire/hawe/global/security/JwtAuthenticationFilter.java`: `GET /api/characters`를 JWT 필터 대상에서 제외. 보호된 `PATCH /api/me/character`의 인증은 유지.
+- `src/test/java/com/sapphire/hawe/character/service/CharacterServiceTests.java`: 사용자 없음, 같은 캐릭터 재선택, 정상 갱신 검증.
+- `src/test/java/com/sapphire/hawe/global/security/JwtAuthenticationFilterTests.java`: 공개 목록의 만료 토큰 무시와 보호된 변경 요청의 401 검증.
+- `.agent/report.md`: 이 작업의 보고서로 덮어씀.
 
-## Plan verification and adjustment
+## 검증
 
-The existing provider, filter, refresh endpoint, token response, and 30-minute setting match the plan. No server code or TTL was changed. The pre-request script uses `await pm.sendRequest` so token variables are updated before the original request proceeds; the plan's callback form did not explicitly guarantee that order. This is an implementation detail within the planned scope.
+- `.\mvnw.cmd test '-Dtest=CharacterServiceTests,JwtAuthenticationFilterTests' -q`: 성공, 신규 테스트 5개 통과.
+- `.\mvnw.cmd package -q`: 성공, 전체 테스트 19개 통과(실패·오류 0), JAR 빌드 완료.
+- `git diff --check`: 공백 오류 없음. 별도 lint 명령은 설정돼 있지 않으며 Maven 빌드에서 Java 컴파일을 검증함.
+- 최종 코드 diff를 확인했고 요청한 두 동작과 테스트 외의 코드 변경은 없음.
 
-## Validation
+## 가정, 위험 및 병합 충돌
 
-- JSON parse with Python: passed.
-- Postman script syntax with Node's `AsyncFunction`: passed. A local mock run confirmed refresh updates for A and B, including B when A has no saved token.
-- `.\mvnw.cmd test -Dtest=JwtTokenProviderTests -q`: passed (3 tests).
-- `.\mvnw.cmd test -q`: passed (14 tests, 0 failures, 0 errors).
-- `.\mvnw.cmd package -q`: passed, including tests and JAR build.
-- `git diff --check`: passed. No separate lint command is configured; Maven compiled the Java code.
-- The requested live Postman check with an aged `tokenIssuedAtA` was not run: no Postman or Newman command is available here. The local mock does not replace an app-level run.
-
-## Risks and findings
-
-- The Postman runtime behavior remains unverified in the app. If refresh fails, the script logs a warning and sends the original request with its saved token, as planned.
-- Out of scope: `JwtAuthenticationFilter` validates a supplied expired token on routes outside `/api/auth/**`, including permit-all `GET /api/characters`, so that request can return 401 if the client attaches an expired token.
-- The final diff contains only the collection change and new test for this task. `.agent/plan.md` was already untracked and was not edited. No merge conflict or unrelated tracked change was found.
+- 사용자가 DB에서 삭제됐으나 access token이 아직 유효한 경우를 `INVALID_TOKEN`(401)으로 처리했다. 기존 `AuthService.refresh`의 삭제 사용자 처리와 일치한다.
+- 갱신 0행은 JDBC 설정에 따라 동일한 값을 다시 저장한 경우에도 발생할 수 있어 사용자 존재 여부를 추가 조회한다.
+- 공개 캐릭터 목록에서는 잘못된 Bearer 토큰도 무시한다. 이 엔드포인트는 사용자 정보를 사용하지 않고 보안 설정에서 `permitAll`이다.
+- HTTP 서버를 직접 띄운 엔드포인트 호출은 하지 않았고, 필터·서비스 테스트와 전체 빌드로 검증했다.
+- 작업 시작 전부터 문서와 프롬프트 파일에 별도 수정·삭제가 있었다. 해당 파일은 건드리지 않았으며, 이번 변경 파일과의 텍스트 충돌은 보이지 않는다. 이전 작업용 `.agent/plan.md`는 이번 요청에 적용하지 않았다.

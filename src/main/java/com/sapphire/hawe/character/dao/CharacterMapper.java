@@ -22,5 +22,5 @@ public interface CharacterMapper {
 
     // users 테이블이지만 캐릭터 선택 기능에서만 쓰여서 여기에 둔다.
     @Update("UPDATE users SET character_id = #{characterId} WHERE id = #{userId}")
-    void updateUserCharacterId(@Param("userId") Long userId, @Param("characterId") Long characterId);
+    int updateUserCharacterId(@Param("userId") Long userId, @Param("characterId") Long characterId);
 }

@@ -96,27 +96,27 @@
 ### POST /groups
 ```json
 // Request
-{ "name": "우리집", "dailyMissionCount": 1 }   // dailyMissionCount, missionSlots 모두 선택 (생략 시 하루 1개, 서버 기본 시각)
+{ "name": "우리집", "relationType": "FAMILY", "dailyMissionCount": 1 }   // relationType(생략 시 CASUAL), dailyMissionCount, missionSlots 모두 선택 (생략 시 하루 1개, 설정 파일의 기본 시각)
 
 // Response 201
-{ "id": 1, "name": "우리집", "ownerId": 1, "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
+{ "id": 1, "name": "우리집", "ownerId": 1, "relationType": "FAMILY", "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
 ```
 
 ### GET /groups/{groupId}
 ```json
-{ "id": 1, "name": "우리집", "ownerId": 1, "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
+{ "id": 1, "name": "우리집", "ownerId": 1, "relationType": "FAMILY", "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
 ```
 에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403)
 
 ### PATCH /groups/{groupId}/settings
-`name`/`dailyMissionCount`/`missionSlots` 중 일부만 보내도 됨 (부분 수정).
-발행·마감 시각은 그룹이 아니라 슬롯이 가진다. `missionSlots`로 슬롯별 시각을 지정하고, 지정하지 않은 슬롯/시각은 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다. 하루 미션 수, 슬롯 규칙, 검증은 `docs/BACKEND/MISSIONS_API.md` §2 "그룹 설정 연동" 참고.
+`name`/`relationType`/`dailyMissionCount`/`missionSlots` 중 일부만 보내도 됨 (부분 수정).
+발행·마감 시각은 그룹이 아니라 슬롯이 가진다. `missionSlots`로 슬롯별 시각을 지정하고, 지정하지 않은 슬롯/시각은 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다. 하루 미션 수, 슬롯 규칙, 검증은 `docs/BACKEND/MISSIONS_API.md` §2 "그룹 설정 연동" 참고.
 ```json
 // Request (예시: 이름만 변경)
 { "name": "새 이름" }
 
 // Response 200 — 변경된 전체 그룹 정보
-{ "id": 1, "name": "새 이름", "ownerId": 1, "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
+{ "id": 1, "name": "새 이름", "ownerId": 1, "relationType": "FAMILY", "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
 ```
 에러: `NOT_GROUP_OWNER` (403)
 

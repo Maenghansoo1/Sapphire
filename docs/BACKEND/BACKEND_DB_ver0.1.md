@@ -2,7 +2,7 @@
 
 ## 계층 구조
 - **Controller** (REST API 진입점) → **Service** (비즈니스 로직) → **DAO** (MariaDB 접근, MyBatis)
-- 부가 저장소: **로컬 파일 시스템**(이미지·음성, 개발 환경) / **S3**(이미지·음성, 운영 환경 전환 예정), **LLM**(미션 생성·판정, 제공사 미정), **Qdrant**(벡터 검색, 도입 시 - 필수 X), **SNS/EventBridge**(알림·스케줄)
+- 부가 저장소: **로컬 파일 시스템**(이미지·음성, 개발 환경) / **S3**(이미지·음성, 운영 환경 전환 예정), **LLM**(미션 생성 전용, 제공사 미정), **Qdrant**(벡터 검색, 도입 시 - 필수 X), **SNS/EventBridge**(알림·스케줄)
 
 ---
 
@@ -23,7 +23,9 @@ erDiagram
   COMMENTS ||--o{ COMMENT_MENTIONS : tags
   USERS ||--o{ COMMENT_MENTIONS : "mentioned in"
   SUBMISSIONS ||--o{ REACTIONS : has
+  SUBMISSIONS ||--o{ SUBMISSION_GUESSES : receives
   USERS ||--o{ REACTIONS : reacts
+  USERS ||--o{ SUBMISSION_GUESSES : guesses
   USERS ||--o{ POKES : sends
   USERS ||--o{ POKES : receives
   GROUPS ||--o{ POKES : scopes
@@ -43,6 +45,7 @@ erDiagram
     bigint id PK
     string name
     bigint owner_id FK
+    string relation_type
     int daily_mission_count
     datetime created_at
   }
@@ -82,6 +85,7 @@ erDiagram
     int number_value
     int guess_value
     string choice_value
+    string answer_text
     string caption
     datetime submitted_at
     boolean is_late
@@ -104,6 +108,14 @@ erDiagram
     bigint submission_id FK
     bigint user_id FK
     string sticker_type
+  }
+  SUBMISSION_GUESSES {
+    bigint id PK
+    bigint submission_id FK
+    bigint user_id FK
+    string guess_text
+    boolean is_correct
+    datetime created_at
   }
   POKES {
     bigint id PK
@@ -136,7 +148,8 @@ erDiagram
 - `SUBMISSIONS.media_url` — 이미지·음성 파일 위치. 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
 - `MISSIONS.template` / `MISSIONS.params` — 미션 틀(예: `TEXT_ACROSTIC`)과 그 빈칸 값(JSON). 틀 목록과 `params` 모양은 `docs/BACKEND/MISSIONS_API.md` §1이 기준
 - 틀에 따라 쓰는 제출 컬럼이 다르다 (사진·그림·음성=`media_*`, 글=`text_value`, 슬라이더·별점=`number_value`, 다수결 예측=`number_value`+`guess_value`, 밸런스 게임=`choice_value`). 쓰지 않는 컬럼은 NULL이며, 틀별 필수 여부는 DB가 아니라 서비스가 검증한다
-- 하루 미션 수 — `GROUPS.daily_mission_count`(1~5, 기본 1)만큼 슬롯(`MISSIONS.slot_no` 1, 2, …)이 열린다. 슬롯별 발행·마감 시각은 `GROUP_MISSION_SLOTS`가 전담하며, **행이 없거나 값이 NULL이면 서버 코드의 기본 시각**(발행 09:00, 마감 23:00 — 초안)을 쓴다. `GROUPS`에는 시각 컬럼이 없다
+- `SUBMISSIONS.answer_text` — 성대모사 제출자가 적은 정답. 다른 멤버에게는 맞히거나 미션 마감 후에만 API 응답에 포함한다. `SUBMISSION_GUESSES`는 다른 멤버의 정답 시도(원문, 정답 여부)를 쌓는다 (한 사람이 여러 번 시도할 수 있어 UNIQUE 없음)
+- 하루 미션 수 — `GROUPS.daily_mission_count`(1~5, 기본 1)만큼 슬롯(`MISSIONS.slot_no` 1, 2, …)이 열린다. 슬롯별 발행·마감 시각은 `GROUP_MISSION_SLOTS`가 전담하며, **행이 없거나 값이 NULL이면 설정 파일의 기본 시각**(발행 09:00, 마감 23:00 — 초안)을 쓴다. `GROUPS`에는 시각 컬럼이 없다
 - `MISSIONS.published_at` / `deadline_at` — 발행 시점의 실제 발행·마감 시각을 고정 저장. 이후 그룹 설정이 바뀌어도 이미 열린 미션의 시각과 지각 판정(`SUBMISSIONS.is_late`)은 바뀌지 않는다
 - 유일성 제약 — `GROUP_MISSION_SLOTS (group_id, slot_no)`: 슬롯 재정의는 슬롯당 1행, `MISSIONS (group_id, mission_date, slot_no)`: 그룹·날짜·슬롯당 미션 1개(중복 발행 방지), `SUBMISSIONS (mission_id, user_id)`: 미션당 1인 1회 제출(`ALREADY_SUBMITTED`)
 - `NOTIFICATIONS`는 `from_user_id`(발신자, 시스템 알림은 NULL) / `to_user_id`(수신자)로 분리
@@ -152,8 +165,9 @@ erDiagram
 
 | 컬럼 | 변경 | 타입 | NULL | 설명 |
 |---|---|---|---|---|
+| `relation_type` | 추가 | `VARCHAR(20)` | NOT NULL, DEFAULT 'CASUAL' | 그룹 관계 코드 `COUPLE`/`FAMILY`/`FRIEND`/`RIVAL`/`CASUAL`. 유효한 코드인지는 서비스에서 검증 (ENUM 대신 VARCHAR — 코드 추가 시 마이그레이션 불필요). 미션 생성 AI에게 톤·금지 주제를 알려주는 입력으로만 쓰이고 틀 선택에는 쓰지 않는다 |
 | `daily_mission_count` | 추가 | `TINYINT UNSIGNED` | NOT NULL, DEFAULT 1 | 하루에 열 미션 수. 허용 범위 1~5는 서비스에서 검증 (상한은 초안). DEFAULT 1이라 기존 그룹은 동작이 그대로다 |
-| `mission_publish_time` | **삭제** | `TIME` | - | 슬롯 테이블로 대체. 삭제 전에 기존 값을 슬롯 1번 행으로 이전 (아래 마이그레이션 참고) |
+| `mission_publish_time` | **삭제** | `TIME` | - | 슬롯 테이블로 대체 (현재 데이터가 없어 이전 없이 삭제) |
 | `mission_deadline_time` | **삭제** | `TIME` | - | 위와 같음 |
 
 **`group_mission_slots` (신규 테이블)** — 슬롯별 시각 재정의. 재정의하지 않은 슬롯은 행이 없다.
@@ -163,11 +177,11 @@ erDiagram
 | `id` | `BIGINT AUTO_INCREMENT` | PK | |
 | `group_id` | `BIGINT` | NOT NULL | FK → `groups.id` (제약명 제안: `fk_group_mission_slots_group`) |
 | `slot_no` | `TINYINT UNSIGNED` | NOT NULL | 1~`daily_mission_count`. 범위 검증은 서비스에서 수행 |
-| `publish_time` | `TIME` | NULL | NULL이면 서버 코드의 기본 발행 시각 사용 |
-| `deadline_time` | `TIME` | NULL | NULL이면 서버 코드의 기본 마감 시각 사용 |
+| `publish_time` | `TIME` | NULL | NULL이면 설정 파일의 기본 발행 시각 사용 |
+| `deadline_time` | `TIME` | NULL | NULL이면 설정 파일의 기본 마감 시각 사용 |
 | `(group_id, slot_no)` | UNIQUE | - | 슬롯당 1행. 제약명 제안: `uk_group_mission_slots_group_slot` |
 
-- 실제 적용 시각은 `COALESCE(slot.publish_time, 서버 기본 발행 시각)` 방식으로 계산한다(마감도 동일). 슬롯 1~N 전체의 유효 시각은 행이 없는 슬롯까지 서비스가 펼쳐서 만든다. 기본 시각은 DB가 아니라 코드에 있으므로 값을 바꾸면 지정하지 않은 모든 그룹에 적용된다.
+- 실제 적용 시각은 `COALESCE(slot.publish_time, 설정 파일의 기본 발행 시각)` 방식으로 계산한다(마감도 동일). 슬롯 1~N 전체의 유효 시각은 행이 없는 슬롯까지 서비스가 펼쳐서 만든다. 기본 시각은 DB가 아니라 설정 파일(`hawe.mission.*`)에 있으므로, 값을 바꾸고 재시작하면 지정하지 않은 모든 그룹에 적용된다.
 - 설정 API에서 `missionSlots`를 보내면 전체 교체이므로, 서비스는 해당 그룹의 행을 지우고 다시 넣는다. `daily_mission_count`를 줄이면 범위 밖 `slot_no` 행은 함께 지운다.
 
 **`missions`**
@@ -193,22 +207,37 @@ erDiagram
 | `number_value` | 추가 | `TINYINT UNSIGNED` | NULL | 별점(1~5) 또는 슬라이더 위치(0~100) |
 | `guess_value` | 추가 | `TINYINT UNSIGNED` | NULL | 다수결 예측의 예측값(0~100) |
 | `choice_value` | 추가 | `CHAR(1)` | NULL | 밸런스 게임 선택 `A` / `B` |
+| `answer_text` | 추가 | `VARCHAR(100)` | NULL | 성대모사(`VOICE_IMPRESSION`)의 정답. 제출자가 적고, 다른 멤버에게는 맞히거나 미션 마감 후에만 공개. 비교용 정규화(공백·대소문자)는 서비스에서 수행 |
 | `caption` | 변경 없음 | `TEXT` | NULL | 보조 설명. 길이 제한(200자)은 서비스에서 수행 |
 | `(mission_id, user_id)` | UNIQUE 추가 | - | - | 미션당 1인 1회. 제약명 제안: `uk_submissions_mission_user` |
 
+**`submission_guesses` (신규 테이블)** — 성대모사 정답 시도 기록.
+
+| 컬럼 | 타입 | NULL | 설명 |
+|---|---|---|---|
+| `id` | `BIGINT AUTO_INCREMENT` | PK | |
+| `submission_id` | `BIGINT` | NOT NULL | 대상 제출물. FK → `submissions.id` (제약명 제안: `fk_submission_guesses_submission`) |
+| `user_id` | `BIGINT` | NOT NULL | 시도한 멤버. FK → `users.id` (제약명 제안: `fk_submission_guesses_user`) |
+| `guess_text` | `VARCHAR(100)` | NOT NULL | 입력한 정답 원문 |
+| `is_correct` | `BOOLEAN` | NOT NULL | 정답 여부 (서비스가 비교해서 저장) |
+| `created_at` | `DATETIME` | NOT NULL, DEFAULT CURRENT_TIMESTAMP | 시도 시각 |
+| `(submission_id, user_id)` | INDEX | - | 사용자별 시도 횟수 조회용. UNIQUE가 아님. 이름 제안: `idx_submission_guesses_submission_user` |
+
+- 정답을 맞혔는지는 `is_correct = TRUE`인 행이 있는지로 판단한다.
+- 시도 횟수 상한은 설정 `hawe.mission.guess-max-attempts`(초안 3)로 서비스가 검사한다 (DB 제약 아님). 동시에 겹친 요청이 상한을 한 번 더 넘길 수 있으나 영향이 작아 허용한다 (초안).
+
 **마이그레이션 시 확인할 것**
-- 기존 테이블에 추가하는 두 UNIQUE 제약(`missions`, `submissions`)은 기존 데이터에 중복이 있으면 추가에 실패한다. (`group_mission_slots`는 새 테이블이라 해당 없음) `V2__unique_group_members.sql`처럼 제약 추가 전에 중복을 정리(가장 작은 `id`만 유지)해야 한다. 현재는 미션/제출을 만드는 코드가 없어 데이터가 거의 없을 것으로 예상되지만 개발 DB는 직접 확인한다.
-- `missions`의 새 NOT NULL 컬럼은 기존 행이 있으면 값을 채워야 한다.
-  - `slot_no`: DEFAULT 1로 자동 채워진다.
-  - `template`, `params`: 기존 제출은 모두 이미지였으므로 `'PHOTO_NOW'`, `'{}'`을 권장한다.
-  - `published_at`, `deadline_at`: 컬럼을 NULL 허용으로 먼저 추가하고, 그룹의 시각으로 채운 뒤 NOT NULL로 바꾼다. 예: `TIMESTAMP(m.mission_date, g.mission_publish_time)`, `TIMESTAMP(m.mission_date, g.mission_deadline_time)` (`groups`와 JOIN). **이 백필은 `groups`의 시각 컬럼을 삭제하기 전에 해야 한다.**
-  - 행이 없으면 위 백필은 불필요하다.
-- `submissions` 기존 행은 `media_url`로 이름을 바꾸면서 `media_type='IMAGE'`로 채운다.
-- **`groups` 시각 컬럼 제거 순서:** (1) `missions`의 `published_at`/`deadline_at` 백필, (2) 기존 그룹의 시각을 `group_mission_slots`의 슬롯 1번 행으로 이전(`INSERT ... SELECT id, 1, mission_publish_time, mission_deadline_time FROM groups`, 서버 기본 시각과 같은 그룹은 생략 가능), (3) 그 다음 `groups`의 두 컬럼 `DROP COLUMN`. 순서를 어기면 기존 그룹의 설정값이 사라진다.
+- **전제:** 현재 개발 DB에는 데이터가 전혀 없다. 따라서 V3는 백필·이전·중복 정리 없이 단순하게 쓸 수 있다.
+  - `missions`의 NOT NULL 컬럼(`template`, `params`, `published_at`, `deadline_at`)을 바로 추가한다 (`slot_no`는 DEFAULT 1).
+  - `groups.mission_publish_time`, `mission_deadline_time`을 이전 없이 바로 `DROP COLUMN` 한다.
+  - `submissions.image_url` → `media_url` 변경에 값 채우기가 필요 없다 (`media_type` 포함).
+  - UNIQUE 제약(`missions`, `submissions`) 추가 전 중복 정리가 필요 없다.
+- **V3 적용 전에 확인:** 데이터가 없다는 것은 현재 개발 DB 기준이다. V1/V2가 적용된 다른 DB(팀원 로컬, 서버 등)가 있다면 그곳도 비어 있는지 확인한다. 데이터가 있다면 NOT NULL 컬럼 값 채우기(`template='PHOTO_NOW'`, `params='{}'`, 그룹 시각 기반 `published_at`/`deadline_at`), 기존 그룹 시각의 슬롯 1번 행 이전, UNIQUE 중복 정리(가장 작은 `id` 유지)를 `groups` 컬럼 삭제 **전에** 해야 한다.
+- 이미 적용된 `V1`/`V2` 파일은 수정하지 않는다 (Flyway 체크섬 불일치). 변경은 새 `V3` 파일로 한다.
 - 코드 영향
   - 메인 코드의 `GroupMapper.findSummariesByUserId`, `GroupMemberMapper.findMembersByGroupId`는 `submissions`/`missions`를 `mission_id`, `user_id`, `group_id`, `mission_date`로만 읽으므로 컬럼 변경에는 영향이 없다. 다만 하루 미션이 여러 개가 되면 `submissionCountThisMonth`(제출 행 수)의 의미가 달라진다 (`MISSIONS_API.md` §11).
   - **`GroupMapperTests`(`summariesAndMembersMapSubmissionValues`)가 `submissions`에 `image_url`로, `missions`에 `template`/`params`/`published_at`/`deadline_at` 없이 직접 INSERT하므로 V3 적용 후 실패한다.** V3와 함께 테스트의 INSERT를 새 컬럼 기준으로 고쳐야 한다. (`comments.image_url`은 다른 테이블이라 이번 변경 대상이 아니다.)
-  - 그룹 모듈(`Group` 도메인, `GroupMapper`의 INSERT/UPDATE/SELECT, `GroupCreateRequest`, `GroupSettingsUpdateRequest`, `GroupResponse`, `GroupService`)은 삭제되는 `missionPublishTime`/`missionDeadlineTime` 대신 `daily_mission_count`와 슬롯 지정을 다루도록 별도 수정이 필요하다. `GroupMapperTests`의 `insertGroup`도 시각 세팅을 제거해야 한다.
+  - 그룹 모듈(`Group` 도메인, `GroupMapper`의 INSERT/UPDATE/SELECT, `GroupCreateRequest`, `GroupSettingsUpdateRequest`, `GroupResponse`, `GroupService`)은 삭제되는 `missionPublishTime`/`missionDeadlineTime` 대신 `daily_mission_count`와 슬롯 지정을 다루도록 별도 수정이 필요하다. `relation_type`도 생성·수정·조회 DTO에 포함해야 한다. `GroupMapperTests`의 `insertGroup`도 시각 세팅을 제거해야 한다.
 - 추가 인덱스는 필요 없다. `missions`의 UNIQUE 제약이 그룹별 날짜 조회의 인덱스 역할을 하고, `submissions`의 UNIQUE 제약이 피드 조회(`mission_id`)의 인덱스 역할을 하며, `user_id`와 `group_mission_slots.group_id`는 FK 인덱스가 있다.
 
 ---
@@ -219,11 +248,13 @@ erDiagram
 |---|---|
 | `AuthService` | 회원가입/로그인(자체 인증), 비밀번호 해싱, JWT 발급·검증 |
 | `GroupService` | 그룹 생성/초대/설정(하루 미션 수, 슬롯별 시각)/멤버 관리 |
-| `MissionService` | 슬롯별 미션 발행(스케줄러 트리거 → LLM 호출 → 서버 검증 → 저장, 실패 시 예비 미션), 오늘 열린 미션 목록·단건 조회 |
-| `MissionScheduleService` | 그룹의 슬롯별 유효 발행·마감 시각 계산(지정 없으면 서버 코드의 기본 시각), 설정 변경 시 스케줄 재등록, 다음 발행 예정 시각 계산 |
+| `MissionService` | 슬롯별 미션 발행(스케줄러 트리거 → 서버가 틀 선택 → LLM으로 문장·빈칸 생성 → 서버 검증 → 저장, 실패 시 예비 미션), 오늘 열린 미션 목록·단건 조회 |
+| `MissionScheduleService` | 그룹의 슬롯별 유효 발행·마감 시각 계산(지정 없으면 설정 파일의 기본 시각), 설정 변경 시 스케줄 재등록, 다음 발행 예정 시각 계산 |
 | `MissionTemplateValidator` | 틀별 `params` 검증(미션 생성 시)과 제출 필드 검증(제출 시). 틀마다 검증기 1개 |
+| `MissionTemplateSelector` | 슬롯별 틀 선택(하루 내 매체 중복 방지, 하루 1개일 때 어제와 매체 중복 방지, 후보 부족 시 예외 허용, 관계별 선호 없음)과 대상 멤버 지정(빈칸 채우기는 항상, 그림 틀은 설정된 확률). 어제 미션만 조회하고 시드 기반으로 계산 (`MISSIONS_API.md` §6-1) |
 | `SubmissionService` | 제출 처리(지각 판정, 중복 제출 차단), 잠금 해제 여부 판단 |
 | `MissionResultService` | 집계 틀(밸런스 게임, 슬라이더 3종)의 그룹 결과 계산 |
+| `GuessService` | 성대모사 정답 시도 처리: 정답 비교(정규화), 시도 횟수 제한, 정답 공개 조건 판단 (`MISSIONS_API.md` §4-1) |
 | `FileStorageService` | 이미지·음성 파일 저장/조회 (개발=로컬, 운영=S3로 전환), 형식·크기 검증 |
 | `FeedService` | 그룹 피드 조회 (제출자만 열람 가능하도록 필터링) |
 | `CommentService` | 댓글 작성, @멘션 파싱, 사진 첨부 |
@@ -245,9 +276,9 @@ erDiagram
 
 ### 그룹
 - `GET /api/groups` — 내 그룹 목록 (오늘 제출 여부 포함)
-- `POST /api/groups` — 그룹 생성 (`name`, 선택: `dailyMissionCount`, `missionSlots`)
+- `POST /api/groups` — 그룹 생성 (`name`, 선택: `relationType`, `dailyMissionCount`, `missionSlots`)
 - `GET /api/groups/{groupId}/members` — 멤버 목록 + 이번 달 제출 횟수
-- `PATCH /api/groups/{groupId}/settings` — 그룹명/하루 미션 수(`dailyMissionCount`)/슬롯별 시각(`missionSlots`) 변경
+- `PATCH /api/groups/{groupId}/settings` — 그룹명/그룹 관계(`relationType`)/하루 미션 수(`dailyMissionCount`)/슬롯별 시각(`missionSlots`) 변경
 - `POST /api/groups/{groupId}/invite` — 초대 링크 발급
 - `DELETE /api/groups/{groupId}/members/me` — 그룹 나가기
 
@@ -260,6 +291,7 @@ erDiagram
   - 저장 위치만 환경별로 다름: 개발 환경은 로컬 디스크, 운영 환경은 내부적으로 S3 업로드 (presigned URL 방식은 사용하지 않음 — 클라이언트 변경 없이 저장소만 전환)
 - `GET /api/missions/{missionId}/submissions` — 그룹 피드 (내가 제출했을 때만 200, 아니면 423 Locked)
 - `GET /api/missions/{missionId}/result` — 집계 틀의 그룹 결과 (제출한 사람만, 집계 틀이 아니면 400)
+- `POST /api/submissions/{id}/guesses` — 성대모사 정답 시도 (`guess`). 제출한 사람만, 본인 제출물 불가, 최대 시도 횟수 제한
 
 ### 게시물 & 댓글
 - `GET /api/submissions/{id}` — 게시물 상세 (미션에 제출한 사람만)
@@ -284,8 +316,8 @@ erDiagram
 ---
 
 ## 4. 비동기·스케줄 처리
-- **EventBridge Scheduler** → 매일 그룹별·슬롯별 발행 시각(지정이 없으면 서버 코드의 기본 발행 시각)에 `MissionService.publishDailyMission(groupId, date, slotNo)` 호출
-  - 같은 그룹·날짜·슬롯의 미션이 이미 있으면 중단 → LLM으로 `{content, category, template, params}` 생성 → 서버 검증(`MissionTemplateValidator`) → 대상 지정 틀이면 멤버 1명 무작위 선택 → 저장(`published_at`, `deadline_at` 고정) → `mission_open` 알림
+- **EventBridge Scheduler** → 매일 그룹별·슬롯별 발행 시각(지정이 없으면 설정 파일의 기본 발행 시각)에 `MissionService.publishDailyMission(groupId, date, slotNo)` 호출
+  - 같은 그룹·날짜·슬롯의 미션이 이미 있으면 중단 → 서버가 틀 선택 → LLM으로 `{content, category, params}` 생성 → 서버 검증(`MissionTemplateValidator`) → 대상 지정 틀이면 멤버 1명 무작위 선택 → 저장(`published_at`, `deadline_at` 고정) → `mission_open` 알림
   - LLM 실패/검증 실패가 반복되면 예비 미션으로 대체 (상세: `docs/BACKEND/MISSIONS_API.md` §6)
 - 제출/댓글/멘션/콕찌르기 발생 시 `NotificationService`가 `NOTIFICATIONS` 테이블에 기록 + **SNS**로 푸시 발송 (비동기, 이벤트 기반)
 

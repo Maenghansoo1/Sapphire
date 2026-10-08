@@ -9,7 +9,7 @@
 - **빈칸(params)**: 틀이 요구하는 입력값 (삼행시는 3글자 제시어, 슬라이더는 양 끝 키워드 등). 틀마다 모양이 다르며 미션에 JSON으로 저장한다.
 - **미션**: 그룹 × 날짜 × 슬롯마다 1개. `template` + `params` + 사용자에게 보여줄 문장 `content`로 구성된다.
 - **슬롯(slot)**: 하루에 열리는 미션의 순번 (`slotNo` 1, 2, 3 …). 그룹이 정한 "하루 미션 수"(`dailyMissionCount`)만큼 슬롯이 있다.
-- **발행 시각 규칙**: 슬롯마다 발행·마감 시각은 `group_mission_slots`(그룹 설정의 `missionSlots`)가 정한다. **지정하지 않은 슬롯(행이 없거나 값이 NULL)은 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다.** 그룹 자체에는 발행·마감 시각 필드가 없다 (§2 "그룹 설정 연동").
+- **발행 시각 규칙**: 슬롯마다 발행·마감 시각은 `group_mission_slots`(그룹 설정의 `missionSlots`)가 정한다. **지정하지 않은 슬롯(행이 없거나 값이 NULL)은 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다.** 그룹 자체에는 발행·마감 시각 필드가 없다 (§2 "그룹 설정 연동").
 - **제출**: 틀이 요구하는 형식의 답. 미션당 1인 1회. 틀마다 담는 필드(파일/글/숫자/선택)가 다르다.
 - **잠금 규칙**: 내가 제출해야 그날의 그룹 피드와 결과를 볼 수 있다 (423 `FEED_LOCKED`).
 - **지각**: 그 미션의 마감 시각(`deadlineAt`) 이후 제출은 `isLate=true`. 제출 자체는 막지 않는다. 마감 시각은 발행 시점에 미션에 고정 저장된다.
@@ -26,8 +26,11 @@
 | 틀 확장 방식 | `template` 코드 1개 + 검증기 1개 추가 | 컬럼/엔드포인트 추가 최소화 |
 | 1차/2차 구분 | 혼자 제출로 끝나는 틀과 집계 틀은 1차, 순서·역할이 필요한 틀은 2차 | 2차는 별도 설계 필요 (§7) |
 | 미션 생성 | HTTP API 없음. 스케줄러가 슬롯별 발행 시각에 서버 내부에서 생성 (§6) | 외부에서 임의로 미션을 만들 수 없게 |
+| AI의 역할 | **미션 생성만** 한다. 서버가 정한 틀 안에서 문장·카테고리·빈칸 값을 만든다. 제출물 평가·판정은 하지 않는다 | 도장은 제출 기록만으로 계산되고 판정 결과를 저장할 필드가 필요 없음 |
+| 성대모사 | 제출자가 음성과 **정답**(누구를 흉내 냈는지)을 함께 내고, 다른 멤버가 정답을 입력해 맞힌다 (사람당 최대 3회, 초안). 미션 문장은 "성대모사를 맞춰보세요" 수준이고 흉내 낼 대상은 제출자가 정한다 | 소리를 AI로 분석하지 않고 사람이 맞히는 방식이라 AI 판정이 필요 없음 |
 | 하루 미션 수 | 그룹 설정 `dailyMissionCount` (1~5, 기본 1) | 그룹마다 하루 몇 개 열지 지정 (상한 5는 초안) |
-| 발행·마감 시각 | 슬롯별 시각(`group_mission_slots`)만 사용. 지정이 없으면 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안) | 시각의 출처를 슬롯 한 곳으로 단순화 (그룹의 기본 시각 컬럼 제거) |
+| 발행·마감 시각 | 슬롯별 시각(`group_mission_slots`)만 사용. 지정이 없으면 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안) | 시각의 출처를 슬롯 한 곳으로 단순화 (그룹의 기본 시각 컬럼 제거) |
+| 서버 기본 시각 | 설정 파일 `hawe.mission.*`에 둔다 (발행 09:00, 마감 23:00 — 초안). 코드 상수가 아님 | 코드 수정 없이 환경별로 조정 가능 (JWT 설정과 같은 방식) |
 | 시각 고정 | 미션 발행 시 `published_at`, `deadline_at`을 미션에 저장 | 이후 그룹 설정을 바꿔도 이미 열린 미션과 지각 판정이 흔들리지 않음 |
 
 ---
@@ -40,6 +43,7 @@
 |---|---|---|
 | **S** 단독 제출 | 각자 혼자 제출하면 끝 | 1차 |
 | **T** 대상 지정 | S와 같되 미션이 특정 멤버(`target`)를 지목 | 1차 |
+| **G** 정답 맞히기 | 제출자가 정답을 함께 내고, 다른 멤버가 그 정답을 맞힘 (성대모사, §4-1) | 1차 |
 | **V** 집계 | 제출값을 모아 결과(평균/비율/순위)를 보여줌 | 1차 |
 | **R** 순서·역할 | 앞사람 결과에 이어가거나, 출제자/맞히는 사람 역할이 나뉨 | 2차 (§7) |
 
@@ -54,7 +58,7 @@
 | 사진 | 색깔 사냥 | `PHOTO_COLOR` | S | `color` | `file`(이미지) | 1차 |
 | 음성 | 한 줄 | `VOICE_LINE` | S | `sentence`, `tone` | `file`(음성) | 1차 |
 | 음성 | 소리 흉내 | `VOICE_MIMIC` | S | `subject` | `file`(음성) | 1차 |
-| 음성 | 성대모사 | `VOICE_IMPRESSION` | S | `subject` | `file`(음성) | 1차 |
+| 음성 | 성대모사 | `VOICE_IMPRESSION` | G | 없음 | `file`(음성), `answer`(정답) | 1차 |
 | 글 | 삼행시 | `TEXT_ACROSTIC` | S | `word`(정확히 3글자) | `text`(3줄) | 1차 |
 | 글 | 한 단어 일기 | `TEXT_ONE_WORD` | S | 없음 | `text`(단어), `caption`(이유) | 1차 |
 | 글 | 한 줄 후기 | `TEXT_REVIEW` | S | 없음 | `number`(별점 1~5), `text`(한 줄) | 1차 |
@@ -71,8 +75,8 @@
 | 그림 | 갈틱폰 | `DRAW_TELEPHONE` | R | `startSentence` | 2차 | 2차 |
 | 슬라이더 | 제시어 바 | `SLIDER_CLUE_BAR` | R | `left`, `right` | 2차 | 2차 |
 
-- `target`을 쓰는 틀(`TEXT_FILL_BLANK`, `DRAW_SKETCH`, `DRAW_A_TO_B`)은 발행 시 서버가 그룹 멤버 중 1명을 무작위로 뽑아 `targetUserId`를 저장한다. 응답에서는 서버가 닉네임을 풀어 `params.target`으로 내려준다 (§2 참조).
-- 성대모사(`VOICE_IMPRESSION`), 소리 흉내(`VOICE_MIMIC`)의 "친구들이 맞히기"는 1차에서는 댓글로 처리한다 (별도 기능 없음).
+- `target`을 쓰는 틀은 발행 시 서버가 그룹 멤버 중 1명을 무작위로 뽑아 `targetUserId`를 저장한다. `TEXT_FILL_BLANK`는 항상, `DRAW_SKETCH`/`DRAW_A_TO_B`는 설정된 확률(`hawe.mission.draw-target-probability`, 초안 0.3)로 지정한다 (§6-1). 응답에서는 서버가 닉네임을 풀어 `params.target`으로 내려준다 (§2 참조).
+- 소리 흉내(`VOICE_MIMIC`)의 "친구들이 맞히기"는 1차에서는 댓글로 처리한다 (별도 기능 없음). 성대모사(`VOICE_IMPRESSION`)는 정답 맞히기(G 유형, §4-1)로 처리한다. 소리 흉내에도 같은 방식을 쓸지는 §11 17번.
 - `SLIDER_CONSENSUS`의 승자는 `guess`와 실제 평균(`number`들의 평균)의 차이가 가장 작은 멤버다. (MISSIONS.md의 설명을 이렇게 해석했다 — §11 확인 필요)
 
 ---
@@ -121,7 +125,7 @@
 ```
 `target`을 쓰는 틀은 `params`에 서버가 풀어준 대상이 추가된다.
 ```json
-"params": { "sentence": "___는 무인도에 가면 제일 먼저 ___ 할 것 같다", "target": { "userId": 3, "nickname": "잎사귀" } }
+"params": { "sentence": "[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다", "target": { "userId": 3, "nickname": "잎사귀" } }
 ```
 - `dailyMissionCount`: 오늘 열릴 미션 수 (그룹 설정). `missions.length`보다 크면 아직 발행 전인 슬롯이 있다.
 - `nextPublishAt`: 오늘 아직 발행되지 않은 슬롯 중 가장 이른 발행 예정 시각. 남은 슬롯이 없으면 `null`.
@@ -150,11 +154,12 @@
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
+| `relationType` | string | 그룹 관계: `COUPLE`(연인) / `FAMILY`(가족) / `FRIEND`(친구) / `RIVAL`(웬수) / `CASUAL`(그저그런사이). 생략하면 `CASUAL` (생성 시) / 변경 없음 (수정 시). AI가 미션의 톤과 금지 주제를 정하는 입력으로만 쓰이며 틀 선택에는 영향이 없다 (§6-1) |
 | `dailyMissionCount` | int (1~5) | 하루에 열 미션 수. 생략하면 1 (생성 시) / 변경 없음 (수정 시) |
 | `missionSlots` | array (선택) | 슬롯별 시각 지정. 항목: `slotNo`, `publishTime`(선택), `deadlineTime`(선택) |
 
 ```json
-// POST /groups — 시각을 지정하지 않은 그룹 (하루 1개, 서버 기본 시각 사용)
+// POST /groups — 시각을 지정하지 않은 그룹 (하루 1개, 설정 파일의 기본 시각 사용)
 { "name": "우리집" }
 
 // PATCH /groups/1/settings — 하루 3개, 2번은 오후 시간대로, 3번은 발행만 지정
@@ -165,7 +170,7 @@
   ] }
 
 // Response 200 — 슬롯마다 실제로 적용되는 시각을 항상 내려준다
-{ "id": 1, "name": "우리집", "ownerId": 1,
+{ "id": 1, "name": "우리집", "ownerId": 1, "relationType": "FAMILY",
   "dailyMissionCount": 3,
   "missionSlots": [
     { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false },
@@ -173,12 +178,28 @@
     { "slotNo": 3, "publishTime": "19:00", "deadlineTime": "23:00", "custom": true }
   ] }
 ```
-- **기본값 규칙:** 지정하지 않은 슬롯, 그리고 지정에서 생략한 시각은 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다. 아무것도 지정하지 않으면 모든 슬롯이 기본 시각에 열린다. `custom`은 해당 슬롯에 지정된 값이 하나라도 있는지를 뜻한다.
+- **기본값 규칙:** 지정하지 않은 슬롯, 그리고 지정에서 생략한 시각은 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다. 아무것도 지정하지 않으면 모든 슬롯이 기본 시각에 열린다. `custom`은 해당 슬롯에 지정된 값이 하나라도 있는지를 뜻한다.
 - **`missionSlots`를 보내면 전체 교체**다. 보낸 슬롯만 지정 상태로 남고 나머지는 기본 시각으로 돌아간다. 빈 배열 `[]`은 지정을 모두 지운다. 필드를 생략하면 기존 지정을 유지한다.
 - **적용 시점(초안):** 아직 발행되지 않은 슬롯에는 오늘부터, 이미 발행된 미션은 바뀌지 않는다. 오늘 이미 지난 시각으로 바꾼 슬롯은 내일부터 적용된다. `dailyMissionCount`를 줄여도 오늘 이미 열린 초과 미션은 유지된다.
-- **검증 (400 `VALIDATION_ERROR`):** `dailyMissionCount` 범위, `slotNo`가 1~`dailyMissionCount` 밖, 같은 `slotNo` 중복, 시각 형식(`HH:mm`) 위반.
+- **검증 (400 `VALIDATION_ERROR`):** `relationType`이 5종 코드가 아님, `dailyMissionCount` 범위, `slotNo`가 1~`dailyMissionCount` 밖, 같은 `slotNo` 중복, 시각 형식(`HH:mm`) 위반.
 - **기존 API와의 차이(호환성 깨짐):** 이미 구현된 그룹 API의 `missionPublishTime`, `missionDeadlineTime` 필드는 폐지된다. 프론트가 아직 연결되지 않아 영향은 작지만 Postman 컬렉션과 그룹 테스트는 고쳐야 한다.
 - 권한은 기존과 같다 (owner만 변경, 멤버는 조회).
+
+### 서버 기본 시각 설정 (`hawe.mission.*`)
+슬롯에 시각이 지정되지 않았을 때만 쓰는 값이며 `application.properties`에 둔다.
+```properties
+hawe.mission.default-publish-time=09:00
+hawe.mission.default-deadline-time=23:00
+hawe.mission.max-daily-count=5
+hawe.mission.draw-target-probability=0.3
+hawe.mission.guess-max-attempts=3
+```
+- `@ConfigurationProperties(prefix = "hawe.mission")` 레코드(`MissionProperties`)로 바인딩한다. 기존 `JwtProperties`와 같은 방식이다.
+- `max-daily-count`는 `dailyMissionCount`의 상한 검증에 쓴다.
+- `draw-target-probability`는 그림 틀(`DRAW_SKETCH`, `DRAW_A_TO_B`)에 대상 멤버를 지정할 확률(0~1), `guess-max-attempts`는 성대모사 정답을 한 제출물에 시도할 수 있는 횟수다.
+- 환경변수로 덮어쓸 수 있다 (예: `HAWE_MISSION_DEFAULT_PUBLISH_TIME`). 개발 환경에서는 확인이 쉽도록 가까운 시각으로 바꿔 쓸 수 있다.
+- 값을 바꾸고 **재시작**하면 시각을 지정하지 않은 모든 그룹에 적용된다. 이미 열린 미션은 `published_at`/`deadline_at`에 고정되어 있어 바뀌지 않는다. 실행 중에는 바꿀 수 없다.
+- 형식이 잘못된 값(예: `9시`)이면 애플리케이션이 시작되지 않는다 (바인딩 실패).
 
 ---
 
@@ -199,6 +220,7 @@
 | `number` | int | 별점(1~5) 또는 슬라이더 위치(0~100) |
 | `guess` | int | `SLIDER_CONSENSUS`의 예측값(0~100) |
 | `choice` | text | `A` 또는 `B` (`TEXT_BALANCE`) |
+| `answer` | text | 성대모사(`VOICE_IMPRESSION`)의 정답 (공백 불가, 최대 50자). 다른 멤버에게는 맞히거나 미션 마감 후에만 공개 |
 | `caption` | text | 보조 설명 (최대 200자, 틀에 따라 선택/필수) |
 
 ### 3-2. 틀별 필수 필드
@@ -206,7 +228,8 @@
 | `template` | 필수 | 선택 | 검증 |
 |---|---|---|---|
 | `PHOTO_*`, `DRAW_*` | `file`(이미지) | `caption` | 이미지 MIME |
-| `VOICE_*` | `file`(음성) | `caption` | 음성 MIME, 길이 ≤ 20초 |
+| `VOICE_LINE`, `VOICE_MIMIC` | `file`(음성) | `caption` | 음성 MIME, 길이 ≤ 20초 |
+| `VOICE_IMPRESSION` | `file`(음성), `answer`(정답) | `caption` | 음성 MIME, 길이 ≤ 20초, 정답 공백 불가 |
 | `TEXT_ACROSTIC` | `text` | - | 정확히 3줄, 각 줄이 `params.word`의 해당 글자로 시작 |
 | `TEXT_ONE_WORD` | `text`(단어, ≤ 20자) | `caption`(이유, ≤ 100자) | 공백 불가 |
 | `TEXT_REVIEW` | `number`(1~5), `text`(≤ 100자) | - | - |
@@ -235,7 +258,7 @@
 { "id": 102, "missionId": 11, "template": "SLIDER_POSITION",
   "number": 70, "submittedAt": "2026-09-29T10:00:00", "isLate": false }
 ```
-응답에는 해당 틀에서 쓰는 필드만 포함한다 (쓰지 않는 필드는 생략).
+응답에는 해당 틀에서 쓰는 필드만 포함한다 (쓰지 않는 필드는 생략). `VOICE_IMPRESSION`의 생성 응답에는 제출자 본인이므로 `answer`가 포함된다.
 
 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `ALREADY_SUBMITTED` (409), `INVALID_SUBMISSION` (400), `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413)
 
@@ -275,6 +298,41 @@
 - 게시물이 속한 그룹의 멤버이면서 **해당 미션에 내가 제출했을 때만** 볼 수 있다 (잠금 규칙 동일).
 - 에러: `SUBMISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423)
 
+### 4-1. 정답 맞히기 (G 유형, 성대모사)
+성대모사 미션에서 제출자는 음성과 함께 **정답**(누구를 흉내 냈는지)을 적는다. 다른 멤버는 음성을 듣고 정답을 입력해서 맞는지 확인한다.
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/submissions/{id}/guesses` | 정답 시도 |
+
+```json
+// Request
+{ "guess": "유재석" }
+
+// Response 200 — 틀린 경우
+{ "correct": false, "attemptsLeft": 2 }
+
+// Response 200 — 맞힌 경우 (정답 공개)
+{ "correct": true, "attemptsLeft": 1, "answer": "유재석" }
+```
+
+피드(`GET /missions/{id}/submissions`)와 상세(`GET /submissions/{id}`)의 `VOICE_IMPRESSION` 항목에는 아래 필드가 추가된다.
+```json
+{ "id": 105, "userId": 2, "nickname": "잎사귀", "template": "VOICE_IMPRESSION",
+  "mediaUrl": "...", "mediaType": "AUDIO",
+  "answer": null,
+  "myGuess": { "solved": false, "attemptsLeft": 3 },
+  "reactionCount": 0, "commentCount": 1, "submittedAt": "...", "isLate": false }
+```
+- `answer`: 공개 조건을 충족할 때만 값이 있고, 아니면 `null`. 서버는 공개 조건이 아닐 때 정답을 응답에 절대 포함하지 않는다.
+- `myGuess`: 현재 사용자의 시도 상태. 본인 제출물이면 `null`.
+- **정답 공개 조건(초안):** 제출자 본인은 항상, 다른 멤버는 정답을 맞혔거나 미션 마감 시각(`deadlineAt`) 이후.
+- **정답 비교(초안):** 앞뒤 공백과 내부 공백을 제거하고 영문 대소문자를 무시한 뒤 완전 일치하면 정답이다.
+- **시도 횟수(초안):** 한 사람이 한 제출물에 최대 3회 (`hawe.mission.guess-max-attempts`). 맞히면 더 시도할 수 없다.
+- 본인 제출물에는 시도할 수 없다. 해당 미션에 내가 제출하지 않았으면 잠금 규칙에 따라 막힌다.
+- 시도는 제출이 아니므로 도장과 제출 횟수에 영향이 없다.
+- 에러: `SUBMISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423), `GUESS_NOT_SUPPORTED` (400), `CANNOT_GUESS_OWN_SUBMISSION` (409), `ALREADY_SOLVED` (409), `GUESS_LIMIT_EXCEEDED` (409), `VALIDATION_ERROR` (400, 빈 값)
+
 ---
 
 ## 5. 집계 결과 (V 유형)
@@ -309,14 +367,15 @@ V 유형 틀(`TEXT_BALANCE`, `SLIDER_POSITION`, `SLIDER_TASTE`, `SLIDER_CONSENSU
 ## 6. 미션 생성 (내부 처리, HTTP API 없음)
 
 ```
-[EventBridge 스케줄러] 그룹별 · 슬롯별 발행 시각 (지정이 없으면 서버 코드의 기본 발행 시각)
+[EventBridge 스케줄러] 그룹별 · 슬롯별 발행 시각 (지정이 없으면 설정 파일의 기본 발행 시각)
    → MissionService.publishDailyMission(groupId, date, slotNo)
        1. 같은 그룹·날짜·슬롯에 미션이 이미 있으면 중단 (중복 발행 방지)
-       2. 입력 수집: 오늘 날짜/요일, 그룹 관계, 최근 미션(문장·카테고리·틀 — 오늘 먼저 열린 슬롯 포함), 카테고리 목록
-       3. AI 호출 (mission-create 프롬프트) → { content, category, template, params }
-       4. 서버 검증 (아래), 실패 시 재시도(최대 N회)
-       5. 대상 지정 틀이면 그룹 멤버 중 1명을 무작위로 뽑아 params.targetUserId 저장
-       6. missions 저장 (slot_no, 발행·마감 시각을 published_at/deadline_at에 고정) + 멤버들에게 mission_open 알림
+       2. 틀 선택: 서버가 그날의 틀(`template`)을 정한다 (규칙은 §6-1)
+       3. 입력 수집: 오늘 날짜/요일, 그룹 관계, 선택된 틀과 그 빈칸 정의, 최근 미션(문장·카테고리·틀 — 오늘 먼저 열린 슬롯 포함), 카테고리 목록
+       4. AI 호출 (mission-create 프롬프트) → { content, category, params }   // 틀은 AI가 고르거나 바꾸지 않는다
+       5. 서버 검증 (아래), 실패 시 재시도(최대 N회)
+       6. 대상 지정 틀이면 그룹 멤버 중 1명을 무작위로 뽑아 params.targetUserId 저장 (AI는 이름 대신 [대상]을 쓰고 서버가 닉네임으로 치환)
+       7. missions 저장 (template, slot_no, 발행·마감 시각을 published_at/deadline_at에 고정) + 멤버들에게 mission_open 알림
        실패 시: 예비 미션 풀에서 선택 (미션이 안 열리는 날이 없게)
 ```
 
@@ -324,17 +383,45 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 
 | 검증 | 내용 |
 |---|---|
-| 틀 | `template`이 1차 코드표에 있는가 (2차 틀은 구현 전까지 제외) |
+| 틀 | 응답이 서버가 정한 `template`의 `params` 형식을 따르는가 (AI가 다른 틀로 바꾸지 못함). 2차 틀은 구현 전까지 선택 대상에서 제외 |
 | 빈칸 | 틀의 `params`가 모두 채워졌는가, 불필요한 키가 없는가 |
 | 삼행시 | `word`가 정확히 한글 3글자인가 |
 | 밸런스 | `optionA` ≠ `optionB` |
 | 슬라이더 | `left` ≠ `right`, 각각 짧은 단어(≤ 20자) |
 | 빈칸 채우기 | `sentence`에 `___`가 정확히 1개 |
 | 카테고리 | 주어진 목록에 있는 값인가 |
-| 연속 방지 | 바로 전 미션, 그리고 같은 날 먼저 열린 미션과 같은 `template`/문장이 아닌가 (하루에 여러 개일 때 같은 틀이 몰리지 않게) |
+| 연속 방지 | 최근 미션 및 같은 날 먼저 열린 미션과 같거나 거의 같은 문장이 아닌가 (틀은 서버가 정하므로 확인 대상이 아님) |
 
 - 스케줄 등록: 그룹 설정이 바뀌면 해당 그룹의 슬롯별 스케줄을 다시 계산해 등록한다. 슬롯 수(`dailyMissionCount`)만큼 실행 단위가 생기며 `(group_id, mission_date, slot_no)` UNIQUE 제약이 중복 실행을 막는다.
-- 시각 결정: 슬롯 N의 실제 발행 시각 = `group_mission_slots.publish_time`, 행이 없거나 NULL이면 서버 코드의 기본 발행 시각. 마감도 같다.
+- 시각 결정: 슬롯 N의 실제 발행 시각 = `group_mission_slots.publish_time`, 행이 없거나 NULL이면 설정 파일의 기본 발행 시각. 마감도 같다.
+
+### 6-1. 틀 선택 규칙 (서버가 정함, AI 개입 없음)
+
+| # | 규칙 | 강도 |
+|---|---|---|
+| 1 | 후보는 1차 틀(§1-2)만 쓴다 | 필수 |
+| 2 | **하루 미션이 2개 이상일 때:** 같은 날 슬롯끼리 매체(사진/음성/글/그림/슬라이더)가 겹치지 않게 한다. 하루 상한(5)이 매체 수(5)와 같아서 상한까지도 전부 다른 매체로 채울 수 있다 | 기본, 후보 부족 시 예외 허용 |
+| 3 | **하루 미션이 1개일 때:** 어제 같은 그룹이 쓴 매체를 제외한다 (어제와 같은 매체가 이어지지 않게) | 기본, 후보 부족 시 예외 허용 |
+| 4 | 그룹 관계에 따른 선호·가중치는 **두지 않는다.** 관계는 AI가 문장의 톤과 금지 주제를 정하는 입력으로만 쓴다 | 확정 |
+| 5 | **대상 지정:** `TEXT_FILL_BLANK`는 항상 대상 멤버를 지정한다. `DRAW_SKETCH`, `DRAW_A_TO_B`는 설정된 확률(`hawe.mission.draw-target-probability`, 초안 0.3)로 지정한다. 확률 판정은 `seed(groupId, 날짜, slotNo)`로 하므로 같은 슬롯을 다시 실행해도 결과가 같다. 다른 틀은 대상을 지정하지 않는다 | 확정 (확률 값은 초안) |
+
+**후보 부족 시 예외 허용:** 규칙 2·3을 지키면 고를 수 있는 틀이 없을 때만 완화한다.
+- 하루 1개: 어제 매체 제외를 풀고 고른다 (예: 어제 5개 매체를 모두 썼을 때).
+- 하루 2개 이상: 구현된 틀이 있는 매체가 슬롯 수보다 적을 때만 같은 날 매체 중복을 허용한다.
+- 위로도 후보가 없으면 예비 미션 풀을 쓴다 (§6).
+
+**계산 방식 (결정적, 동시성 문제 없음):**
+```
+mediaOrder = shuffle(매체 5종, seed = hash(groupId, 날짜))
+N >= 2 : 슬롯 k의 매체 = mediaOrder[k-1]
+N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모두 빠지면 mediaOrder[0])
+틀     : 그 매체의 1차 틀 중 하나를 seed(groupId, 날짜, slotNo)로 선택 (구현된 틀만)
+```
+- 읽는 DB 데이터는 **어제의 미션뿐**이다. 오늘 슬롯끼리는 서로 조회하지 않으므로, 같은 시각에 여러 슬롯이 동시에 발행되어도 결과가 같고 경쟁이 없다.
+- 같은 `(그룹, 날짜, 슬롯)`을 다시 실행해도 같은 결과가 나온다 (멱등). `(group_id, mission_date, slot_no)` UNIQUE 제약이 중복 저장을 막는다.
+- 어제 미션이 없는 그룹(첫날, 발행이 없었던 날)은 제외 없이 고른다.
+- 대상을 지정하는 틀의 안전 검토는 §8에서 따로 다룬다.
+- AI에게 줄 대상 표기: 대상이 있는 틀에서 AI는 이름 대신 `[대상]`을 문장에 쓰고, 서버가 응답할 때 현재 닉네임으로 바꿔 넣는다 (초안, 닉네임이 바뀌어도 최신 이름이 보이도록).
 
 ---
 
@@ -357,10 +444,10 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 ## 8. 정책 충돌 / 주의
 
 - **`TEXT_FILL_BLANK` (랜덤 사람 지정 빈칸 채우기)**: MISSIONS.md의 예시 문장은 특정 멤버를 비하하는 내용이다. 이 문서에는 옮기지 않았다. 이 틀은 구조상 **여러 명이 한 명에 대해 쓰는** 형태라 `mission-create-prompt.md`의 규칙과 충돌한다 (웬수: "여러 명이 한 명을 공격하게 되는 미션" 금지, 친구: "특정 친구 한 명을 지목해서 놀리는 미션" 금지, 공통: 혐오·비하 금지, 외모·몸 금지). 사용하려면 (a) 긍정적 문장만 허용, (b) 그룹 관계별 허용 여부, (c) 신고/삭제 수단 중 무엇을 둘지 먼저 정해야 한다.
-- **`DRAW_SKETCH`, `DRAW_A_TO_B`의 대상 지정**: "{사용자이름}을 동물로 그리기"는 외모 비하가 되지 않게 주제를 제한해야 한다 (가족, 그저그런사이는 사용하지 않는 것을 권장).
-- **`VOICE_IMPRESSION`**: 특정 인물 지정 시 그룹 멤버나 실존 인물의 목소리를 흉내 내는 것이 괜찮은지 정책이 필요하다. 프롬프트의 "다른 사람 목소리가 나오게 하는 미션 금지"와 구분해야 한다.
+- **`DRAW_SKETCH`, `DRAW_A_TO_B`의 대상 지정**: 설정된 확률로 대상이 지정된다. "[대상]을 동물로 그리기"가 외모 비하가 되지 않도록 프롬프트가 성격·분위기·좋아할 것 같은 것 등 칭찬하거나 가벼운 방향으로 제한한다. 관계별 선호를 두지 않기로 했으므로 가족, 그저그런사이에도 같은 확률이 적용된다.
+- **`VOICE_IMPRESSION`**: 누구를 흉내 낼지는 제출자가 직접 정한다 (미션 문장은 "성대모사를 맞춰보세요" 수준). AI가 제출을 평가하지 않으므로 실존 인물이나 그룹 멤버를 흉내 내는 내용은 서비스가 걸러주지 못한다. 신고·삭제 수단은 아직 없다.
 - **`PHOTO_GALLERY`**: 갤러리 사진에는 얼굴·위치·개인정보가 있을 수 있다. 조건(`condition`)을 만들 때 해당 주제를 피하도록 프롬프트 규칙을 유지한다.
-- **`mission-create-prompt.md` 동기화**: 현재 프롬프트의 답변 방식은 PHOTO/VOICE/TEXT/DRAWING/SLIDER 5가지이고 틀(`template`)과 `params`를 돌려주는 형식이 아니다. 이 문서의 틀 코드표에 맞게 출력 형식을 고쳐야 한다. 규칙 변경 시 두 문서를 함께 갱신한다.
+- **프롬프트 동기화(완료)**: `mission-create-prompt.md`를 서버가 정한 틀 안에서 `content`/`category`/`params`만 만드는 구조로 고쳤고, 제출 판정 프롬프트(`mission-judge-prompt.md`)는 삭제했다. 틀이 추가·변경되면 프롬프트의 "틀과 빈칸"과 §1 코드표를 함께 갱신한다 (기록: `src/main/resources/prompts/수정 기록용(후에삭제).md`).
 
 ---
 
@@ -368,10 +455,11 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 
 | 테이블 | 변경 |
 |---|---|
-| `groups` | `daily_mission_count TINYINT UNSIGNED NOT NULL DEFAULT 1` 추가. `mission_publish_time`, `mission_deadline_time` **삭제** (기존 값은 V3에서 슬롯 1번 행으로 이전) |
-| `group_mission_slots` (신규) | 슬롯별 발행·마감 시각 지정. 컬럼: `group_id`, `slot_no`, `publish_time NULL`, `deadline_time NULL`. 행이 없거나 값이 NULL이면 서버 코드의 기본 시각을 사용. `(group_id, slot_no)` UNIQUE |
+| `groups` | `relation_type VARCHAR(20) NOT NULL DEFAULT 'CASUAL'` 추가 (그룹 관계, 코드 유효성은 서비스에서 검증). `daily_mission_count TINYINT UNSIGNED NOT NULL DEFAULT 1` 추가. `mission_publish_time`, `mission_deadline_time` **삭제** (현재 데이터가 없어 이전 없이 삭제) |
+| `group_mission_slots` (신규) | 슬롯별 발행·마감 시각 지정. 컬럼: `group_id`, `slot_no`, `publish_time NULL`, `deadline_time NULL`. 행이 없거나 값이 NULL이면 설정 파일의 기본 시각을 사용. `(group_id, slot_no)` UNIQUE |
 | `missions` | `template VARCHAR(40) NOT NULL`, `params JSON NOT NULL`, `slot_no TINYINT UNSIGNED NOT NULL DEFAULT 1`, `published_at DATETIME NOT NULL`, `deadline_at DATETIME NOT NULL` 추가. UNIQUE `(group_id, mission_date, slot_no)` 추가 (중복 발행 방지) |
-| `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `text_value`, `number_value`, `guess_value`, `choice_value` 추가 (모두 NULL 허용). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
+| `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `text_value`, `number_value`, `guess_value`, `choice_value`, `answer_text` 추가 (모두 NULL 허용). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
+| `submission_guesses` (신규) | 성대모사 정답 시도 기록. 컬럼: `id`, `submission_id`(FK), `user_id`(FK), `guess_text VARCHAR(100) NOT NULL`, `is_correct BOOLEAN NOT NULL`, `created_at DATETIME`. `(submission_id, user_id)` 인덱스(UNIQUE 아님, 여러 번 시도 가능) |
 
 - 기존 `group_members` UNIQUE 제약처럼 **동시 요청에서의 중복은 DB 제약으로 막고** 서비스에서 `DuplicateKeyException`을 `ALREADY_SUBMITTED`로 변환한다.
 - `submissions.caption`의 `TEXT` 길이는 서비스에서 제한한다 (200자).
@@ -397,13 +485,17 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 | `UNSUPPORTED_FILE_TYPE` | 415 | 허용하지 않는 파일 형식 |
 | `FILE_TOO_LARGE` | 413 | 파일 크기 초과 |
 | `RESULT_NOT_SUPPORTED` | 400 | 집계가 없는 틀에 결과 조회 |
+| `GUESS_NOT_SUPPORTED` | 400 | 정답이 없는 틀(성대모사가 아닌 제출물)에 정답을 시도함 |
+| `CANNOT_GUESS_OWN_SUBMISSION` | 409 | 본인 제출물에 정답을 시도함 |
+| `ALREADY_SOLVED` | 409 | 이미 정답을 맞힘 |
+| `GUESS_LIMIT_EXCEEDED` | 409 | 시도 횟수를 모두 사용함 |
 
 ## 11. 미정 사항 (구현 전에 결정 필요)
 
-1. AI 판정(`mission-judge-prompt.md`)이 도장에 영향을 주는가? 현재 도장 규칙은 "제출 기록이 있으면 참잘했어요"라 판정 결과를 담을 필드와 정책이 없다.
+1. (결정됨, 정리 완료) AI는 제출을 평가하지 않는다. 도장은 제출 기록만으로 계산하고 판정 정책·필드는 없다. 판정 프롬프트는 삭제했다.
 2. 하루가 끝난 뒤(예: 자정) 제출을 완전히 막을 것인가? 현재는 마감 후에도 `isLate`로 제출 가능하고 상한이 없다.
 3. "오늘"의 기준 시간대. DB `CURDATE()`와 서버 시간대를 `Asia/Seoul`로 통일할지 (그룹 API의 `submittedToday`와 동일 문제).
-4. 한 그룹 안에서 틀 중복/순환 규칙 (최근 N일 같은 틀 금지 등)과 그룹 관계별 허용 틀 목록.
+4. (결정됨) 틀 중복·순환 규칙은 §6-1이다. 그룹 관계별 허용 틀 목록은 두지 않는다.
 5. `SLIDER_CONSENSUS`의 승리 판정 해석 확인 (§1-2).
 6. 대상 지정 틀에서 대상 본인이 제출할 수 있는가, 대상이 도중에 탈퇴하면 어떻게 표시하는가.
 7. 파일 한도·허용 형식의 확정값, 음성 길이 검증 방식 (서버에서 오디오 길이를 읽을 수 있는지).
@@ -413,4 +505,9 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 11. 슬롯의 마감이 발행보다 이르거나 자정을 넘기는 경우 허용 여부 (그룹 설정의 기존 미정 사항과 동일).
 12. 설정 변경 적용 시점 규칙(§2 "그룹 설정 연동")이 의도와 맞는지.
 13. 피드 잠금 단위. 현재는 **미션별**로 제출해야 그 미션의 피드를 볼 수 있다. 하루 단위(그날 하나라도 제출하면 모두 열람)로 할지.
-14. 서버 기본 시각의 값(현재 초안 발행 09:00 / 마감 23:00)과 둘 곳(코드 상수 vs 설정 파일). 코드 상수로 두면 값을 바꿀 때 지정하지 않은 모든 그룹의 시각이 함께 바뀐다.
+14. (결정됨) 서버 기본 시각은 설정 파일 `hawe.mission.*`에 둔다 (§2). 값(초안 발행 09:00 / 마감 23:00)과 `max-daily-count`(초안 5)는 확정이 필요하다.
+15. (결정됨) 틀 선택 규칙은 §6-1: 하루 여러 개는 같은 날 매체 중복 금지, 하루 1개는 어제와 같은 매체 제외, 후보 부족 시 예외 허용, 그룹 관계별 선호는 두지 않음. 남은 일: 매체 목록·시드 계산 방식 구현 시 확정.
+16. (결정됨) 그림 틀(`DRAW_SKETCH`, `DRAW_A_TO_B`)은 설정된 확률로 대상 멤버를 지정한다 (§6-1 규칙 5, 초안 0.3). 확률 값은 확정이 필요하고, 안전 검토는 §8에서 이어진다.
+17. 소리 흉내(`VOICE_MIMIC`)에도 성대모사와 같은 정답 맞히기를 쓸지 (현재는 댓글로 처리).
+18. 정답 맞히기 세부 확정: 비교 방식(공백·대소문자 무시 완전 일치가 충분한지, 오타·별칭 허용), 시도 횟수(3회), 공개 시점(맞힘/마감 후).
+19. 누가 정답을 맞혔을 때 제출자에게 알림을 보낼지, 제출자가 맞힌 사람을 볼 수 있는지.

@@ -17,7 +17,9 @@ erDiagram
   COMMENTS ||--o{ COMMENT_MENTIONS : tags
   USERS ||--o{ COMMENT_MENTIONS : "mentioned in"
   SUBMISSIONS ||--o{ REACTIONS : has
+  SUBMISSIONS ||--o{ SUBMISSION_GUESSES : receives
   USERS ||--o{ REACTIONS : reacts
+  USERS ||--o{ SUBMISSION_GUESSES : guesses
   USERS ||--o{ POKES : sends
   USERS ||--o{ POKES : receives
   GROUPS ||--o{ POKES : scopes
@@ -37,6 +39,7 @@ erDiagram
     bigint id PK
     string name
     bigint owner_id FK
+    string relation_type
     int daily_mission_count
     datetime created_at
   }
@@ -76,6 +79,7 @@ erDiagram
     int number_value
     int guess_value
     string choice_value
+    string answer_text
     string caption
     datetime submitted_at
     boolean is_late
@@ -98,6 +102,14 @@ erDiagram
     bigint submission_id FK
     bigint user_id FK
     string sticker_type
+  }
+  SUBMISSION_GUESSES {
+    bigint id PK
+    bigint submission_id FK
+    bigint user_id FK
+    string guess_text
+    boolean is_correct
+    datetime created_at
   }
   POKES {
     bigint id PK
@@ -135,6 +147,8 @@ erDiagram
 | MISSIONS.group_id | GROUPS.id | |
 | SUBMISSIONS.mission_id | MISSIONS.id | |
 | SUBMISSIONS.user_id | USERS.id | |
+| SUBMISSION_GUESSES.submission_id | SUBMISSIONS.id | 정답을 시도한 제출물 |
+| SUBMISSION_GUESSES.user_id | USERS.id | 시도한 멤버 |
 | COMMENTS.submission_id | SUBMISSIONS.id | |
 | COMMENTS.user_id | USERS.id | |
 | COMMENT_MENTIONS.comment_id | COMMENTS.id | |
@@ -170,24 +184,25 @@ erDiagram
 | id | PK |
 | name | 그룹명 |
 | owner_id | 그룹장 (FK → USERS.id) |
+| relation_type | 그룹 관계 `COUPLE`(연인) / `FAMILY`(가족) / `FRIEND`(친구) / `RIVAL`(웬수) / `CASUAL`(그저그런사이), 기본 `CASUAL`. 미션 문장의 톤·금지 주제를 정하는 입력으로만 사용 |
 | daily_mission_count | 하루에 여는 미션 수 (1~5, 기본 1) |
 | created_at | 그룹 생성 시각 |
 
 > ver0.1 변경: `mission_deadline_time` 신규 추가 — `SUBMISSIONS.is_late` 판단 기준(그룹별 커스텀 마감 시각)을 저장하기 위함.
-> V3 변경: `daily_mission_count` 신규 추가(NOT NULL, DEFAULT 1). `mission_publish_time`/`mission_deadline_time` 삭제 — 시각은 `GROUP_MISSION_SLOTS`가 전담하고, 지정이 없으면 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 사용. 기존 그룹의 값은 V3에서 슬롯 1번 행으로 이전.
+> V3 변경: `relation_type` 신규 추가(NOT NULL, DEFAULT 'CASUAL'). `daily_mission_count` 신규 추가(NOT NULL, DEFAULT 1). `mission_publish_time`/`mission_deadline_time` 삭제 — 시각은 `GROUP_MISSION_SLOTS`가 전담하고, 지정이 없으면 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 사용. 현재 데이터가 없어 이전 없이 삭제.
 
 ### GROUP_MISSION_SLOTS
-슬롯(그날 몇 번째 미션인지)별 발행·마감 시각을 **지정한 경우에만** 행이 생긴다. 지정하지 않은 슬롯은 행이 없고 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다.
+슬롯(그날 몇 번째 미션인지)별 발행·마감 시각을 **지정한 경우에만** 행이 생긴다. 지정하지 않은 슬롯은 행이 없고 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다.
 
 | 컬럼 | 설명 |
 |---|---|
 | id | PK |
 | group_id | 소속 그룹 (FK → GROUPS.id) |
 | slot_no | 미션 순번 (1~`GROUPS.daily_mission_count`). 범위 검증은 서비스에서 수행 |
-| publish_time | 이 슬롯의 발행 시각. NULL이면 서버 코드의 기본 발행 시각 사용 |
-| deadline_time | 이 슬롯의 마감 시각. NULL이면 서버 코드의 기본 마감 시각 사용 |
+| publish_time | 이 슬롯의 발행 시각. NULL이면 설정 파일의 기본 발행 시각 사용 |
+| deadline_time | 이 슬롯의 마감 시각. NULL이면 설정 파일의 기본 마감 시각 사용 |
 
-> V3 신규 테이블. UNIQUE `(group_id, slot_no)`. 실제 적용 시각은 `COALESCE(슬롯 값, 서버 기본값)`.
+> V3 신규 테이블. UNIQUE `(group_id, slot_no)`. 실제 적용 시각은 `COALESCE(슬롯 값, 설정 파일 기본값)`.
 
 ### GROUP_MEMBERS
 | 컬럼 | 설명 |
@@ -226,12 +241,27 @@ erDiagram
 | number_value | 숫자 답: 별점(1~5) 또는 슬라이더 위치(0~100). 없으면 NULL |
 | guess_value | 다수결 예측의 예측값(0~100). 해당 틀에서만 값 있음 |
 | choice_value | 밸런스 게임 선택 `A` / `B`. 해당 틀에서만 값 있음 |
+| answer_text | 성대모사 제출자가 적은 정답. 다른 멤버에게는 맞히거나 미션 마감 후에만 공개. 해당 틀에서만 값 있음 |
 | caption | 제출 캡션(보조 설명) |
 | submitted_at | 제출 시각 |
 | is_late | 마감 이후 제출 여부 (해당 미션의 `deadline_at` 기준으로 판단) |
 
 > ver0.1 변경: `image_url`은 개발 환경에서 로컬 경로를 저장(추후 S3 URL로 전환 예정). `is_late`는 마감 시각과 `submitted_at`을 비교해 판단하는 정책으로 확정.
 > V3 변경: `image_url`을 `media_url`로 이름 변경(NULL 허용)하고 `media_type`, `text_value`, `number_value`, `guess_value`, `choice_value` 추가. 틀에 따라 필요한 칸만 채우고 나머지는 NULL이며, 틀별 필수 여부는 서비스가 검증. UNIQUE `(mission_id, user_id)` — 미션당 1인 1회 제출. `is_late` 기준이 그룹 설정 마감 시각에서 미션의 `deadline_at`으로 바뀜.
+
+### SUBMISSION_GUESSES
+성대모사 미션에서 다른 멤버가 정답을 시도한 기록이다.
+
+| 컬럼 | 설명 |
+|---|---|
+| id | PK |
+| submission_id | 대상 제출물 (FK → SUBMISSIONS.id) |
+| user_id | 시도한 멤버 (FK → USERS.id) |
+| guess_text | 입력한 정답 원문 |
+| is_correct | 정답 여부 (서비스가 비교해 저장) |
+| created_at | 시도 시각 |
+
+> V3 신규 테이블. 한 사람이 여러 번 시도할 수 있어 UNIQUE는 없고 `(submission_id, user_id)` 인덱스만 둔다. 시도 횟수 상한은 설정(`hawe.mission.guess-max-attempts`)으로 서비스가 검사.
 
 ### COMMENTS
 | 컬럼 | 설명 |
