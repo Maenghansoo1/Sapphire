@@ -7,11 +7,13 @@
 
 - **틀(template)**: 매체(사진/음성/글/그림/슬라이더) + 놀이 방식. 코드값으로 식별한다 (예: `TEXT_ACROSTIC`).
 - **빈칸(params)**: 틀이 요구하는 입력값 (삼행시는 3글자 제시어, 슬라이더는 양 끝 키워드 등). 틀마다 모양이 다르며 미션에 JSON으로 저장한다.
-- **미션**: 그룹 × 날짜마다 1개. `template` + `params` + 사용자에게 보여줄 문장 `content`로 구성된다.
+- **미션**: 그룹 × 날짜 × 슬롯마다 1개. `template` + `params` + 사용자에게 보여줄 문장 `content`로 구성된다.
+- **슬롯(slot)**: 하루에 열리는 미션의 순번 (`slotNo` 1, 2, 3 …). 그룹이 정한 "하루 미션 수"(`dailyMissionCount`)만큼 슬롯이 있다.
+- **발행 시각 규칙**: 슬롯마다 발행·마감 시각은 `group_mission_slots`(그룹 설정의 `missionSlots`)가 정한다. **지정하지 않은 슬롯(행이 없거나 값이 NULL)은 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다.** 그룹 자체에는 발행·마감 시각 필드가 없다 (§2 "그룹 설정 연동").
 - **제출**: 틀이 요구하는 형식의 답. 미션당 1인 1회. 틀마다 담는 필드(파일/글/숫자/선택)가 다르다.
 - **잠금 규칙**: 내가 제출해야 그날의 그룹 피드와 결과를 볼 수 있다 (423 `FEED_LOCKED`).
-- **지각**: 그룹의 마감 시각(`mission_deadline_time`) 이후 제출은 `isLate=true`. 제출 자체는 막지 않는다.
-- **도장**: 별도 저장 없이 제출 기록 유무로 계산한다 (`FEATURE_SPEC` 도장 규칙).
+- **지각**: 그 미션의 마감 시각(`deadlineAt`) 이후 제출은 `isLate=true`. 제출 자체는 막지 않는다. 마감 시각은 발행 시점에 미션에 고정 저장된다.
+- **도장**: 별도 저장 없이 제출 기록 유무로 계산한다 (`FEATURE_SPEC` 도장 규칙). 하루에 미션이 여러 개일 때의 기준은 미정 (§11, 임시로 현행 유지: 그날 하나라도 제출하면 참잘했어요).
 
 ## 0-1. 이번 설계에서 확정한 것들
 
@@ -23,7 +25,10 @@
 | 파일 응답 필드 | `mediaUrl` + `mediaType`(`IMAGE`/`AUDIO`)로 통일 (기존 `imageUrl`에서 변경) | 음성도 담아야 함 |
 | 틀 확장 방식 | `template` 코드 1개 + 검증기 1개 추가 | 컬럼/엔드포인트 추가 최소화 |
 | 1차/2차 구분 | 혼자 제출로 끝나는 틀과 집계 틀은 1차, 순서·역할이 필요한 틀은 2차 | 2차는 별도 설계 필요 (§7) |
-| 미션 생성 | HTTP API 없음. 스케줄러가 발행 시각에 서버 내부에서 생성 (§6) | 외부에서 임의로 미션을 만들 수 없게 |
+| 미션 생성 | HTTP API 없음. 스케줄러가 슬롯별 발행 시각에 서버 내부에서 생성 (§6) | 외부에서 임의로 미션을 만들 수 없게 |
+| 하루 미션 수 | 그룹 설정 `dailyMissionCount` (1~5, 기본 1) | 그룹마다 하루 몇 개 열지 지정 (상한 5는 초안) |
+| 발행·마감 시각 | 슬롯별 시각(`group_mission_slots`)만 사용. 지정이 없으면 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안) | 시각의 출처를 슬롯 한 곳으로 단순화 (그룹의 기본 시각 컬럼 제거) |
+| 시각 고정 | 미션 발행 시 `published_at`, `deadline_at`을 미션에 저장 | 이후 그룹 설정을 바꿔도 이미 열린 미션과 지각 판정이 흔들리지 않음 |
 
 ---
 
@@ -68,7 +73,7 @@
 
 - `target`을 쓰는 틀(`TEXT_FILL_BLANK`, `DRAW_SKETCH`, `DRAW_A_TO_B`)은 발행 시 서버가 그룹 멤버 중 1명을 무작위로 뽑아 `targetUserId`를 저장한다. 응답에서는 서버가 닉네임을 풀어 `params.target`으로 내려준다 (§2 참조).
 - 성대모사(`VOICE_IMPRESSION`), 소리 흉내(`VOICE_MIMIC`)의 "친구들이 맞히기"는 1차에서는 댓글로 처리한다 (별도 기능 없음).
-- `SLIDER_CONSENSUS`의 승자는 `guess`와 실제 평균(`number`들의 평균)의 차이가 가장 작은 멤버다. (MISSIONS.md의 설명을 이렇게 해석했다 — §9 확인 필요)
+- `SLIDER_CONSENSUS`의 승자는 `guess`와 실제 평균(`number`들의 평균)의 차이가 가장 작은 멤버다. (MISSIONS.md의 설명을 이렇게 해석했다 — §11 확인 필요)
 
 ---
 
@@ -76,44 +81,55 @@
 
 | Method | Path | 설명 |
 |---|---|---|
-| GET | `/groups/{groupId}/missions/today` | 오늘의 미션 + 내 제출 여부 |
+| GET | `/groups/{groupId}/missions/today` | 오늘 열린 미션 목록 + 내 제출 여부 |
 | GET | `/missions/{missionId}` | 미션 단건 (알림 payload, 달력에서 진입 시) |
 | GET | `/mission-templates` | 틀 목록과 빈칸/제출 형식 (프론트 화면 구성용) |
 
 ### GET /groups/{groupId}/missions/today
+오늘 이미 발행된 미션을 `slotNo` 오름차순으로 돌려준다. 아직 하나도 발행되지 않았으면 `missions`가 빈 배열이다.
 ```json
-// Response 200 — TEXT_ACROSTIC
+// Response 200
 {
-  "missionId": 10,
-  "groupId": 1,
-  "content": "\"퇴근길\"로 삼행시 지어줘",
-  "category": "감성",
-  "template": "TEXT_ACROSTIC",
-  "media": "TEXT",
-  "params": { "word": "퇴근길" },
-  "publishedAt": "2026-09-28T09:00:00",
-  "deadlineAt": "2026-09-28T23:00:00",
-  "submittedByMe": false
+  "date": "2026-09-28",
+  "dailyMissionCount": 2,
+  "nextPublishAt": "2026-09-28T14:00:00",
+  "missions": [
+    {
+      "missionId": 10,
+      "groupId": 1,
+      "slotNo": 1,
+      "content": "\"퇴근길\"로 삼행시 지어줘",
+      "category": "감성",
+      "template": "TEXT_ACROSTIC",
+      "media": "TEXT",
+      "params": { "word": "퇴근길" },
+      "publishedAt": "2026-09-28T09:00:00",
+      "deadlineAt": "2026-09-28T12:00:00",
+      "submittedByMe": false
+    }
+  ]
 }
 ```
+슬라이더 미션 항목 예시:
 ```json
-// Response 200 — SLIDER_POSITION
 {
-  "missionId": 11, "groupId": 1, "content": "오늘 컨디션은 어디쯤?", "category": "일상",
+  "missionId": 11, "groupId": 1, "slotNo": 2, "content": "오늘 컨디션은 어디쯤?", "category": "일상",
   "template": "SLIDER_POSITION", "media": "SLIDER",
   "params": { "question": "오늘 컨디션", "left": "방전", "right": "풀충전" },
-  "publishedAt": "2026-09-29T09:00:00", "deadlineAt": "2026-09-29T23:00:00", "submittedByMe": true
+  "publishedAt": "2026-09-28T14:00:00", "deadlineAt": "2026-09-28T23:00:00", "submittedByMe": true
 }
 ```
 `target`을 쓰는 틀은 `params`에 서버가 풀어준 대상이 추가된다.
 ```json
 "params": { "sentence": "___는 무인도에 가면 제일 먼저 ___ 할 것 같다", "target": { "userId": 3, "nickname": "잎사귀" } }
 ```
-- `deadlineAt`이 지나도 미션은 계속 보이고 제출도 가능하다 (제출 시 `isLate=true`).
-- 에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `MISSION_NOT_PUBLISHED_YET` (404) — 오늘 발행 시각 전이거나 오늘 미션이 아직 생성되지 않음
+- `dailyMissionCount`: 오늘 열릴 미션 수 (그룹 설정). `missions.length`보다 크면 아직 발행 전인 슬롯이 있다.
+- `nextPublishAt`: 오늘 아직 발행되지 않은 슬롯 중 가장 이른 발행 예정 시각. 남은 슬롯이 없으면 `null`.
+- 마감 시각(`deadlineAt`)이 지나도 미션은 계속 보이고 제출도 가능하다 (제출 시 `isLate=true`).
+- 에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403). (이전의 `MISSION_NOT_PUBLISHED_YET`는 폐지 — 빈 배열로 표현)
 
 ### GET /missions/{missionId}
-응답 형태는 `/missions/today`와 같다.
+응답은 위 `missions[]`의 항목 1개와 같다 (`slotNo`, `publishedAt`, `deadlineAt` 포함).
 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403) — 미션이 속한 그룹의 멤버가 아님
 
 ### GET /mission-templates
@@ -128,6 +144,41 @@
 ] }
 ```
 정적 목록이라 페이지네이션 봉투를 쓰지 않아도 되지만 목록 응답 규칙(`content`)은 따른다.
+
+### 그룹 설정 연동 (하루 미션 수 · 발행 시각)
+그룹 설정 API(`POST /groups`, `PATCH /groups/{groupId}/settings`, `GET /groups/{groupId}`; 기준 문서 `API_DESIGN_ver0.1.md` §2)에 아래 항목이 있다. **그룹에는 발행·마감 시각 필드가 없고, 시각은 모두 슬롯(`missionSlots`)이 가진다.**
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `dailyMissionCount` | int (1~5) | 하루에 열 미션 수. 생략하면 1 (생성 시) / 변경 없음 (수정 시) |
+| `missionSlots` | array (선택) | 슬롯별 시각 지정. 항목: `slotNo`, `publishTime`(선택), `deadlineTime`(선택) |
+
+```json
+// POST /groups — 시각을 지정하지 않은 그룹 (하루 1개, 서버 기본 시각 사용)
+{ "name": "우리집" }
+
+// PATCH /groups/1/settings — 하루 3개, 2번은 오후 시간대로, 3번은 발행만 지정
+{ "dailyMissionCount": 3,
+  "missionSlots": [
+    { "slotNo": 2, "publishTime": "14:00", "deadlineTime": "22:00" },
+    { "slotNo": 3, "publishTime": "19:00" }
+  ] }
+
+// Response 200 — 슬롯마다 실제로 적용되는 시각을 항상 내려준다
+{ "id": 1, "name": "우리집", "ownerId": 1,
+  "dailyMissionCount": 3,
+  "missionSlots": [
+    { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false },
+    { "slotNo": 2, "publishTime": "14:00", "deadlineTime": "22:00", "custom": true },
+    { "slotNo": 3, "publishTime": "19:00", "deadlineTime": "23:00", "custom": true }
+  ] }
+```
+- **기본값 규칙:** 지정하지 않은 슬롯, 그리고 지정에서 생략한 시각은 서버 코드의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다. 아무것도 지정하지 않으면 모든 슬롯이 기본 시각에 열린다. `custom`은 해당 슬롯에 지정된 값이 하나라도 있는지를 뜻한다.
+- **`missionSlots`를 보내면 전체 교체**다. 보낸 슬롯만 지정 상태로 남고 나머지는 기본 시각으로 돌아간다. 빈 배열 `[]`은 지정을 모두 지운다. 필드를 생략하면 기존 지정을 유지한다.
+- **적용 시점(초안):** 아직 발행되지 않은 슬롯에는 오늘부터, 이미 발행된 미션은 바뀌지 않는다. 오늘 이미 지난 시각으로 바꾼 슬롯은 내일부터 적용된다. `dailyMissionCount`를 줄여도 오늘 이미 열린 초과 미션은 유지된다.
+- **검증 (400 `VALIDATION_ERROR`):** `dailyMissionCount` 범위, `slotNo`가 1~`dailyMissionCount` 밖, 같은 `slotNo` 중복, 시각 형식(`HH:mm`) 위반.
+- **기존 API와의 차이(호환성 깨짐):** 이미 구현된 그룹 API의 `missionPublishTime`, `missionDeadlineTime` 필드는 폐지된다. 프론트가 아직 연결되지 않아 영향은 작지만 Postman 컬렉션과 그룹 테스트는 고쳐야 한다.
+- 권한은 기존과 같다 (owner만 변경, 멤버는 조회).
 
 ---
 
@@ -258,14 +309,14 @@ V 유형 틀(`TEXT_BALANCE`, `SLIDER_POSITION`, `SLIDER_TASTE`, `SLIDER_CONSENSU
 ## 6. 미션 생성 (내부 처리, HTTP API 없음)
 
 ```
-[EventBridge 스케줄러] 그룹별 mission_publish_time
-   → MissionService.publishDailyMission(groupId, date)
-       1. 같은 그룹·날짜에 미션이 이미 있으면 중단 (중복 발행 방지)
-       2. 입력 수집: 오늘 날짜/요일, 그룹 관계, 최근 미션(문장·카테고리·틀), 카테고리 목록
+[EventBridge 스케줄러] 그룹별 · 슬롯별 발행 시각 (지정이 없으면 서버 코드의 기본 발행 시각)
+   → MissionService.publishDailyMission(groupId, date, slotNo)
+       1. 같은 그룹·날짜·슬롯에 미션이 이미 있으면 중단 (중복 발행 방지)
+       2. 입력 수집: 오늘 날짜/요일, 그룹 관계, 최근 미션(문장·카테고리·틀 — 오늘 먼저 열린 슬롯 포함), 카테고리 목록
        3. AI 호출 (mission-create 프롬프트) → { content, category, template, params }
        4. 서버 검증 (아래), 실패 시 재시도(최대 N회)
        5. 대상 지정 틀이면 그룹 멤버 중 1명을 무작위로 뽑아 params.targetUserId 저장
-       6. missions 저장 + 멤버들에게 mission_open 알림
+       6. missions 저장 (slot_no, 발행·마감 시각을 published_at/deadline_at에 고정) + 멤버들에게 mission_open 알림
        실패 시: 예비 미션 풀에서 선택 (미션이 안 열리는 날이 없게)
 ```
 
@@ -280,7 +331,10 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 | 슬라이더 | `left` ≠ `right`, 각각 짧은 단어(≤ 20자) |
 | 빈칸 채우기 | `sentence`에 `___`가 정확히 1개 |
 | 카테고리 | 주어진 목록에 있는 값인가 |
-| 연속 방지 | 바로 전 미션과 같은 `template`/문장이 아닌가 |
+| 연속 방지 | 바로 전 미션, 그리고 같은 날 먼저 열린 미션과 같은 `template`/문장이 아닌가 (하루에 여러 개일 때 같은 틀이 몰리지 않게) |
+
+- 스케줄 등록: 그룹 설정이 바뀌면 해당 그룹의 슬롯별 스케줄을 다시 계산해 등록한다. 슬롯 수(`dailyMissionCount`)만큼 실행 단위가 생기며 `(group_id, mission_date, slot_no)` UNIQUE 제약이 중복 실행을 막는다.
+- 시각 결정: 슬롯 N의 실제 발행 시각 = `group_mission_slots.publish_time`, 행이 없거나 NULL이면 서버 코드의 기본 발행 시각. 마감도 같다.
 
 ---
 
@@ -314,14 +368,19 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 
 | 테이블 | 변경 |
 |---|---|
-| `missions` | `template VARCHAR(40) NOT NULL`, `params JSON NOT NULL` 추가. `(group_id, mission_date)` UNIQUE 추가 (중복 발행 방지) |
+| `groups` | `daily_mission_count TINYINT UNSIGNED NOT NULL DEFAULT 1` 추가. `mission_publish_time`, `mission_deadline_time` **삭제** (기존 값은 V3에서 슬롯 1번 행으로 이전) |
+| `group_mission_slots` (신규) | 슬롯별 발행·마감 시각 지정. 컬럼: `group_id`, `slot_no`, `publish_time NULL`, `deadline_time NULL`. 행이 없거나 값이 NULL이면 서버 코드의 기본 시각을 사용. `(group_id, slot_no)` UNIQUE |
+| `missions` | `template VARCHAR(40) NOT NULL`, `params JSON NOT NULL`, `slot_no TINYINT UNSIGNED NOT NULL DEFAULT 1`, `published_at DATETIME NOT NULL`, `deadline_at DATETIME NOT NULL` 추가. UNIQUE `(group_id, mission_date, slot_no)` 추가 (중복 발행 방지) |
 | `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `text_value`, `number_value`, `guess_value`, `choice_value` 추가 (모두 NULL 허용). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
 
 - 기존 `group_members` UNIQUE 제약처럼 **동시 요청에서의 중복은 DB 제약으로 막고** 서비스에서 `DuplicateKeyException`을 `ALREADY_SUBMITTED`로 변환한다.
 - `submissions.caption`의 `TEXT` 길이는 서비스에서 제한한다 (200자).
+- 컬럼별 상세 정의는 `BACKEND_DB_ver0.1.md`의 "미션/제출/그룹 스케줄 스키마 변경 상세"를 기준으로 한다.
 
 ### 다른 문서에 미치는 영향 (이 문서에서는 수정하지 않음)
-- `API_DESIGN_ver0.1.md` §7 (Calendar)의 `submission.imageUrl` → `mediaUrl` 계열로 맞춰야 함.
+- `API_DESIGN_ver0.1.md` §7 (Calendar)의 `submission.imageUrl` → `mediaUrl` 계열로 맞춰야 함. 하루에 미션이 여러 개일 수 있으므로 `GET /me/calendar/{date}`의 그룹별 `mission`/`submission`도 목록 구조로 바꿔야 함.
+- 이미 구현된 그룹 API(`GroupController`, `GroupService`, `GroupMapper`, `Group` 도메인, DTO)는 `dailyMissionCount`, `missionSlots`를 모르고, 삭제되는 `missionPublishTime`/`missionDeadlineTime`을 아직 사용한다. 그룹 생성·수정·조회의 요청/응답과 SQL을 별도 구현 작업으로 바꿔야 한다.
+- `GroupMemberMapper.findMembersByGroupId`의 `submissionCountThisMonth`는 현재 제출 행 수를 센다. 하루 미션이 여러 개가 되면 "제출한 날 수"와 의미가 달라지므로 기준을 정해야 한다 (§11).
 - `API_DESIGN_ver0.1.md` §4 (Comment/Reaction)는 `submissions` 기준이라 그대로 유효.
 - `BACKEND_DB_ver0.1.md`의 엔드포인트 목록(§ 미션/제출)과 `DB_DESIGN_ver0.1.md`의 `submissions` 컬럼 설명을 이 문서에 맞게 갱신해야 함.
 
@@ -330,7 +389,6 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 | 코드 | HTTP | 설명 |
 |---|---|---|
 | `MISSION_NOT_FOUND` | 404 | 미션 없음 |
-| `MISSION_NOT_PUBLISHED_YET` | 404 | 오늘 미션이 아직 발행되지 않음 |
 | `NOT_GROUP_MEMBER` | 403 | 그룹 멤버가 아님 (`GroupErrorCode` 재사용 또는 동일 코드) |
 | `ALREADY_SUBMITTED` | 409 | 이미 제출함 |
 | `FEED_LOCKED` | 423 | 내가 제출하기 전에는 피드·결과·상세를 볼 수 없음 |
@@ -349,3 +407,10 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 5. `SLIDER_CONSENSUS`의 승리 판정 해석 확인 (§1-2).
 6. 대상 지정 틀에서 대상 본인이 제출할 수 있는가, 대상이 도중에 탈퇴하면 어떻게 표시하는가.
 7. 파일 한도·허용 형식의 확정값, 음성 길이 검증 방식 (서버에서 오디오 길이를 읽을 수 있는지).
+8. **도장 기준 (하루에 미션이 여러 개일 때).** 선택지: (a) 하나라도 제출하면 참잘했어요(현행 규칙 유지, 임시 기준), (b) 그날 열린 미션을 모두 제출해야 참잘했어요, (c) 미션별 도장. (b)나 (c)를 택하면 `FEATURE_SPEC`, 달력 API, `stampedToday` 계산이 모두 바뀐다.
+9. 멤버 목록의 `submissionCountThisMonth`를 "제출 수"로 둘지 "제출한 날 수"로 바꿀지.
+10. 하루 미션 수 상한(현재 초안 5)과 슬롯 간 최소 간격 제한 여부. 모든 슬롯이 같은 시각이면 같은 시각에 N개가 한꺼번에 열린다 (허용하는 것으로 가정).
+11. 슬롯의 마감이 발행보다 이르거나 자정을 넘기는 경우 허용 여부 (그룹 설정의 기존 미정 사항과 동일).
+12. 설정 변경 적용 시점 규칙(§2 "그룹 설정 연동")이 의도와 맞는지.
+13. 피드 잠금 단위. 현재는 **미션별**로 제출해야 그 미션의 피드를 볼 수 있다. 하루 단위(그날 하나라도 제출하면 모두 열람)로 할지.
+14. 서버 기본 시각의 값(현재 초안 발행 09:00 / 마감 23:00)과 둘 곳(코드 상수 vs 설정 파일). 코드 상수로 두면 값을 바꿀 때 지정하지 않은 모든 그룹의 시각이 함께 바뀐다.
