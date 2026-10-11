@@ -51,10 +51,13 @@
 
 ## 개발 환경 준비
 
+> 다음 작업 PC 는 Mac 이에요 — iOS·Android 둘 다 빌드할 수 있어요.
+
 ### Android
 - Android Studio 설치 → `android/` 폴더 열기. 처음 열면 `local.properties`(SDK 경로)가 자동으로 생겨요(git 에 안 올라가요).
 - JDK 17~21 필요 (JDK 26 은 Gradle 8.12 와 안 맞아요). Android Studio 내장 JDK 를 쓰면 돼요.
-- 명령줄 빌드: `cd android && ./gradlew :app:assembleDebug`
+- 명령줄 빌드: `cd android && ./gradlew :app:assembleDebug` (Mac 에서 permission denied 가 나면 `chmod +x gradlew`)
+- 에뮬레이터: Android Studio > Device Manager 에서 가상 기기를 하나 만들어요 (Apple Silicon Mac 은 arm64 이미지).
 - 버전: Kotlin 2.1.10, AGP 8.8.2, Gradle 8.12, compileSdk 35, minSdk 26, CameraX 1.4.1
 
 ### iOS (Mac 필요)
