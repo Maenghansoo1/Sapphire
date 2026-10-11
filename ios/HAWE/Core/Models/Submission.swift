@@ -44,11 +44,6 @@ struct MissionResult: Identifiable, Hashable {
 
 // MARK: - 목업
 
-extension MissionType {
-    /// 15 캘린더에 쓰는 한 글자 (그/사/글/음)
-    var letter: String { String(displayName.prefix(1)) }
-}
-
 extension MissionResult {
     /// 05 미션에서 '친구들 작품 보기'를 눌렀을 때 — 완료한 멤버의 작품을 목업으로 만들어요.
     static func mock(for mission: TodayMission) -> MissionResult {

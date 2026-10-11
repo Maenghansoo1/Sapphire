@@ -12,7 +12,7 @@ struct DayRecord: Hashable {
 }
 
 /// 15 기록 캘린더 (Figma 1:1311)
-/// 그룹별 월간 캘린더. 기록 있는 날에 유형 글자(그/사/글/음), 오늘 테두리,
+/// 그룹별 월간 캘린더. 기록 있는 날에 유형 이름(그림/사진/글/음성), 오늘 테두리,
 /// 날짜를 고르면 아래 카드 → '모아보기'로 그날 결과 공개 화면 (내가 올린 날만)
 struct RecordCalendarView: View {
     let group: GroupDetail
@@ -54,7 +54,6 @@ struct RecordCalendarView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     monthHeader.padding(.top, 12)
                     grid.padding(.top, 12)
-                    legend.padding(.top, 12)
                     if let selected, let record = records[selected] {
                         selectedCard(record).padding(.top, 20)
                     }
@@ -161,7 +160,8 @@ struct RecordCalendarView: View {
                     .font(.plex(15, record != nil ? .bold : .medium))
                     .foregroundStyle(isSelected ? Color.onAccent : isFuture ? Color.textDisabled : Color.ink)
                 // 글자가 없어도 높이를 맞춰요.
-                Text(record?.type.letter ?? " ")
+                // 유형 이름을 그대로 써요 (그림·사진·글·음성, 사용자 요청)
+                Text(record?.type.displayName ?? " ")
                     .font(.plex(10, .semibold))
                     .foregroundStyle(isSelected ? Color.onAccent : Color.textSecondary)
             }
@@ -187,17 +187,6 @@ struct RecordCalendarView: View {
         if isToday { text += ", 오늘" }
         if let record { text += ", \(record.type.displayName) 기록" }
         return text
-    }
-
-    /// "그 그림   사 사진   글 글   음 음성" (12 · 간격 14)
-    private var legend: some View {
-        HStack(spacing: 14) {
-            ForEach(MissionType.allCases) { type in
-                Text("\(type.letter) \(type.displayName)")
-            }
-        }
-        .font(.caption12)
-        .foregroundStyle(.textSecondary)
     }
 
     // MARK: - Selected day
