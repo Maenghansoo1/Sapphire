@@ -37,6 +37,8 @@ import com.sapphire.hawe.R
 import com.sapphire.hawe.app.AppLinks
 import com.sapphire.hawe.app.AppSession
 import com.sapphire.hawe.app.LocalSession
+import com.sapphire.hawe.app.LocalStore
+import com.sapphire.hawe.data.DataStore
 import com.sapphire.hawe.app.MyAccount
 import com.sapphire.hawe.app.rememberOpenWebLink
 import com.sapphire.hawe.designsystem.CharacterPicker
@@ -69,6 +71,7 @@ import java.time.LocalDate
 @Composable
 fun LoginScreen(onSignup: () -> Unit, onPasswordReset: (String) -> Unit, onSocial: (LoginProvider) -> Unit) {
     val session = LocalSession.current
+    val store = LocalStore.current
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
 
@@ -91,7 +94,7 @@ fun LoginScreen(onSignup: () -> Unit, onPasswordReset: (String) -> Unit, onSocia
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 HTextField(email, { email = it }, placeholder = "이메일", keyboardType = KeyboardType.Email)
                 HTextField(password, { password = it }, placeholder = "비밀번호", isSecure = true)
-                HButton("로그인") { logIn(session, email) }
+                HButton("로그인") { logIn(session, store, email) }
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = HLayout.minTouch),
                     horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
@@ -123,14 +126,14 @@ fun LoginScreen(onSignup: () -> Unit, onPasswordReset: (String) -> Unit, onSocia
  * TODO: 서버 연결 시 실제 로그인. 지금은 이 기기에서 가입한 이메일이면 그 계정으로,
  * 처음 보는 이메일이면 그 이메일로 가입된 계정이 있다고 보고 들어가요 (iOS 와 같은 규칙).
  */
-private fun logIn(session: AppSession, email: String) {
+private fun logIn(session: AppSession, store: DataStore, email: String) {
     val trimmed = email.trim().lowercase()
     if (trimmed.isNotEmpty() && session.account.email?.lowercase() != trimmed) {
         val nickname = trimmed.substringBefore("@").take(10).ifEmpty { "하늘" }
-        session.account = MyAccount(
-            Profile(AvatarContent.Character(ProfileCharacter.Default), nickname),
-            trimmed, LocalDate.now(), LoginProvider.Email, setOf(LoginProvider.Email),
-        )
+        val profile = Profile(AvatarContent.Character(ProfileCharacter.Default), nickname)
+        session.account = MyAccount(profile, trimmed, LocalDate.now(), LoginProvider.Email, setOf(LoginProvider.Email))
+        store.reset()
+        store.updateMyProfile(profile)
     }
     session.signIn()
 }
@@ -236,6 +239,7 @@ private fun TermRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit
 @Composable
 fun SignupProfileScreen(provider: LoginProvider, email: String?, onBack: () -> Unit) {
     val session = LocalSession.current
+    val store = LocalStore.current
     var avatar by remember { mutableStateOf<AvatarContent>(AvatarContent.Character(ProfileCharacter.Default)) }
     var nickname by rememberSaveable { mutableStateOf("") }
     val canStart = nickname.trim().length in 2..10
@@ -263,7 +267,11 @@ fun SignupProfileScreen(provider: LoginProvider, email: String?, onBack: () -> U
             cta = {
                 // TODO: 서버 연결 시 프로필 저장. 간편 로그인 이메일은 각 SDK 에서 받아와요.
                 HButton("시작하기", enabled = canStart) {
-                    session.account = MyAccount(Profile(avatar, nickname.trim()), email, LocalDate.now(), provider, setOf(provider))
+                    val profile = Profile(avatar, nickname.trim())
+                    session.account = MyAccount(profile, email, LocalDate.now(), provider, setOf(provider))
+                    // 새 계정이라 그룹이 없어서 01 시작으로 가요.
+                    store.reset()
+                    store.updateMyProfile(profile)
                     session.signIn()
                 }
             },
@@ -322,7 +330,7 @@ fun PasswordResetScreen(initialEmail: String, onBack: () -> Unit) {
 @Preview(showSystemUi = true)
 @Composable
 private fun LoginPreview() {
-    androidx.compose.runtime.CompositionLocalProvider(LocalSession provides AppSession()) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalSession provides AppSession(), LocalStore provides DataStore()) {
         LoginScreen({}, {}, {})
     }
 }
@@ -330,7 +338,7 @@ private fun LoginPreview() {
 @Preview(showSystemUi = true)
 @Composable
 private fun SignupProfilePreview() {
-    androidx.compose.runtime.CompositionLocalProvider(LocalSession provides AppSession()) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalSession provides AppSession(), LocalStore provides DataStore()) {
         SignupProfileScreen(LoginProvider.Email, "a@b.com") {}
     }
 }

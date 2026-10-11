@@ -16,15 +16,22 @@ import com.sapphire.hawe.feature.auth.LoginScreen
 import com.sapphire.hawe.feature.auth.PasswordResetScreen
 import com.sapphire.hawe.feature.auth.SignupAccountScreen
 import com.sapphire.hawe.feature.auth.SignupProfileScreen
+import com.sapphire.hawe.data.DataStore
+import com.sapphire.hawe.feature.groups.CreateGroupScreen
+import com.sapphire.hawe.feature.groups.GroupInfoScreen
+import com.sapphire.hawe.feature.groups.GroupProfileScreen
+import com.sapphire.hawe.feature.groups.HomeScreen
+import com.sapphire.hawe.feature.groups.JoinGroupScreen
 import com.sapphire.hawe.feature.groups.StartScreen
 import com.sapphire.hawe.model.LoginProvider
 
 val LocalSession = staticCompositionLocalOf<AppSession> { error("AppSession 이 없어요") }
+val LocalStore = staticCompositionLocalOf<DataStore> { error("DataStore 가 없어요") }
 
-/** 로그인 상태에 따라 첫 화면을 골라요. 로그아웃 → A1 로그인, 로그인 → 01 시작 (2단계에서 04 홈 연결) */
+/** 로그인 상태에 따라 첫 화면을 골라요. 로그아웃 → A1 로그인, 로그인 → 그룹이 있으면 04 홈, 없으면 01 시작 */
 @Composable
-fun HaweApp(session: AppSession) {
-    CompositionLocalProvider(LocalSession provides session) {
+fun HaweApp(session: AppSession, store: DataStore) {
+    CompositionLocalProvider(LocalSession provides session, LocalStore provides store) {
         Crossfade(session.isSignedIn, label = "root") { signedIn ->
             if (signedIn) MainFlow() else AuthFlow()
         }
@@ -71,10 +78,76 @@ private fun AuthFlow() {
     }
 }
 
-/** 로그인 뒤 흐름 — 2단계에서 04 홈 · 02 · 03 · 16 을 붙여요. */
+/**
+ * 로그인 뒤 흐름. 그룹이 하나도 없으면 01 시작, 있으면 04 홈이 첫 화면이에요.
+ * 화면 사이에는 그룹 id 만 넘기고, 내용은 DataStore 에서 읽어요.
+ */
 @Composable
 private fun MainFlow() {
-    StartScreen()
+    val store = LocalStore.current
+    val nav = rememberNavController()
+    fun backToRoot() = nav.popBackStack("root", inclusive = false)
+
+    NavHost(nav, startDestination = "root") {
+        composable("root") {
+            if (store.groups.isEmpty()) {
+                StartScreen(
+                    onCreateGroup = { nav.navigate("createGroup") },
+                    onJoinGroup = { nav.navigate("joinGroup") },
+                    // TODO: 17 마이페이지 (5단계)
+                    onMyPage = {},
+                )
+            } else {
+                HomeScreen(
+                    onAdd = { nav.navigate("start") },
+                    // TODO: 17 마이페이지 (5단계)
+                    onMyPage = {},
+                    // TODO: 05 오늘의 미션 (3단계) — 그 전까지는 16 그룹 정보로 열어요.
+                    onOpenGroup = { id -> nav.navigate("groupInfo/$id") },
+                )
+            }
+        }
+        composable("start") {
+            StartScreen(
+                onBack = { nav.popBackStack() },
+                onCreateGroup = { nav.navigate("createGroup") },
+                onJoinGroup = { nav.navigate("joinGroup") },
+                onMyPage = {},
+            )
+        }
+        composable("createGroup") {
+            CreateGroupScreen(onBack = { nav.popBackStack() }) { name, relationship, startDate ->
+                val id = store.createGroup(name, relationship, startDate)
+                // 그룹을 만든 뒤에는 16 그룹 정보(초대 코드 공유)로 가요. 뒤로 가면 홈이에요. (CLAUDE.md §4)
+                nav.navigate("groupInfo/$id") { popUpTo("root") }
+            }
+        }
+        composable(
+            "joinGroup?code={code}",
+            arguments = listOf(navArgument("code") { type = NavType.StringType; defaultValue = "" }),
+        ) { entry ->
+            JoinGroupScreen(initialCode = entry.arguments?.getString("code") ?: "", onBack = { nav.popBackStack() }) { code ->
+                store.join(code)
+                backToRoot()
+            }
+        }
+        composable("groupInfo/{id}") { entry ->
+            val id = entry.arguments?.getString("id") ?: return@composable
+            GroupInfoScreen(
+                groupId = id,
+                onBack = { nav.popBackStack() },
+                onEditProfile = { nav.navigate("groupProfile/$id") },
+                onLeft = {
+                    backToRoot()
+                    store.leave(id)
+                },
+            )
+        }
+        composable("groupProfile/{id}") { entry ->
+            val id = entry.arguments?.getString("id") ?: return@composable
+            GroupProfileScreen(groupId = id, onBack = { nav.popBackStack() })
+        }
+    }
 }
 
 /** 앱 밖 웹 문서를 앱 안 브라우저(Custom Tabs)로 열어요 — iOS Safari View 와 같은 역할 */

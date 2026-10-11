@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.remember
 import com.sapphire.hawe.app.HaweApp
 import com.sapphire.hawe.app.AppSession
+import com.sapphire.hawe.data.DataStore
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,7 +21,8 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             val session = remember { AppSession() }
-            HaweApp(session)
+            val store = remember { DataStore() }
+            HaweApp(session, store)
         }
     }
 }
