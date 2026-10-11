@@ -3,6 +3,9 @@ import SwiftUI
 /// 04 홈 · 내 그룹 목록 (Figma 1:461)
 struct HomeView: View {
     let groups: [GroupSummary]
+    @Binding var path: [MainRoute]
+
+    @State private var showsAddMenu = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,12 +42,18 @@ struct HomeView: View {
                 .foregroundStyle(.ink)
             Spacer()
             HStack(spacing: 16) {
-                // TODO: 02 그룹 만들기 / 17 마이페이지 연결
-                headerButton(.plus, size: 24, label: "그룹 추가") {}
+                headerButton(.plus, size: 24, label: "그룹 추가") { showsAddMenu = true }
+                // TODO: 17 마이페이지 연결
                 headerButton(.person, size: 22, label: "마이페이지") {}
             }
         }
         .frame(height: HLayout.headerHeight)
+        // Figma 에 + 를 눌렀을 때 화면이 없어서 01 시작과 같은 두 가지를 고르게 했어요.
+        .confirmationDialog("그룹 추가", isPresented: $showsAddMenu) {
+            Button("새 그룹 만들기") { path.append(.createGroup) }
+            Button("초대 코드로 참여하기") { path.append(.joinGroup(code: nil)) }
+            Button("취소", role: .cancel) {}
+        }
     }
 
     /// 아이콘은 Figma 크기 그대로 두고, 눌리는 영역만 44pt 로 넓혀요.
@@ -130,6 +139,6 @@ struct GroupCard: View {
 
 #Preview {
     NavigationStack {
-        HomeView(groups: GroupSummary.mock)
+        HomeView(groups: GroupSummary.mock, path: .constant([]))
     }
 }

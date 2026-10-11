@@ -2,6 +2,8 @@ import SwiftUI
 
 /// 01 시작 (Figma 1:314) — 참여한 그룹이 하나도 없을 때
 struct StartView: View {
+    @Binding var path: [MainRoute]
+
     var body: some View {
         HCTAScaffold {
             VStack(alignment: .leading, spacing: 48) {
@@ -11,9 +13,8 @@ struct StartView: View {
             .padding(.top, HLayout.introTopInset)
         } cta: {
             VStack(spacing: 12) {
-                // TODO: 02 그룹 만들기 / 03 초대 코드로 참여는 다음 묶음에서 연결해요.
-                HButton("새 그룹 만들기") {}
-                HButton("초대 코드로 참여하기", kind: .secondary) {}
+                HButton("새 그룹 만들기") { path.append(.createGroup) }
+                HButton("초대 코드로 참여하기", kind: .secondary) { path.append(.joinGroup(code: nil)) }
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -66,6 +67,6 @@ struct StartView: View {
 
 #Preview {
     NavigationStack {
-        StartView()
+        StartView(path: .constant([]))
     }
 }

@@ -1,19 +1,22 @@
 import SwiftUI
 
 /// 하단 고정 CTA 화면 틀 (CLAUDE.md §3-4)
-/// 내용은 위쪽만 스크롤되고, CTA 는 화면 아래 끝에서 36pt 위에 고정돼요 (Figma 프레임 pb 36).
+/// 내용은 위쪽만 스크롤되고, CTA 는 화면 아래 끝에서 `bottomInset`(기본 36, Figma 프레임 pb) 위에 고정돼요.
 /// 키보드가 올라오면 CTA 도 키보드 위로 올라와요.
 struct HCTAScaffold<Content: View, CTA: View>: View {
     private let horizontalPadding: CGFloat
+    private let bottomInset: CGFloat
     private let content: Content
     private let cta: CTA
 
     init(
         horizontalPadding: CGFloat = HLayout.screenPadding,
+        bottomInset: CGFloat = HLayout.ctaBottomInset,
         @ViewBuilder content: () -> Content,
         @ViewBuilder cta: () -> CTA
     ) {
         self.horizontalPadding = horizontalPadding
+        self.bottomInset = bottomInset
         self.content = content()
         self.cta = cta()
     }
@@ -32,7 +35,7 @@ struct HCTAScaffold<Content: View, CTA: View>: View {
             cta
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, 12)
-                .padding(.bottom, HLayout.ctaBottomInset)
+                .padding(.bottom, bottomInset)
         }
         .ignoresSafeArea(.container, edges: .bottom)
     }

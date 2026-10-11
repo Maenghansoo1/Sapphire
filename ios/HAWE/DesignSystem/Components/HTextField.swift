@@ -13,6 +13,8 @@ struct HTextField: View {
     private let keyboard: UIKeyboardType
     private let contentType: UITextContentType?
     private let error: String?
+    private let textSize: CGFloat
+    private let labelSpacing: CGFloat
 
     init(
         _ label: String? = nil,
@@ -23,7 +25,9 @@ struct HTextField: View {
         maxLength: Int? = nil,
         keyboard: UIKeyboardType = .default,
         contentType: UITextContentType? = nil,
-        error: String? = nil
+        error: String? = nil,
+        textSize: CGFloat = 16,
+        labelSpacing: CGFloat = 8
     ) {
         self.label = label
         self.placeholder = placeholder
@@ -34,10 +38,12 @@ struct HTextField: View {
         self.keyboard = keyboard
         self.contentType = contentType
         self.error = error
+        self.textSize = textSize
+        self.labelSpacing = labelSpacing
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: labelSpacing) {
             if let label {
                 Text(label)
                     .font(.fieldLabel)
@@ -45,7 +51,7 @@ struct HTextField: View {
             }
 
             field
-                .font(.plex(16))
+                .font(.plex(textSize))
                 .foregroundStyle(.ink)
                 .tint(.ink)
                 .keyboardType(keyboard)

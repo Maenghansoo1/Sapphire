@@ -17,6 +17,17 @@ enum Relationship: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// 02 그룹 만들기 장식 미리보기 문구 — "캐릭터 사이에 ○○ 떠요"
+    var decorPhrase: String {
+        switch self {
+        case .lover: "하트가"
+        case .friend: "반짝이가"
+        case .family: "작은 집이"
+        case .rival: "번개가"
+        case .soso: "말줄임표가"
+        }
+    }
+
     /// 연인은 2명, 나머지는 최대 6명
     var maxMembers: Int { self == .lover ? 2 : 6 }
 

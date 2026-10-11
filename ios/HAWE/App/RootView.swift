@@ -11,13 +11,9 @@ struct RootView: View {
             case .signedOut:
                 AuthFlowView()
             case .signedIn(let hasGroups):
-                NavigationStack {
-                    if hasGroups {
-                        HomeView(groups: GroupSummary.mock)
-                    } else {
-                        StartView()
-                    }
-                }
+                MainFlowView(hasGroups: hasGroups)
+                    // 01 → 04 로 바뀔 때 쌓인 화면을 새로 시작해요.
+                    .id(hasGroups)
             }
         }
         .animation(.default, value: session.state)
