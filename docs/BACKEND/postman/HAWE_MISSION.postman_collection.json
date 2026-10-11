@@ -1,0 +1,899 @@
+{
+  "info": {
+    "name": "HA'WE - MISSION READ API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "미션 조회 API(GET /api/mission-templates, /api/groups/{id}/missions/today, /api/missions/{id}) 테스트. 서버(http://localhost:8080) 필요. 폴더 0~2는 DB 수정 없이 통과합니다. 미션 발행 기능이 아직 없어서 폴더 3~4는 DB에 SQL을 직접 넣어야 합니다: 2.5 폴더 실행 -> Postman Console(View > Show Postman Console)에 출력된 SQL을 hawe DB에서 실행 -> 폴더 3 실행 -> 3.5 폴더 실행 후 출력된 SQL 실행 -> 폴더 4 실행. 처음부터 다시 돌릴 때는 collection 변수 run을 비우세요(새 계정 생성)."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const REFRESH_AFTER_MS = 20 * 60 * 1000;",
+          "for (const user of ['A', 'B', 'C']) {",
+          "  const accessToken = pm.collectionVariables.get('token' + user);",
+          "  const refreshToken = pm.collectionVariables.get('refreshToken' + user);",
+          "  const issuedAt = pm.collectionVariables.get('tokenIssuedAt' + user);",
+          "  if (!accessToken || !refreshToken || !(Date.now() - Number(issuedAt) > REFRESH_AFTER_MS)) continue;",
+          "  try {",
+          "    const response = await pm.sendRequest({",
+          "      url: pm.variables.replaceIn('{{baseUrl}}/api/auth/refresh'),",
+          "      method: 'POST',",
+          "      header: { 'Content-Type': 'application/json' },",
+          "      body: { mode: 'raw', raw: JSON.stringify({ refreshToken }) }",
+          "    });",
+          "    if (response.code !== 200) {",
+          "      console.warn('Token refresh failed for user ' + user, response.code);",
+          "      continue;",
+          "    }",
+          "    const tokens = response.json();",
+          "    if (!tokens.accessToken || !tokens.refreshToken) throw new Error('Missing token in refresh response');",
+          "    pm.collectionVariables.set('token' + user, tokens.accessToken);",
+          "    pm.collectionVariables.set('refreshToken' + user, tokens.refreshToken);",
+          "    pm.collectionVariables.set('tokenIssuedAt' + user, Date.now().toString());",
+          "  } catch (error) {",
+          "    console.warn('Token refresh failed for user ' + user, error);",
+          "  }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "0. 사용자 준비",
+      "item": [
+        {
+          "name": "A 회원가입",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\": \"usera_{{run}}\", \"password\": \"password1\", \"nickname\": \"nicka\", \"email\": \"a_{{run}}@test.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"run\")) pm.collectionVariables.set(\"run\", Date.now().toString(36));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A 로그인",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\": \"usera_{{run}}\", \"password\": \"password1\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenA\", pm.response.json().accessToken);",
+                  "pm.collectionVariables.set(\"refreshTokenA\", pm.response.json().refreshToken);",
+                  "pm.collectionVariables.set(\"tokenIssuedAtA\", Date.now().toString());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B 회원가입",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\": \"userb_{{run}}\", \"password\": \"password1\", \"nickname\": \"nickb\", \"email\": \"b_{{run}}@test.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B 로그인",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"loginId\": \"userb_{{run}}\", \"password\": \"password1\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenB\", pm.response.json().accessToken);",
+                  "pm.collectionVariables.set(\"refreshTokenB\", pm.response.json().refreshToken);",
+                  "pm.collectionVariables.set(\"tokenIssuedAtB\", Date.now().toString());"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. 미션 틀 목록",
+      "item": [
+        {
+          "name": "1-1 틀 목록 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/mission-templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mission-templates"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json().content;",
+                  "pm.test(\"16 phase-1 templates in doc order\", () => pm.expect(c.map(t => t.template)).to.eql([\"PHOTO_NOW\", \"PHOTO_GALLERY\", \"PHOTO_COLOR\", \"VOICE_LINE\", \"VOICE_MIMIC\", \"VOICE_IMPRESSION\", \"TEXT_ACROSTIC\", \"TEXT_ONE_WORD\", \"TEXT_REVIEW\", \"TEXT_BALANCE\", \"TEXT_FILL_BLANK\", \"DRAW_SKETCH\", \"DRAW_A_TO_B\", \"SLIDER_POSITION\", \"SLIDER_TASTE\", \"SLIDER_CONSENSUS\"]));",
+                  "pm.test(\"each has media/name/phase=1/schemas\", () => c.forEach(t => { pm.expect([\"PHOTO\",\"VOICE\",\"TEXT\",\"DRAW\",\"SLIDER\"]).to.include(t.media); pm.expect(t.name).to.be.a(\"string\").and.not.empty; pm.expect(t.phase).to.eql(1); pm.expect(t.paramsSchema).to.be.an(\"object\"); pm.expect(t.payloadSchema).to.be.an(\"object\").and.not.empty; }));",
+                  "pm.test(\"TEXT_ACROSTIC sample\", () => { const t = c.find(x => x.template === \"TEXT_ACROSTIC\"); pm.expect(t.media).to.eql(\"TEXT\"); pm.expect(t.paramsSchema.word).to.eql(\"string(3)\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-2 토큰 없이 (401/403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/mission-templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mission-templates"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 or 403\", () => pm.expect([401, 403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. 오늘의 미션 - 미션 없음",
+      "item": [
+        {
+          "name": "2-1 그룹 생성 (A, 하루 2개, 2번 슬롯 14:00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"미션조회그룹\", \"dailyMissionCount\": 2, \"missionSlots\": [{\"slotNo\": 2, \"publishTime\": \"14:00\", \"deadlineTime\": \"22:00\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"groupId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-2 오늘 미션 - 비어 있음 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/missions/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "missions",
+                "today"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"empty missions, count 2\", () => { pm.expect(j.missions).to.eql([]); pm.expect(j.dailyMissionCount).to.eql(2); });",
+                  "pm.test(\"date is YYYY-MM-DD\", () => pm.expect(j.date).to.match(/^\\d{4}-\\d{2}-\\d{2}$/));",
+                  "pm.test(\"nextPublishAt = today 09:00 (earliest unpublished slot)\", () => pm.expect(j.nextPublishAt).to.match(new RegExp(\"^\" + j.date + \"T09:00(:00)?$\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-3 멤버 아님 (B) → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/missions/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "missions",
+                "today"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"NOT_GROUP_MEMBER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_MEMBER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-4 없는 그룹 → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/999999999/missions/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "999999999",
+                "missions",
+                "today"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"GROUP_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"GROUP_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-5 토큰 없이 (401/403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/missions/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "missions",
+                "today"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 or 403\", () => pm.expect([401, 403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2-6 없는 미션 → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/missions/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "missions",
+                "999999999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"MISSION_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"MISSION_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2.5 시드 SQL 출력 (미션 2개)",
+      "item": [
+        {
+          "name": "SQL 출력 (Postman Console 확인)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/missions/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "missions",
+                "today"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const g = pm.collectionVariables.get(\"groupId\"), run = pm.collectionVariables.get(\"run\");",
+                  "const sql = [",
+                  "  \"-- Run this in the hawe DB, then run folder 3.\",",
+                  "  \"INSERT INTO missions (group_id, content, category, template, params, slot_no, published_at, deadline_at, mission_date) VALUES\",",
+                  "  \"(\" + g + \", '\\\"퇴근길\\\"로 삼행시 지어줘', '감성', 'TEXT_ACROSTIC', '{\\\"word\\\":\\\"퇴근길\\\"}', 1, NOW(), NOW() + INTERVAL 3 HOUR, CURDATE()),\",",
+                  "  \"(\" + g + \", '[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다', '유머', 'TEXT_FILL_BLANK', JSON_OBJECT('sentence', '[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다', 'targetUserId', (SELECT id FROM users WHERE login_id = 'userb_\" + run + \"')), 2, NOW(), NOW() + INTERVAL 3 HOUR, CURDATE());\"",
+                  "].join(\"\\n\");",
+                  "console.log(sql);",
+                  "pm.test(\"SQL printed to Postman Console (View > Show Postman Console)\", () => pm.expect(sql).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. 시드 후 조회 (SQL 실행 필요, 제출 전)",
+      "item": [
+        {
+          "name": "3-1 오늘 미션 2개 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/missions/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "missions",
+                "today"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"2 missions ordered by slotNo (did you run the seed SQL?)\", () => { pm.expect(j.missions.length).to.eql(2); pm.expect(j.missions.map(m => m.slotNo)).to.eql([1, 2]); });",
+                  "pm.test(\"all slots published -> nextPublishAt null\", () => pm.expect(j.nextPublishAt).to.eql(null));",
+                  "const [m1, m2] = j.missions;",
+                  "pm.test(\"mission 1 acrostic\", () => { pm.expect(m1.template).to.eql(\"TEXT_ACROSTIC\"); pm.expect(m1.media).to.eql(\"TEXT\"); pm.expect(m1.params).to.eql({word: \"퇴근길\"}); pm.expect(m1.submittedByMe).to.eql(false); pm.expect(m1.groupId).to.eql(Number(pm.collectionVariables.get(\"groupId\"))); pm.expect(m1.publishedAt).to.be.a(\"string\"); pm.expect(m1.deadlineAt).to.be.a(\"string\"); });",
+                  "pm.test(\"mission 2 target expanded\", () => { pm.expect(m2.template).to.eql(\"TEXT_FILL_BLANK\"); pm.expect(m2.params).to.not.have.property(\"targetUserId\"); pm.expect(m2.params.target.nickname).to.eql(\"nickb\"); pm.expect(m2.params.target.userId).to.be.a(\"number\"); pm.expect(m2.params.sentence).to.include(\"___\"); });",
+                  "pm.collectionVariables.set(\"missionId1\", m1.missionId);",
+                  "pm.collectionVariables.set(\"missionId2\", m2.missionId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-2 미션 단건 1 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/missions/{{missionId1}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "missions",
+                "{{missionId1}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const m = pm.response.json();",
+                  "pm.test(\"same shape as list item\", () => { pm.expect(m.missionId).to.eql(Number(pm.collectionVariables.get(\"missionId1\"))); pm.expect(m.slotNo).to.eql(1); pm.expect(m.template).to.eql(\"TEXT_ACROSTIC\"); pm.expect(m.params).to.eql({word: \"퇴근길\"}); pm.expect(m.submittedByMe).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-3 미션 단건 2 - target 풀림 (A)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/missions/{{missionId2}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "missions",
+                "{{missionId2}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const m = pm.response.json();",
+                  "pm.test(\"target expanded, no targetUserId\", () => { pm.expect(m.params).to.not.have.property(\"targetUserId\"); pm.expect(m.params.target.nickname).to.eql(\"nickb\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-4 멤버 아님 (B) 단건 → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/missions/{{missionId1}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "missions",
+                "{{missionId1}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"NOT_GROUP_MEMBER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_MEMBER\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-5 토큰 없이 단건 (401/403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/missions/{{missionId1}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "missions",
+                "{{missionId1}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 or 403\", () => pm.expect([401, 403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3.5 제출 SQL 출력",
+      "item": [
+        {
+          "name": "SQL 출력 (Postman Console 확인)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/missions/{{missionId1}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "missions",
+                "{{missionId1}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get(\"missionId1\"), run = pm.collectionVariables.get(\"run\");",
+                  "const sql = \"-- Make user A a submitter of mission 1, then run folder 4.\\nINSERT INTO submissions (mission_id, user_id, answer_data) VALUES (\" + id + \", (SELECT id FROM users WHERE login_id = 'usera_\" + run + \"'), '{\\\"text\\\":\\\"abc\\\"}');\";",
+                  "console.log(sql);",
+                  "pm.test(\"SQL printed to Postman Console\", () => pm.expect(sql).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. 제출 후 submittedByMe (SQL 실행 필요)",
+      "item": [
+        {
+          "name": "4-1 A: 1번 true, 2번 false",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/missions/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "missions",
+                "today"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const ms = pm.response.json().missions;",
+                  "pm.test(\"submittedByMe true for mission 1 only (did you run the submission SQL?)\", () => pm.expect(ms.map(m => m.submittedByMe)).to.eql([true, false]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4-2 단건 1 (A) true",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/missions/{{missionId1}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "missions",
+                "{{missionId1}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"submittedByMe\", () => pm.expect(pm.response.json().submittedByMe).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

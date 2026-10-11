@@ -1,109 +1,95 @@
-# Plan: Group module follow-up for V3 (relationType / dailyMissionCount / missionSlots)
+# Plan: Mission read APIs (today / single / template catalog)
 
 ## Goal
-Adapt the already-implemented `group` slice to the V3 schema. V3 (`src/main/resources/db/migration/V3__mission_slots_and_submission_answers.sql`, already written) dropped `groups.mission_publish_time` / `mission_deadline_time` and added `groups.relation_type`, `groups.daily_mission_count` and table `group_mission_slots`. Group create / get / settings APIs must stop using the dropped columns and instead handle `relationType`, `dailyMissionCount`, and per-slot times (`missionSlots`) as specified in `docs/BACKEND/MISSIONS_API.md` section 2 "그룹 설정 연동" and "서버 기본 시각 설정" (read those two subsections first; they are the API contract).
+Implement the three read-only mission endpoints in a new `mission` feature package, per `docs/BACKEND/MISSIONS_API.md` section 2 (read "미션 조회" and the template table in section 1-2 first; they are the API contract):
+- `GET /api/groups/{groupId}/missions/today`
+- `GET /api/missions/{missionId}`
+- `GET /api/mission-templates`
+
+No mission creation, scheduler, submission, feed, or AI code. Missions are inserted by a future publisher; for now tests insert rows directly via JDBC.
 
 ## Findings
-- Dropped columns are still used by:
-  - `group/dao/GroupMapper.java`: `insert` (L16), `findById` (L21), `update` (L25-26).
-  - `group/domain/Group.java`: `LocalTime missionPublishTime / missionDeadlineTime`.
-  - `group/dto/GroupCreateRequest.java`, `GroupSettingsUpdateRequest.java`, `GroupResponse.java`: `missionPublishTime`, `missionDeadlineTime` (strings, HH:mm pattern).
-  - `group/service/GroupService.java`: `createGroup`, `updateSettings`, `toGroupResponse` (uses `TIME_FORMAT` HH:mm).
-  - Tests: `GroupServiceTests` (L46-57 create test, L128-129 and L138-139 group fixture + assertions), `GroupMapperTests` (`insertGroup` L74-75 calls `setMissionPublishTime/DeadlineTime`).
-  - `docs/BACKEND/postman/HAWE_GROUP.postman_collection.json` (request bodies/tests using the old fields; verify by grep).
-- `GroupController` needs no change (it just passes the DTOs through); `GET /api/groups/{id}` goes through `getGroup` -> `toGroupResponse`.
-- `application.properties` currently has NO `hawe.mission.*` keys. `JwtProperties` is a `@ConfigurationProperties` record registered via `@EnableConfigurationProperties(JwtProperties.class)` on `JwtTokenProvider`; follow the same pattern for the new properties record.
-- DB column types: `daily_mission_count TINYINT UNSIGNED NOT NULL DEFAULT 1`, `relation_type VARCHAR(20) NOT NULL DEFAULT 'CASUAL'`, `group_mission_slots(group_id, slot_no TINYINT UNSIGNED, publish_time TIME NULL, deadline_time TIME NULL)` with UNIQUE `(group_id, slot_no)`.
-- Feature `ErrorCode` enums live in `group/service`; validation failures that the spec calls 400 `VALIDATION_ERROR`: look at `global/exception` (`CommonErrorCode`, `GlobalExceptionHandler`) to see how `@Valid` failures are rendered and which code/exception to use for service-level validation failures. Reuse the existing mechanism; add a `GroupErrorCode` constant only if nothing suitable exists.
+- No `mission` package exists yet. V3 schema is final: `missions(id, group_id, content, category, template, params JSON, slot_no, published_at, deadline_at, mission_date)`, UNIQUE `(group_id, mission_date, slot_no)`; `submissions` has UNIQUE `(mission_id, user_id)`; `group_mission_slots(group_id, slot_no, publish_time, deadline_time)`.
+- Reusable existing code (inject, don't copy):
+  - `group.dao.GroupMapper.findById(id)` (group existence + `dailyMissionCount`), `group.dao.GroupMemberMapper.existsByGroupIdAndUserId(groupId, userId)`, `group.dao.GroupMissionSlotMapper.findByGroupId(groupId)`.
+  - `group.service.GroupErrorCode.GROUP_NOT_FOUND` (404) and `NOT_GROUP_MEMBER` (403) — reuse, as the doc allows.
+  - `global.config.MissionProperties(defaultPublishTime, defaultDeadlineTime, maxDailyCount)` for default slot times.
+  - `auth.dao.UserMapper.findById(id)` for target nickname lookup.
+  - `global.exception.BusinessException` + `ErrorCode` interface; feature enums live in `<feature>/service` (see `group/service/GroupErrorCode.java`, `poke/service/PokeErrorCode.java`).
+- Controller style: see `character/controller/CharacterController.java` (`@RequestMapping("/api")`, `@AuthenticationPrincipal Long userId`). All three routes are authenticated by default (not in `SecurityConfig` permitAll) — no security change needed.
+- Read-model pattern for MyBatis projections: `group/dao/GroupSummaryRow.java` (plain class with setters, annotation SQL, snake_case -> camelCase mapping already enabled).
+- JSON: the project uses Jackson 3 (`tools.jackson.databind.ObjectMapper`, see `JwtAuthenticationFilter`). Inject that `ObjectMapper` bean; do NOT import `com.fasterxml...`. `missions.params` is read from MariaDB as a String.
+- "Today" timezone is an open decision (MISSIONS_API.md section 11 item 3). `GroupMapper.findSummariesByUserId` uses SQL `CURDATE()`. Use the same notion here: query with `m.mission_date = CURDATE()` in SQL, and for the response `date` / `nextPublishAt` use `LocalDate.now()` in the service. Add a one-line code comment that the time zone question is open. Do not introduce a `Clock` bean.
 
 ## Root Cause / Key Implementation Points
-Per MISSIONS_API.md section 2:
-1. Request fields (create: all optional except `name`; update: all optional, partial update):
-   - `relationType`: one of `COUPLE|FAMILY|FRIEND|RIVAL|CASUAL`. Omitted -> `CASUAL` on create, unchanged on update. Invalid -> 400.
-   - `dailyMissionCount`: int 1..`hawe.mission.max-daily-count` (5). Omitted -> 1 on create, unchanged on update. Out of range -> 400.
-   - `missionSlots`: array of `{slotNo, publishTime?, deadlineTime?}`; times are `HH:mm`.
-2. Slot semantics:
-   - Sending `missionSlots` is a FULL REPLACE: delete all existing rows for the group, insert the sent ones. `[]` clears all. Field omitted (null) = keep existing rows.
-   - `slotNo` must be within 1..(effective dailyMissionCount), where effective = the new `dailyMissionCount` if sent, else the group's current value. Duplicate `slotNo` in one request -> 400. Time format violation -> 400.
-   - Do not insert a row whose `publishTime` and `deadlineTime` are both null (equivalent to no row; keeps "row exists only for customized slots").
-   - If `dailyMissionCount` is lowered, delete rows with `slot_no > new count` (also when `missionSlots` is omitted).
-   - Do NOT validate deadline vs publish ordering or midnight crossing (undecided, MISSIONS_API.md section 11 item 11).
-3. Response (create/get/update) = `{id, name, ownerId, relationType, dailyMissionCount, missionSlots}` where `missionSlots` is always expanded to slots 1..dailyMissionCount, each `{slotNo, publishTime, deadlineTime, custom}`: time = row value if non-null else `hawe.mission.default-publish-time` / `default-deadline-time`; `custom` = row exists and at least one of its times is non-null. Times formatted `HH:mm`.
-4. Defaults come from config, not DB: add `hawe.mission.default-publish-time=09:00`, `default-deadline-time=23:00`, `max-daily-count=5` to `application.properties`, bound by a `MissionProperties` record (`@ConfigurationProperties(prefix = "hawe.mission")`, `LocalTime` for times, `int` for max). Only add the three keys used now; `draw-target-probability` and `guess-max-attempts` belong to later features, do not add them.
-5. Permissions unchanged: only owner may update settings; members may read.
+1. **Template catalog (`GET /api/mission-templates`)**: a static in-code enum `MissionTemplate` (package `mission.domain`) with: `code` (enum name, e.g. `TEXT_ACROSTIC`), `media` (`PHOTO|VOICE|TEXT|DRAW|SLIDER`), Korean `name`, `phase` (1), `paramsSchema` (`Map<String,String>`), `payloadSchema` (`Map<String,String>`). Include exactly the 16 phase-1 templates from the section 1-2 table (PHOTO_NOW, PHOTO_GALLERY, PHOTO_COLOR, VOICE_LINE, VOICE_MIMIC, VOICE_IMPRESSION, TEXT_ACROSTIC, TEXT_ONE_WORD, TEXT_REVIEW, TEXT_BALANCE, TEXT_FILL_BLANK, DRAW_SKETCH, DRAW_A_TO_B, SLIDER_POSITION, SLIDER_TASTE, SLIDER_CONSENSUS). The five phase-2 (R type) templates are not designed yet (section 7), so leave them out. Schema value strings follow the doc example style: `"string"`, `"string(3)"`, `"int(0..100, required)"`, `"string(required)"`, etc. `params` column of the table maps to `paramsSchema` keys; `payload` column maps to `payloadSchema` keys (e.g. VOICE_IMPRESSION payload: `file`, `answer`, `alias`). For target-capable templates, `paramsSchema` lists the keys from the table (`targetUserId` is server-assigned: mark it `"long(server-assigned, optional)"` for DRAW_*, and `"long(server-assigned)"` for TEXT_FILL_BLANK).
+   Response: `{ "content": [ {template, media, name, phase, paramsSchema, payloadSchema}, ... ] }` in table order.
+2. **Mission item (`MissionResponse`)**: `missionId, groupId, slotNo, content, category, template, media, params, publishedAt, deadlineAt, submittedByMe`. `media` is derived from `MissionTemplate.valueOf(template).media`. If a stored `template` code is unknown (future/phase-2 or bad data), do not fail the whole request: use `media = null`-safe fallback (leave `media` null) and return `params` as stored. Dates are ISO-8601 `LocalDateTime` (no zone), matching the doc.
+3. **params resolution**: parse the stored JSON string into a `Map<String,Object>` (preserve key order, e.g. `LinkedHashMap`). If it contains `targetUserId`, remove that key and add `target: { userId, nickname }` using `UserMapper.findById`. If the user no longer exists, omit `target`. Empty/`{}` params stays `{}`. A malformed JSON string must not 500: treat as `{}` (and keep it simple; no logging framework changes).
+4. **`submittedByMe`**: computed in SQL with `EXISTS (SELECT 1 FROM submissions s WHERE s.mission_id = m.id AND s.user_id = #{userId})`.
+5. **Today response**: `{ date, dailyMissionCount, nextPublishAt, missions[] }`.
+   - `missions`: missions of the group with `mission_date = CURDATE()` ordered by `slot_no ASC`; empty array if none.
+   - `dailyMissionCount`: `Group.getDailyMissionCount()`.
+   - `nextPublishAt`: among slot numbers `1..dailyMissionCount` that do NOT yet have a mission today, the earliest effective publish time (`group_mission_slots.publish_time` if non-null, else `MissionProperties.defaultPublishTime`) combined with today's date; `null` when every slot is already published. Do not skip slots whose time has already passed (spec: earliest among unpublished slots).
+   - Errors: group missing -> `GROUP_NOT_FOUND` 404 (check first); not a member -> `NOT_GROUP_MEMBER` 403.
+6. **Single mission**: `findById`; missing -> new `MissionErrorCode.MISSION_NOT_FOUND` (404). Then membership check on the mission's group -> `NOT_GROUP_MEMBER` 403. Response = one `MissionResponse` (same fields as a `missions[]` item).
+7. Order of checks for single mission: existence (404) before membership (403), per spec error list.
 
 ## Files / Functions to Change
-- NEW `global/config/MissionProperties.java` (record; location next to `MyBatisConfig`; or follow wherever fits best, but not in the group package since the mission module will share it). Register with `@EnableConfigurationProperties(MissionProperties.class)` on `GroupService` (same pattern as `JwtTokenProvider`) or on a config class — pick the one consistent with existing code.
-- EDIT `src/main/resources/application.properties`: add the three `hawe.mission.*` keys. Check `.env.example` is not needed.
-- EDIT `group/domain/Group.java`: remove time fields; add `String relationType`, `int dailyMissionCount` (use `Integer`/`int` consistently with mapper mapping).
-- NEW `group/domain/GroupMissionSlot.java` (`groupId`, `slotNo`, `LocalTime publishTime`, `LocalTime deadlineTime`; id optional).
-- NEW `group/dao/GroupMissionSlotMapper.java` (`@Mapper`, annotation SQL, same style as `GroupMemberMapper`): `findByGroupId` (ORDER BY slot_no), `insert`, `deleteByGroupId`, `deleteByGroupIdAndSlotNoGreaterThan`.
-- EDIT `group/dao/GroupMapper.java`: `insert` -> `(name, owner_id, relation_type, daily_mission_count)`; `findById` select `id, name, owner_id, relation_type, daily_mission_count, created_at`; `update` -> `name, relation_type, daily_mission_count`. Make sure `relation_type`/`daily_mission_count` map to `relationType`/`dailyMissionCount` (check how `owner_id` -> `ownerId` is mapped today in `MyBatisConfig`).
-- NEW `group/dto/MissionSlotRequest.java` (`@NotNull Integer slotNo`, optional `publishTime`/`deadlineTime` with the existing `HH:mm` `@Pattern`) and `group/dto/MissionSlotResponse.java` (`int slotNo, String publishTime, String deadlineTime, boolean custom`).
-- EDIT `group/dto/GroupCreateRequest.java`: `name` (`@NotBlank @Size(max=100)`), `relationType` (optional, `@Pattern` on the 5 codes), `dailyMissionCount` (`Integer`, optional, `@Min(1)`), `missionSlots` (`@Valid List<MissionSlotRequest>`, optional). Remove the two time fields.
-- EDIT `group/dto/GroupSettingsUpdateRequest.java`: same optional fields plus `name`; remove the two time fields. Keep the "all optional / partial update" doc comment accurate.
-- EDIT `group/dto/GroupResponse.java`: `(Long id, String name, Long ownerId, String relationType, int dailyMissionCount, List<MissionSlotResponse> missionSlots)`.
-- EDIT `group/service/GroupService.java`: inject `GroupMissionSlotMapper` and `MissionProperties`; rework `createGroup`, `updateSettings`, `toGroupResponse` (now needs the group's slot rows and returns the expanded list); add private helpers for validation (max count, slotNo range, duplicates), slot replacement, and slot expansion. `getGroup` loads slots too. Keep `@Transactional` on create/update so group + slots are atomic.
-- EDIT `src/test/java/.../group/service/GroupServiceTests.java` and `.../group/dao/GroupMapperTests.java` (see Tests Required).
-- EDIT `docs/BACKEND/postman/HAWE_GROUP.postman_collection.json`: replace `missionPublishTime`/`missionDeadlineTime` usage with the new fields (create with `{ "name": ... }`, settings with `dailyMissionCount`/`missionSlots`), update any test scripts asserting old fields.
+All new unless noted (package root `com.sapphire.hawe`):
+- `mission/controller/MissionController.java`: `@RestController @RequestMapping("/api")`; `GET /groups/{groupId}/missions/today`, `GET /missions/{missionId}`, `GET /mission-templates`.
+- `mission/service/MissionService.java`: `getTodayMissions(userId, groupId)`, `getMission(userId, missionId)`, `listTemplates()`; private helpers for params resolution, next-publish calculation, row -> response mapping.
+- `mission/service/MissionErrorCode.java`: enum implementing `ErrorCode` (copy structure of `GroupErrorCode`); only `MISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "미션을 찾을 수 없습니다")` now. Do not add the other section-10 codes yet.
+- `mission/dao/MissionMapper.java` (`@Mapper`, annotation SQL, no XML): `findTodayByGroupId(groupId, userId)` (returns `List<MissionRow>`, ordered by slot_no), `findById(missionId, userId)` (returns `MissionRow` or null).
+- `mission/dao/MissionRow.java`: projection with `id, groupId, content, category, template, params (String), slotNo, publishedAt, deadlineAt, submittedByMe`.
+- `mission/domain/MissionTemplate.java`: enum described above (with a `media` enum or String).
+- `mission/dto/MissionResponse.java`, `TodayMissionsResponse.java`, `MissionTemplateResponse.java` (records). The templates list wraps `{content: [...]}` — use a small record or the existing `PageResponse` ONLY if it matches `{content: [...]}` without pagination fields; otherwise add a tiny record `MissionTemplateListResponse(List<MissionTemplateResponse> content)`.
+- No edits to existing files expected. If `MyBatisConfig` needs the new mapper registered (check whether it scans `@Mapper` packages or lists them), make the minimal change there.
 
 ## Implementation Steps
-1. Add `hawe.mission.*` keys + `MissionProperties` record + registration.
-2. `Group` domain, `GroupMapper` SQL, new `GroupMissionSlot` + `GroupMissionSlotMapper`.
-3. DTOs (request/response/slot).
-4. `GroupService` logic (create, update, get, response expansion, validation).
-5. Update `GroupMapperTests.insertGroup` and `GroupServiceTests`; add new tests.
-6. Update Postman collection.
-7. Run validation steps.
+1. `MissionTemplate` enum + `MissionTemplateResponse` + service `listTemplates` + controller route.
+2. `MissionErrorCode`, `MissionRow`, `MissionMapper` (SQL), DTO records.
+3. `MissionService.getMission` and params resolution (target expansion).
+4. `MissionService.getTodayMissions` incl. `nextPublishAt`.
+5. Controller wiring; verify mapper is picked up by `MyBatisConfig`.
+6. Tests (below), then run validation.
 
 ## Constraints
-- Do not edit any Flyway migration (V1-V4). V3 is final.
-- Do not touch `docs/` except the Postman collection (docs are already updated by the owner). Do not edit `CLAUDE.md`/`AGENTS.md`. No git state changes or commits.
-- Do not implement missions/scheduling/submission features. No scheduler, no `MissionScheduleService`; only the group settings API.
-- Follow the existing layering (controller -> service -> dao -> domain/dto), annotation-based MyBatis SQL, `BusinessException` + feature `ErrorCode`. Don't introduce XML mappers or ENUM types for `relationType` unless clearly consistent with existing code (a `String` with validation is the doc's decision).
-- Keep `submittedToday`/`stampedToday` queries and member/invite/join/leave logic unchanged.
+- Read-only: no INSERT/UPDATE/DELETE on missions/submissions in main code. No scheduler, AI, submission, feed, or file-storage code.
+- Do not edit migrations, group module, docs, `CLAUDE.md`, `AGENTS.md`. No git commands that change state.
+- Follow layering controller -> service -> dao -> dto/domain; annotation-based MyBatis; errors via `BusinessException(ErrorCode)`.
+- Never expose answer data (`answer_text`/`answer_aliases`) — not part of these endpoints and they must not be selected.
+- Don't add `hawe.mission.*` keys; use existing `MissionProperties`.
 
 ## Edge Cases
-- Create with only `{"name": "..."}` -> relationType `CASUAL`, count 1, one slot expanded with default times, `custom=false`.
-- Update with only `dailyMissionCount` lowered (5 -> 2) and no `missionSlots` -> rows with `slot_no > 2` deleted, rows 1-2 kept.
-- Update with `dailyMissionCount: 2` and `missionSlots` containing `slotNo: 3` -> 400.
-- Update with `missionSlots` containing `slotNo: 3` but no `dailyMissionCount` while current count is 1 -> 400.
-- Duplicate `slotNo` -> 400. `slotNo` 0 or negative -> 400. `dailyMissionCount` 0 or 6 -> 400. Bad `relationType` (e.g. lowercase `family`) -> 400. Bad time `9:00` -> 400.
-- Slot with only `publishTime` -> `deadlineTime` falls back to default, `custom=true`.
-- `missionSlots: []` -> all rows deleted, all slots `custom=false`.
-- Partial update with `name` only must not reset `relationType`/`dailyMissionCount`/slots (the `update` SQL writes the loaded group's current values, so load first then overwrite only provided fields, as `updateSettings` does today).
-- MariaDB `TINYINT UNSIGNED` -> Java `int`/`Integer` mapping is fine; no overflow with 1-5.
-- `LocalTime` <-> `TIME` mapping in MyBatis for slot rows (the old `Group` already did this with `LocalTime`, so the handler works).
-- Non-owner update -> 403 `NOT_GROUP_OWNER` still checked before validation side effects (no slot writes before the owner check).
+- Group with no missions today -> `missions: []`, `nextPublishAt` = earliest slot time (today), `dailyMissionCount` from group.
+- All slots published -> `nextPublishAt: null`.
+- `dailyMissionCount` larger than published count with custom slot rows: slot with only `publish_time` NULL falls back to default publish time.
+- A slot_no > `dailyMissionCount` that has a mission today (count was lowered after publishing): still returned in `missions`; it must NOT affect `nextPublishAt` (only slots 1..dailyMissionCount that are unpublished count).
+- Mission past `deadlineAt` is still returned (no filtering by time).
+- Target user deleted/missing -> no `target` key; `targetUserId` key never leaks in the response.
+- Non-member of an existing group -> 403, nonexistent group -> 404 (group existence checked first, so a nonexistent group never yields 403).
+- Unknown template code in DB -> request still succeeds with `media` null.
+- Midnight/time-zone mismatch between JVM and DB `CURDATE()` can make `date` differ from queried day; accepted for now (open decision), note in report.
 
 ## Regression Risks
-- API contract break (intended): `missionPublishTime` / `missionDeadlineTime` removed from create/update/response. Frontend isn't wired; Postman collection is the only consumer.
-- `GroupService` constructor signature changes -> `GroupServiceTests` setup and any other direct construction must be updated (grep for `new GroupService(`).
-- `PokeMapperTests`, `CharacterMapperTests`, `HaweApplicationTests` need a Flyway-clean DB; they currently fail only because the local DB has V4 applied before V3 (see Validation Steps).
-- Slot replacement is delete-then-insert; make sure it runs inside the same transaction as the group update.
+- New package only; low risk. Make sure a second `@EnableConfigurationProperties`/bean isn't needed: `MissionProperties` is already registered through `GroupService`'s annotation; `MissionService` depends on that bean being present (it is, since `GroupService` is a bean). To avoid a hidden coupling, also add `@EnableConfigurationProperties(MissionProperties.class)` on `MissionService` (duplicate registration is harmless).
+- `ObjectMapper` bean type is Jackson 3 — wrong import would fail at startup.
+- Mapper scanning: confirm the new `@Mapper` is registered under the manual `MyBatisConfig` setup.
 
 ## Tests Required
-Update:
-- `GroupMapperTests.insertGroup`: stop setting times (new columns have DB defaults; optionally set `relationType`/`dailyMissionCount` explicitly).
-- `GroupServiceTests`: fix constructor (mock `GroupMissionSlotMapper`, build a real `MissionProperties(LocalTime.of(9,0), LocalTime.of(23,0), 5)`), replace the two time-based assertions, fix the `Group` fixture helper.
-Add (Mockito unit tests in `GroupServiceTests`, same style as existing):
-- create with defaults returns relationType `CASUAL`, count 1, 1 expanded slot with `09:00`/`23:00`, `custom=false`; owner membership still inserted.
-- create with `dailyMissionCount=3` + `missionSlots` (slot 2 both times, slot 3 publish only) -> 3 expanded slots with correct `custom` and fallback times; slot rows inserted for 2 and 3 only.
-- update `missionSlots` full replace: `deleteByGroupId` called, new rows inserted; `[]` clears; `null` leaves slots untouched (no delete/insert).
-- lowering `dailyMissionCount` calls `deleteByGroupIdAndSlotNoGreaterThan`.
-- validation failures: slotNo out of range, duplicate slotNo, `dailyMissionCount` above max, invalid `relationType` (if validated in the service) -> expected error; non-owner gets `NOT_GROUP_OWNER` with no slot mapper writes.
-Add (DB test, like `GroupMapperTests`, needs live MariaDB): `GroupMissionSlotMapper` insert/find/delete round trip and `GroupMapper` insert+findById returns `relationType`/`dailyMissionCount` defaults.
-DTO validation (`@Pattern` on relationType / HH:mm) can be covered by the existing validation approach if the repo has one; otherwise skip.
+- `mission/service/MissionServiceTests` (Mockito, same style as `GroupServiceTests`):
+  - today: empty list + `nextPublishAt` earliest (default time and custom slot time), all published -> null, lowered-count case, group not found, non-member.
+  - single: success with params, `MISSION_NOT_FOUND`, non-member 403, target expansion (`targetUserId` -> `target.nickname`, key removed), missing target user, malformed params JSON -> `{}`.
+- `MissionTemplateTests` (plain unit): catalog has 16 entries, unique codes, every code has non-empty `payloadSchema`, order matches doc table; `listTemplates` response shape `{content: [...]}`.
+- `mission/dao/MissionMapperTests` (live DB, like `GroupMapperTests`): insert user/group/member/mission(s)/submission via JDBC; check `findTodayByGroupId` ordering by slot_no and `submittedByMe` true/false, `findById` returns null for unknown id. Use `template='PHOTO_NOW'`, `params='{}'`, and distinct `slot_no` per mission.
 
 ## Validation Steps
-1. Prerequisite (user action, not Codex): the local `hawe` DB has V4 applied, so Flyway rejects V3. If V3 is not yet applied there, ask the user to drop/recreate the `hawe` database (or report that DB-backed tests could not run). Do NOT alter Flyway history or force out-of-order migration.
-2. `.\mvnw.cmd test` — all unit tests must pass; DB tests must pass once the DB is clean. Report exactly which tests could not run and why.
+1. `.\mvnw.cmd test -Dtest=MissionServiceTests,MissionTemplateTests` must pass.
+2. DB tests (`MissionMapperTests` and the rest of the suite) need a clean `hawe` DB where Flyway can apply V1-V4 (user recreates the DB; do NOT alter Flyway history). If the DB isn't ready, report which tests could not run.
 3. `.\mvnw.cmd package -DskipTests` compiles.
-4. If the DB is clean: `.\mvnw.cmd spring-boot:run`, then via Swagger/Postman: register+login, `POST /api/groups {"name":"x"}`, `PATCH /api/groups/{id}/settings` with `dailyMissionCount: 3` and `missionSlots`, `GET /api/groups/{id}`; compare responses with the example in MISSIONS_API.md section 2.
-5. `grep -rn "missionPublishTime\|missionDeadlineTime\|mission_publish_time\|mission_deadline_time" src docs/BACKEND/postman` returns only `V1__initial_schema.sql`/`V3` hits.
+4. With a clean DB, run the app, then via Swagger or Postman: register/login, create a group, insert one mission row manually (SQL), call `GET /api/groups/{id}/missions/today`, `GET /api/missions/{id}`, `GET /api/mission-templates`; compare shapes to MISSIONS_API.md section 2 examples; verify 403 as a non-member and 404 for unknown ids.
 
 ## Potential Merge Conflicts
-- Uncommitted docs edits (`docs/BACKEND/*.md`) are in the worktree; not touched here except the Postman JSON.
-- `PokeMapperTests` / `GroupMapperTests` were just edited by the V3 task (uncommitted); this task edits `GroupMapperTests` again — apply on top of the current working copy.
-- A future `mission/` module will also read `hawe.mission.*` and `group_mission_slots`; `MissionProperties` should live in a shared place (`global/config`) so it does not need to move later.
-- Sequence: this task must land together with / right after V3; the group API is broken without it.
+- None expected with existing files (new package). Uncommitted changes from the V3 and group tasks are in the worktree (`GroupService`, group DTOs, tests, `application.properties`); this task only reads from group mappers/error codes and must not modify them.
+- A future submission/feed task will add to `MissionMapper`/`MissionErrorCode` and likely reuse `MissionTemplate`; keep the enum open to extension (validators later). A future mission publisher will write rows with `template`/`params` shapes this task reads (`targetUserId` in `params`).

@@ -1,29 +1,29 @@
-# Group module V3 follow-up report
+# Mission read APIs implementation report
 
 ## Files changed
 
-- `src/main/java/com/sapphire/hawe/global/config/MissionProperties.java` and `src/main/resources/application.properties`: added shared, bound default slot times and the maximum daily mission count.
-- `src/main/java/com/sapphire/hawe/group/domain/Group.java`, `GroupMissionSlot.java`, `src/main/java/com/sapphire/hawe/group/dao/GroupMapper.java`, and `GroupMissionSlotMapper.java`: mapped V3 group fields and added slot insert, lookup, replace, and trim operations.
-- `src/main/java/com/sapphire/hawe/group/dto/GroupCreateRequest.java`, `GroupSettingsUpdateRequest.java`, `GroupResponse.java`, `MissionSlotRequest.java`, and `MissionSlotResponse.java`: replaced old group time fields with relation type, daily mission count, and per-slot request and response fields.
-- `src/main/java/com/sapphire/hawe/group/service/GroupService.java`: applies create defaults, validates relation type/count/slot numbers/times, atomically stores slot settings, expands all response slots with configured time fallbacks, and preserves owner/member permissions.
-- `src/test/java/com/sapphire/hawe/group/service/GroupServiceTests.java` and `src/test/java/com/sapphire/hawe/group/dao/GroupMapperTests.java`: updated old fixtures; added service cases for defaults, custom slots, replacement, clearing, trimming, partial updates, and invalid settings, plus a mapper round trip case.
-- `docs/BACKEND/postman/HAWE_GROUP.postman_collection.json`: updated request bodies and assertions to the V3 group contract.
-- `.agent/report.md`: this report.
+- Added `src/main/java/com/sapphire/hawe/mission/controller/MissionController.java` with authenticated today, single mission, and template catalog GET routes.
+- Added `mission/service/MissionService.java` and `MissionErrorCode.java` for group membership checks, mission responses, params and target resolution, unpublished slot timing, and mission 404 errors.
+- Added `mission/dao/MissionMapper.java` and `MissionRow.java` for read-only MyBatis queries and `submittedByMe` projection.
+- Added `mission/domain/MissionTemplate.java` with the 16 phase-1 templates in document order.
+- Added `mission/dto/MissionResponse.java`, `TodayMissionsResponse.java`, `MissionTemplateResponse.java`, and `MissionTemplateListResponse.java`.
+- Added `src/test/java/com/sapphire/hawe/mission/service/MissionServiceTests.java`, `mission/domain/MissionTemplateTests.java`, and `mission/dao/MissionMapperTests.java`.
+- Overwrote `.agent/report.md` for this task. No existing production source, migration, group code, or docs were changed.
 
 ## Validation
 
-- Java 25: `.\mvnw.cmd test '-Dtest=GroupServiceTests'` passed: 12 tests, no failures or errors.
-- Java 25: `.\mvnw.cmd test` ran 38 tests: 29 passed and nine errored during Spring context startup. `CharacterMapperTests` (3), `GroupMapperTests` (3), `HaweApplicationTests` (1), and `PokeMapperTests` (2) could not start because the local `hawe` database already has V4 applied and Flyway rejects the new, unapplied V3. No test assertion failures were reported.
-- Java 25: `.\mvnw.cmd package -DskipTests` passed, compiling main and test sources and building the JAR.
-- `git diff --check` passed with only Git line ending notices. Python's JSON parser accepted the updated Postman collection. A source search found old group time names only in V1/V3 migration SQL.
-- No lint or separate typecheck task is configured.
+- Java 25: `.\mvnw.cmd test '-Dtest=MissionServiceTests,MissionTemplateTests'` passed (11 tests).
+- Java 25: `.\mvnw.cmd test` passed (50 tests, 0 failures, 0 errors), including the new MariaDB mapper test. Flyway validated all four migrations; the local schema is at V4.
+- Java 25: `.\mvnw.cmd package -DskipTests` passed and built the JAR.
+- `git diff --check` passed. No lint or separate typecheck task is configured.
+- Manual HTTP smoke checks through Swagger/Postman were not run. Spring Boot context and mapper registration were exercised by database tests.
 
 ## Remaining risks and assumptions
 
-- Database backed mapper tests and live create/update/get API smoke checks remain unverified until `hawe` is recreated with V1/V2 followed by V3/V4. I did not reset the database, alter Flyway history, or force an out-of-order migration.
-- The V3 migration still assumes an empty `missions` table, as documented in the earlier migration report.
-- The previously uncommitted V3 migration and `PokeMapperTests` changes, plus unrelated documentation and prompt changes, were left untouched. `GroupMapperTests` was edited on top of the V3 task's existing changes. The Postman collection is the only documentation file changed here.
+- Today uses MariaDB `CURDATE()` for row selection and JVM `LocalDate.now()` for response date and `nextPublishAt`. Different database and JVM time zones can disagree near midnight; the API document leaves this open.
+- The catalog contains only the 16 documented phase-1 templates. Unknown stored template codes remain readable with `media: null`.
+- Mission publication is a future feature; tests insert mission rows directly.
 
-## Plan adjustments
+## Potential merge conflicts and plan adjustments
 
-- Slot trimming runs only when the daily mission count decreases and `missionSlots` is omitted. A full slot replacement already removes out-of-range rows; increasing or retaining the count does not delete rows.
+- New `mission` package only; `.agent/plan.md` had an existing uncommitted change and was left untouched. No plan design changes were needed.
