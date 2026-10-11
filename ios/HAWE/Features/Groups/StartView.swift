@@ -17,8 +17,7 @@ struct StartView: View {
             scaffold
         }
         .overlay(alignment: .topTrailing) {
-            // TODO: 17 마이페이지 연결
-            Button {} label: {
+            Button { path.append(.myPage(.home)) } label: {
                 HIconView(icon: .person, size: 22)
                     .frame(width: HLayout.minTouch, height: HLayout.minTouch)
             }

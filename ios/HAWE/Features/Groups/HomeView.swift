@@ -44,8 +44,7 @@ struct HomeView: View {
             Spacer()
             HStack(spacing: 16) {
                 headerButton(.plus, size: 24, label: "그룹 추가") { path.append(.start) }
-                // TODO: 17 마이페이지 연결
-                headerButton(.person, size: 22, label: "마이페이지") {}
+                headerButton(.person, size: 22, label: "마이페이지") { path.append(.myPage(.home)) }
             }
         }
         .frame(height: HLayout.headerHeight)

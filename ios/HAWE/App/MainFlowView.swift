@@ -10,6 +10,7 @@ enum MainRoute: Hashable {
     case mission(TodayMission)
     case results(MissionResult)
     case calendar(GroupDetail)
+    case myPage(MyPageRoute)
 }
 
 struct MainFlowView: View {
@@ -45,8 +46,29 @@ struct MainFlowView: View {
                     ResultsView(result: result)
                 case .calendar(let group):
                     RecordCalendarView(group: group, path: $path)
+                case .myPage(let route):
+                    MyPageDestination(route: route, path: $path)
                 }
             }
+        }
+        // 로그인 뒤 처음 들어왔을 때 푸시 권한을 물어봐요.
+        .task { await PushCenter.shared.requestAuthorizationIfNeeded() }
+        .onChange(of: PushCenter.shared.pendingDestination) { _, destination in
+            guard let destination else { return }
+            open(destination)
+            PushCenter.shared.pendingDestination = nil
+        }
+    }
+
+    /// 알림을 눌렀을 때 갈 화면
+    /// TODO: 서버 연결 시 groupID·submissionID 로 실제 그룹·작품을 불러와요. 지금은 목업 첫 그룹으로 가요.
+    private func open(_ destination: PushDestination) {
+        let mission = TodayMission.mock(for: GroupSummary.mock[0])
+        switch destination.kind {
+        case .topic, .poke, .friendDone:
+            path = [.mission(mission)]
+        case .comment:
+            path = [.mission(mission), .results(.mock(for: mission))]
         }
     }
 
