@@ -24,6 +24,9 @@ import com.sapphire.hawe.feature.groups.HomeScreen
 import com.sapphire.hawe.feature.groups.JoinGroupScreen
 import com.sapphire.hawe.feature.groups.StartScreen
 import com.sapphire.hawe.feature.mission.MissionScreen
+import com.sapphire.hawe.feature.records.RecordCalendarScreen
+import com.sapphire.hawe.feature.results.ResultsScreen
+import com.sapphire.hawe.feature.results.SubmissionDetailScreen
 import com.sapphire.hawe.model.LoginProvider
 
 val LocalSession = staticCompositionLocalOf<AppSession> { error("AppSession 이 없어요") }
@@ -136,12 +139,30 @@ private fun MainFlow() {
             MissionScreen(
                 groupId = id,
                 onBack = { nav.popBackStack() },
-                // TODO: 15 기록 캘린더 (4단계)
-                onCalendar = {},
+                onCalendar = { nav.navigate("calendar/$id") },
                 onGroupInfo = { nav.navigate("groupInfo/$id") },
-                // TODO: 10~13 결과 공개 (4단계)
-                onResults = {},
+                onResults = { missionId -> nav.navigate("results/$id/$missionId") },
             )
+        }
+        composable("results/{id}/{missionId}") { entry ->
+            val id = entry.arguments?.getString("id") ?: return@composable
+            val missionId = entry.arguments?.getString("missionId") ?: return@composable
+            ResultsScreen(id, missionId, onBack = { nav.popBackStack() }) { submissionId ->
+                nav.navigate("submission/$id/$missionId/$submissionId")
+            }
+        }
+        composable("submission/{id}/{missionId}/{submissionId}") { entry ->
+            val args = entry.arguments ?: return@composable
+            SubmissionDetailScreen(
+                groupId = args.getString("id") ?: return@composable,
+                missionId = args.getString("missionId") ?: return@composable,
+                submissionId = args.getString("submissionId") ?: return@composable,
+                onBack = { nav.popBackStack() },
+            )
+        }
+        composable("calendar/{id}") { entry ->
+            val id = entry.arguments?.getString("id") ?: return@composable
+            RecordCalendarScreen(id, onBack = { nav.popBackStack() }) { missionId -> nav.navigate("results/$id/$missionId") }
         }
         composable("groupInfo/{id}") { entry ->
             val id = entry.arguments?.getString("id") ?: return@composable

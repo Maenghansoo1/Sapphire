@@ -96,7 +96,7 @@ fun ColumnScope.HCTAScaffold(
 @Composable
 fun HAlert(
     title: String,
-    message: String,
+    message: String?,
     confirmTitle: String,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
@@ -121,7 +121,7 @@ fun HAlert(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(title, style = plex(20, FontWeight.Bold), color = HColors.ink, textAlign = TextAlign.Center)
-            Text(message, style = plex(14, lineHeight = 1.6f), color = HColors.textSecondary, textAlign = TextAlign.Center)
+            if (message != null) Text(message, style = plex(14, lineHeight = 1.6f), color = HColors.textSecondary, textAlign = TextAlign.Center)
             Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HButton(cancelTitle, Modifier.weight(1f), kind = HButtonKind.Gray, height = 50.dp, onClick = onCancel)
                 HButton(confirmTitle, Modifier.weight(1f), kind = confirmKind, height = 50.dp, onClick = onConfirm)
