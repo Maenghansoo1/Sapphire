@@ -24,15 +24,13 @@ import com.sapphire.hawe.designsystem.brand.HLogoLockup
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.HCtaScaffold
 import com.sapphire.hawe.designsystem.tokens.*
-import kotlinx.coroutines.delay
 
 @Composable
 fun StartScreen(session: AppSession, showsBack: Boolean = false, onBack: () -> Unit = {},
     onCreateGroup: () -> Unit, onJoinGroup: () -> Unit, onMyPage: () -> Unit) {
     val context = LocalContext.current
     val debug = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-    var showToast by remember { mutableStateOf(false) }
-    LaunchedEffect(showToast) { if (showToast) { delay(2000); showToast = false } }
+    val toast = rememberHToastState()
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
         Column {
             if (showsBack) Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
@@ -56,18 +54,16 @@ fun StartScreen(session: AppSession, showsBack: Boolean = false, onBack: () -> U
                 }
             }, cta = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HButton("새 그룹 만들기") { onCreateGroup(); showToast = true }
-                    HButton("초대 코드로 참여하기", kind = HButtonKind.SECONDARY) { onJoinGroup(); showToast = true }
+                    HButton("새 그룹 만들기") { onCreateGroup() }
+                    HButton("초대 코드로 참여하기", kind = HButtonKind.SECONDARY) { onJoinGroup() }
                 }
             })
         }
         Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 14.dp)
-            .size(HLayout.minTouch).clickable { onMyPage(); showToast = true }
+            .size(HLayout.minTouch).clickable { onMyPage(); toast.show("준비 중이에요") }
             .semantics { contentDescription = "마이페이지" },
             contentAlignment = Alignment.Center) { HIconView(HIcon.PERSON, size = 22.dp) }
-        if (showToast) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 150.dp)) {
-            HToast("준비 중이에요")
-        }
+        HToastHost(toast, bottomPadding = 150.dp)
     }
 }
 

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
@@ -34,8 +35,8 @@ fun HTextField(value: String, onValueChange: (String) -> Unit, placeholder: Stri
     keyboardType: KeyboardType = KeyboardType.Text, textSize: Int = 16,
     capitalization: KeyboardCapitalization = KeyboardCapitalization.Sentences,
     autoCorrectEnabled: Boolean = true, imeAction: ImeAction = ImeAction.Default,
-    onImeAction: (() -> Unit)? = null) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    onImeAction: (() -> Unit)? = null, labelSpacing: Dp = 8.dp) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(labelSpacing)) {
         if (label != null) Text(label, style = HType.fieldLabel, color = HColors.textSecondary)
         val shape = RoundedCornerShape(HRadius.input)
         BasicTextField(value, { onValueChange(if (maxLength == null) it else it.take(maxLength)) },

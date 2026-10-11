@@ -1,101 +1,64 @@
-# Review — Android 3단계 (인증 흐름 A1·A2·A3·비밀번호 찾기 + 01 시작 + 내비게이션 뼈대)
+# Review — Android 6단계 (1/3): 미션 수행 공통 틀 + 08 글 + 07 사진
 
-기준: `.agent/plan.md`, `.agent/report.md`, 작업 트리의 `android/` 미커밋 변경. `ios/`·`src/`·`docs/` 등 범위 밖 파일 변경 없음 확인.
-Codex 가 `assembleDebug` / `testDebugUnitTest`(17개 통과) / `lintDebug` / `installDebug` 를 직접 돌린 결과는 보고서대로라고 가정했고, 아래는 코드를 읽어서 확인한 문제만 적었다. 화면·키보드 동작은 폰에서 보지 못했다.
+기준: `.agent/plan.md`, `.agent/report.md`, 작업 트리의 `android/` 미커밋 변경. 범위 밖 파일 변경 없음, 새 의존성은 CameraX 4개(1.6.2)뿐, `DataStore`/모델 변경 없음, 매니페스트는 CAMERA 권한 + `uses-feature required=false` 2개 확인.
+Codex 가 `assembleDebug` / `testDebugUnitTest`(40개 통과) / `lintDebug`(오류 0) / `installDebug` 를 직접 실행한 결과는 보고서대로라고 가정했다. 아래는 코드를 읽어 확인한 내용이며 폰에서 직접 눌러 보지는 않았다.
 
-전반: 계획의 구조(인증/메인 NavHost 분리, 타입 안전 라우트, `SignupAccountState` 분리, A2 비밀번호를 인증 흐름 메모리에만 보관, 디버그 전용 로그아웃)와 iOS 문구·수치·규칙은 충실히 옮겼다. 다만 이번에 새로 넣은 `HTextField` 키보드 액션 처리에 모든 입력창에 영향을 주는 결함이 있고, A1 이 키보드/내비게이션 바 inset 을 처리하지 않는다.
+## 확인한 항목 (문제 없음)
+- **내비게이션**: `MissionPerform(groupId, type?)` 라우트, 수직 슬라이드 전환(진입/팝 종료에만 지정), 진입 판단(`performEntryDecision`)은 `remember(entry)` 로 한 번만 결정되고 `LaunchedEffect(entry)` 에서만 내비게이션 → 제출 직후 `didSubmit` 이 true 가 되어 재구성돼도 추가 내비게이션이 없다(4단계 버그 재발 방지 규칙 준수). 제출은 `store.submit` → `previousBackStackEntry.savedStateHandle["submitted"]=true` → `popBackStack()`, 05 가 `getStateFlow` 로 받아 토스트 후 신호를 비운다.
+- **공통 헤더**: 내용이 있을 때만 `BackHandler` 활성, 확인창이 떠 있는 동안은 비활성(`hasDraft && !confirming`), 문구·버튼 구성이 iOS 와 일치.
+- **08**: 글자(grapheme) 단위 제한·카운트, `TextFieldValue` 오버로드로 제한이 걸릴 때만 값을 되써서 IME 조합을 보호, 본문은 `rememberSaveable`, 연타 방지 플래그.
+- **07**: `PreviewView` 를 `COMPATIBLE`(TextureView)로 써서 둥근 모서리 클립 유지, 권한 요청은 진입 시 1회 + `ON_RESUME` 재확인(설정에서 켜고 돌아오면 반영), 사진이 생기면 카메라 언바인드·"다시 찍기" 로 재바인드, 촬영은 임시 파일 → 디코딩 → 삭제, 전면 카메라 플래시는 건너뜀, 반대 카메라 없으면 전환 비활성. EXIF 변환 행렬(TRANSPOSE/TRANSVERSE 포함)을 표준 변환과 대조했고 동등하다. `centerCropRect`/`sampleSizeFor` 수식 확인(4:3·3:4·정사각·세로로 긴 이미지).
+- **05 연동**: `isPerformScreenAvailable` 로 글/사진만 수행 화면으로, 그림/음성은 기존 임시 동작 유지. 디버그 유형 전환(`FLAG_DEBUGGABLE` 가드, 알약 길게 누르기)과 `HCtaScaffold` 프리뷰 문자열 복구(UTF-8) 확인.
 
 ---
 
 ## P1
 
 ### File / Location
-`android/app/src/main/java/com/sapphire/hawe/designsystem/components/HTextField.kt` — `BasicTextField(... keyboardActions = KeyboardActions(onAny = { onImeAction?.invoke() }))`
+`android/app/src/main/java/com/sapphire/hawe/feature/mission/WriteMissionScreen.kt` — `BasicTextField(... modifier = Modifier.fillMaxWidth().height(360.dp).border(...).padding(20.dp), ...)`
 
 ### Problem
-`KeyboardActions(onAny = ...)` 는 Done/Next/Go/Search/Send/Previous **모든** 액션에 람다를 지정한다. Compose 는 해당 액션의 핸들러가 null 일 때만 기본 동작(Next → 다음 입력으로 포커스 이동, Done → 키보드 숨김)을 실행하므로, `onImeAction` 이 null 이어도 빈 람다가 기본 동작을 대신한다. 즉 `onImeAction` 을 넘기지 않는 모든 `HTextField` 에서 Next/Done 키가 아무 일도 하지 않는다.
-- A1 이메일(`ImeAction.Next`) → 비밀번호로 포커스가 넘어가지 않음
-- A2 이메일/비밀번호(`Next`) → 다음 칸으로 안 넘어가고, 확인 칸/A3 닉네임/비밀번호 찾기 이메일(`Done`) → 키보드가 안 내려감
-(A1 비밀번호는 `onImeAction = login` 이라 로그인은 실행됨.)
+테두리·높이·안쪽 여백을 `BasicTextField` 자신의 `modifier` 에 걸었다. `BasicTextField` 의 포커스/탭 처리는 그 modifier 체인의 **안쪽(패딩 안, 글 내용 높이)** 에만 붙으므로 터치가 먹는 영역은 "글이 있는 첫 줄 높이"의 내용 영역뿐이다(여러 줄 기본 `minLines = 1`). 360dp 높이의 에디터 박스에서 안내 문구 아래의 빈 공간이나 20dp 안쪽 여백을 눌러도 키보드가 올라오지 않는다. iOS 는 에디터 영역 전체에 `onTapGesture { isFocused = true }` 가 걸려 있다(`WriteMissionView.editor`: `.contentShape(Rectangle()).onTapGesture`).
 
 ### Why It Matters
-iOS 에서는 동작하는 기본 키보드 흐름이 깨지고, 4단계 이후 모든 입력 화면(02 그룹 이름, 03 초대 코드, 댓글 입력 등)이 같은 컴포넌트를 쓴다. 폰에서 입력할 때 가장 먼저 눈에 띄는 불편이다. 확인한 근거는 코드 구조(`KeyboardActions` 생성자 의미)이며 폰에서 직접 눌러 보지는 않았다.
+08 에 들어오면 사용자가 가장 먼저 하는 동작은 큰 박스를 누르는 것인데, 박스 중앙을 눌러서는 입력이 시작되지 않는다. 첫 줄의 아주 좁은 영역만 눌러야 하므로 "글이 안 써진다" 로 보일 수 있다. 메인 흐름이라 P1 로 본다. (코드 구조에서 확인한 내용이며 폰에서 재현하지는 않았다.)
 
 ### Recommended Fix
-`LocalFocusManager` / `LocalSoftwareKeyboardController` 를 가져와 기본 동작을 직접 호출한다.
-```kotlin
-val focus = LocalFocusManager.current
-val keyboard = LocalSoftwareKeyboardController.current
-keyboardActions = KeyboardActions(
-    onNext = { focus.moveFocus(FocusDirection.Down) },
-    onDone = { if (onImeAction != null) onImeAction() else { keyboard?.hide(); focus.clearFocus() } },
-)
-```
-(`onAny` 사용 제거.) 갤러리/기존 호출은 기본값으로 그대로 동작해야 한다.
-
----
-
-### File / Location
-`android/app/src/main/java/com/sapphire/hawe/feature/auth/LoginScreen.kt` — 최상위 `Column(Modifier.fillMaxSize().background(...).verticalScroll(...).padding(top = introTopInset, bottom = ctaBottomInset)`
-
-### Problem
-`MainActivity` 가 `enableEdgeToEdge()` 이고 매니페스트에 `windowSoftInputMode` 도 없는데, A1 은 `imePadding()` 도 내비게이션 바 inset 도 적용하지 않는다(`RootScreen` 은 상태 바만 처리). 다른 인증 화면은 `HCtaScaffold` 가 `imePadding` + 내비게이션 바를 처리하지만 A1 은 `HCtaScaffold` 를 쓰지 않는다.
-- 3버튼 내비게이션에서 스크롤 끝의 아래 여백이 36dp 뿐이라 마지막 "Google로 계속하기" 버튼의 아래쪽이 내비게이션 바(약 48dp) 뒤로 겹친다.
-- 키보드가 열리면 스크롤 영역의 뷰포트가 줄어들지 않아(키보드 위로 올려 주는 inset 처리 없음), 키보드 높이가 큰 기기/작은 화면에서 비밀번호 입력창·로그인 버튼이 키보드 아래에 가려질 수 있다.
-
-### Why It Matters
-첫 화면이다. 지난 리뷰(HCtaScaffold)에서 지적한 것과 같은 종류의 문제가 같은 단계의 다른 화면에서 반복됐고, 계획의 Edge Cases("키보드가 올라와도 CTA/입력이 가려지지 않는다, 3버튼 내비게이션에서 가려지지 않는다")에 명시돼 있다.
-
-### Recommended Fix
-스크롤 `Column` 에 `Modifier.imePadding()` 을 붙이고, 아래 여백을 `max(HLayout.ctaBottomInset, navigationBars 하단 + 12.dp)` 로 계산한다(키보드가 열려 있으면 `imePadding` 이 내비게이션 바를 포함하므로 중복되지 않게 `HCtaScaffold` 와 같은 처리). 같은 계산이 두 곳에 생기므로 `HCtaScaffold` 안의 `ctaBottom` 계산을 작은 공용 함수(예: `@Composable fun ctaBottomPadding(bottomInset: Dp): Dp`)로 빼서 A1 과 공유하면 중복이 없다.
+바깥 `Box` 가 테두리·높이 360·안쪽 여백 20 을 갖고, 그 `Box` 에 `Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { focusRequester.requestFocus(); keyboard?.show() }` 를 건다. 안쪽 `BasicTextField` 는 `Modifier.fillMaxSize().focusRequester(focusRequester)` 로 박스를 채운다(내부 스크롤은 필드가 처리). 안내 문구는 `decorationBox` 안에 그대로 둔다.
 
 ---
 
 ## P2
 
 ### File / Location
-`android/app/src/main/java/com/sapphire/hawe/feature/auth/SignupAccountScreen.kt` — `AgreementRow` 의 `androidx.compose.material3.TextButton`
+`feature/mission/PhotoMissionScreen.kt` — `photo?.recycle()` 호출들(`picker` 콜백, 촬영 콜백, "다시 찍기", `DisposableEffect` 의 `onDispose { latestPhoto?.recycle() }`)
 
 ### Problem
-"보기" 를 Material3 `TextButton` 으로 만들어 최소 높이 48dp 와 Material 리플(테마 primary 색 = accent)이 생긴다. iOS 는 최소 높이 44, 눌림 효과 없는 밑줄 텍스트다. 이 프로젝트는 시스템 컴포넌트를 쓰지 않고 iOS 수치대로 직접 그린다는 규칙(ANDROID.md §3, 계획 Root Cause 6)과도 어긋난다.
+화면에 그려지고 있는 `Bitmap`(`asImageBitmap()` 로 Compose `Image` 에 전달)을 상태를 바꾸기 **직전에** `recycle()` 한다. 이미 RenderThread 에 올라간 디스플레이 리스트가 그 비트맵을 참조하고 있는 순간에 호출되면 "Canvas: trying to use a recycled bitmap" 예외가 날 수 있다. API 26+ 에서는 비트맵 메모리가 GC 로 회수되므로 `recycle()` 이 필요하지 않다.
 
 ### Why It Matters
-약관 박스의 줄 높이가 iOS(44) 보다 커지고 눌림 색이 다르다. 기능 문제는 아니다.
+드문 타이밍 이슈지만 발생하면 앱이 종료된다. 이득(메모리 즉시 회수)에 비해 위험이 크다.
 
 ### Recommended Fix
-`Text("보기", Modifier.heightIn(min = 44.dp).clickable(...).padding(horizontal = 4.dp), ...)` 로 교체(필요하면 `indication = null`).
+`recycle()` 호출을 모두 제거하고 참조만 교체한다(`photo = next`, `photo = null`). `loadCroppedPhoto` 내부의 중간 비트맵(`original`, `upright`)은 화면에 올라가지 않으므로 `recycle()` 유지해도 된다.
 
 ---
 
 ### File / Location
-`android/app/src/main/java/com/sapphire/hawe/app/AuthNavigation.kt` — `var signupPassword by remember { ... }`, `signupConfirm`
+`feature/mission/PhotoMissionScreen.kt` — `picker` 콜백, 촬영 콜백의 `loadCroppedPhoto(...)`, "올리기" 의 `photoJpegBytes(...)`
 
 ### Problem
-A2 비밀번호를 `remember` 로 들고 있어, 시스템 글자 크기·언어·다크 모드 같은 구성 변경으로 Activity 가 재생성되면(세로 고정이라 회전은 아님) 비밀번호/확인만 지워지고 `rememberSaveable` 인 이메일·약관은 유지된다.
+이미지 디코딩·회전·크롭(`loadCroppedPhoto`)과 JPEG 압축(`photoJpegBytes`)이 메인 스레드에서 동기 실행된다. 12MP 사진은 2048px 로 다운샘플해도 수백 ms 가 걸릴 수 있다.
 
 ### Why It Matters
-의도(프로세스 복원 시 비밀번호를 저장하지 않음)와 달리 단순 구성 변경에서도 입력이 사라지는 부분 상태가 된다. 영향이 작아 계획의 "허용" 범위일 수 있으나 보고서에 이 한계가 적혀 있지 않다.
+앨범 선택 직후/촬영 직후/올리기 직후 화면이 잠깐 멈춘다. 기능 오류는 아니고 체감 문제다.
 
 ### Recommended Fix
-허용한다면 보고서에 한계를 명시한다. 유지하고 싶다면 비밀번호를 `AppViewModel`(Activity 범위, 구성 변경에서 유지) 의 휘발성 필드로 옮긴다(저장하지 않음).
-
----
-
-### File / Location
-`android/app/src/test/java/com/sapphire/hawe/feature/auth/`
-
-### Problem
-계획 Tests Required 대비 빠진 케이스: 이메일 `""`·`a@b.co`·`a b@c.com` 외에 공백 포함 입력, `canProceed` 에서 약관 둘 중 하나만 빠졌을 때(현재는 `agreePrivacy = false` 한 번만), `emailError`/`passwordError` 가 빈 값에서 null 인 것은 확인하지만 `passwordError` 문구 자체와 `confirmError` 가 빈 확인칸에서 null 인 케이스, 로그인 후 같은 이메일(대소문자 다름) 재입력 시 null 인 케이스는 있음.
-
-### Why It Matters
-큰 공백은 아니고 핵심 규칙(검사 4종·전체 동의·로그인 계정 생성)은 테스트로 덮여 있다.
-
-### Recommended Fix
-`agreeService = false`/`agreePrivacy = false` 각각 단독일 때 `canProceed` 가 false 인지, `passwordError` 문구를 검증하는 단언 몇 줄만 추가.
+(선택) `rememberCoroutineScope` + `withContext(Dispatchers.Default)` 로 디코딩·압축을 옮기고, 처리 중에는 셔터/올리기를 막는다(`capturing`/`submitted` 플래그 재사용). 이번 단계에서 하지 않으면 보고서의 "남은 위험"에 한 줄 적는다.
 
 ---
 
 ## 결론
 
-**수정 후 재리뷰 필요** — P1 2건(`HTextField` 키보드 액션, A1 inset 처리)을 고친 뒤 다시 리뷰한다. P2 는 같이 고치는 것을 권장한다.
-수정 후 `.agent/report.md` 에 항목별 처리 결과(수정/보류와 이유)를 추가하고, `assembleDebug` / `testDebugUnitTest` / `lintDebug` / `installDebug` 를 다시 돌려 결과를 적어 달라.
+**수정 후 재리뷰 필요** — P1 1건(08 에디터 터치 영역)을 고친 뒤 다시 리뷰한다. P2 두 건 중 `recycle()` 제거는 같이 고치는 것을 권장하고, 메인 스레드 처리는 선택이다.
+수정 후 `.agent/report.md` 에 처리 결과를 추가하고 `assembleDebug` / `testDebugUnitTest` / `lintDebug` / `installDebug` 결과를 갱신해 달라.

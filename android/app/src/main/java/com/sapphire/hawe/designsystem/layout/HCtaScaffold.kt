@@ -1,4 +1,4 @@
-﻿package com.sapphire.hawe.designsystem.layout
+package com.sapphire.hawe.designsystem.layout
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -43,5 +43,5 @@ fun ctaBottomPadding(bottomInset: Dp = HLayout.ctaBottomInset): Dp {
 @Preview(showBackground = true)
 @Composable
 private fun CtaScaffoldPreview() {
-    HCtaScaffold(content = { Text("怨꾩젙??留뚮뱾?댁슂") }, cta = { HButton("?ㅼ쓬") {} })
+    HCtaScaffold(content = { Text("계정을 만들어요") }, cta = { HButton("다음") {} })
 }
