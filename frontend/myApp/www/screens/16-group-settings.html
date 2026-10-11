@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>그룹 정보</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .title { display: flex; flex-direction: column; gap: 4px; padding: 12px 0 20px; }
+  .title h1 { font-size: 24px; font-weight: 700; }
+  .invite { gap: 14px; padding: 18px; border-radius: 20px; }
+  .invite-top { display: flex; align-items: center; justify-content: space-between; }
+  .code { font-size: 26px; font-weight: 700; letter-spacing: 3.12px; }
+  .copy { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--color-border); border-radius: 22px; background: var(--color-bg); }
+  .section-hd { padding: 24px 0 6px; }
+  .member { display: flex; align-items: center; gap: 12px; height: 52px; }
+  .member-name { display: flex; flex: 1 0 0; align-items: center; gap: 6px; min-width: 0; font-size: 15px; font-weight: 500; white-space: nowrap; }
+  .settings { padding-top: 12px; border-top: 1px solid var(--color-line); }
+  .leave { display: flex; align-items: center; height: 52px; font-size: 15px; color: var(--color-danger); }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="05-group-mission.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">그룹 정보</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <div class="title">
+    <h1>컴공 동기</h1>
+    <p class="c-2" style="font-size: 14px;">친구 · 2026년 6월 2일부터 · 미션 142회</p>
+  </div>
+
+  <section class="soft invite">
+    <div class="invite-top">
+      <div class="nowrap" style="display: flex; flex-direction: column; gap: 2px;">
+        <span class="fw-6 c-2" style="font-size: 13px;">초대 코드</span>
+        <span class="code">K7Q2PX</span>
+      </div>
+      <button class="copy" type="button" data-copy="K7Q2PX" aria-label="초대 코드 복사"><span class="ic s-20"><img src="../img/ui/icons/copy.svg" alt=""></span></button>
+    </div>
+    <button class="btn btn-primary" type="button" id="share">초대 링크 공유하기</button>
+  </section>
+
+  <div class="section-hd"><span>멤버</span><span>5 / 6명</span></div>
+  <section>
+    <div class="member">
+      <span class="avatar"><span class="ic"><img src="../img/ui/chars/bear.svg" alt=""></span></span>
+      <span class="member-name">과대표 하늘 <span class="c-2 fw-4" style="font-size: 12px;">나 · 방장</span></span>
+      <a class="pill" href="16-1-group-profile.html">내 프로필 편집</a>
+    </div>
+    <div class="member">
+      <span class="avatar"><span class="ic"><img src="../img/ui/chars/potato.svg" alt=""></span></span>
+      <span class="member-name">민준</span>
+    </div>
+    <div class="member">
+      <span class="avatar"><span class="ic"><img src="../img/ui/chars/flower.svg" alt=""></span></span>
+      <span class="member-name">지우</span>
+    </div>
+    <div class="member">
+      <span class="avatar"><span class="ic"><img src="../img/ui/chars/drop.svg" alt=""></span></span>
+      <span class="member-name">서연</span>
+    </div>
+    <div class="member">
+      <span class="avatar"><span class="ic"><img src="../img/ui/chars/film.svg" alt=""></span></span>
+      <span class="member-name">현우</span>
+    </div>
+  </section>
+
+  <section class="settings">
+    <a class="list-row" href="#">주제 도착 시간<span class="list-row-trail">오전 9:00<span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="#">알림<span class="list-row-trail">켜짐<span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="leave" href="04-home.html">그룹 나가기</a>
+  </section>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+<script>
+  document.getElementById('share').addEventListener('click', function () {
+    var data = { title: "HA'WE 초대", text: "'컴공 동기' 그룹에 초대했어요. 초대 코드: K7Q2PX" };
+    if (navigator.share) navigator.share(data).catch(function () {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(data.text);
+  });
+</script>
+</body>
+</html>

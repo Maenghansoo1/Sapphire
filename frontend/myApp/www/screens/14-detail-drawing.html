@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>작품 상세 · 그림</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<link rel="stylesheet" href="../css/detail.css">
+</head>
+<body>
+<main class="screen is-fixed detail">
+  <div class="top">
+    <header class="hdr">
+      <a class="hdr-btn" href="11-result-drawing.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+      <div class="author">
+        <span class="avatar a-30"><span class="ic"><img src="../img/ui/chars/potato.svg" alt=""></span></span>
+        <span class="fw-6" style="font-size: 15px;">민준</span>
+        <span class="c-2" style="font-size: 13px;">10월 10일 · 그림</span>
+      </div>
+      <div class="hdr-right"><button type="button" aria-label="더보기"><span class="ic s-20"><img src="../img/ui/icons/more.svg" alt=""></span></button></div>
+    </header>
+    <p class="c-2" style="font-size: 13px;">요즘 제일 웃겼던 순간</p>
+  </div>
+
+  <div class="scroll">
+    <div class="media drawing"><span class="ic" style="--s: 240px;"><img src="../img/ui/draw/sample-minjun-240.svg" alt="민준의 그림"></span></div>
+
+    <div class="likes">
+      <button class="like" type="button"><span class="ic s-20"><img src="../img/ui/icons/heart.svg" alt=""></span>4</button>
+      <span class="c-2 nowrap" style="font-size: 13px;">지우, 서연님 외 2명이 좋아해요</span>
+    </div>
+
+    <section class="comments">
+      <p class="fw-7" style="font-size: 14px;">댓글 3</p>
+      <div class="comment">
+        <span class="avatar a-32"><span class="ic"><img src="../img/ui/chars/drop.svg" alt=""></span></span>
+        <div class="comment-body">
+          <p class="comment-meta"><span class="fw-6" style="font-size: 13px;">서연</span><span class="c-2" style="font-size: 12px;">2시간 전</span></p>
+          <p class="comment-text">이거 그때 과방에서 있었던 일 맞지 ㅋㅋㅋ</p>
+        </div>
+      </div>
+      <div class="comment">
+        <span class="avatar a-32"><span class="ic"><img src="../img/ui/chars/flower.svg" alt=""></span></span>
+        <div class="comment-body">
+          <p class="comment-meta"><span class="fw-6" style="font-size: 13px;">지우</span><span class="c-2" style="font-size: 12px;">1시간 전</span></p>
+          <p class="comment-text">표정이 너무 정확함</p>
+        </div>
+      </div>
+      <div class="comment">
+        <span class="avatar a-32"><span class="ic"><img src="../img/ui/chars/film.svg" alt=""></span></span>
+        <div class="comment-body">
+          <p class="comment-meta"><span class="fw-6" style="font-size: 13px;">현우</span><span class="c-2" style="font-size: 12px;">30분 전</span></p>
+          <p class="comment-text">나도 내일 이걸로 그릴까</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <form class="comment-bar" onsubmit="return false;">
+    <input type="text" placeholder="민준님에게 댓글 남기기">
+    <button class="send" type="submit">등록</button>
+  </form>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>

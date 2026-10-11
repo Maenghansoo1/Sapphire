@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>미션 수행 · 그림</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .screen { gap: 16px; }
+  .mission-title { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+  .canvas { position: relative; height: 400px; overflow: hidden; border: 1px solid var(--color-line); border-radius: 20px; touch-action: none; }
+  .canvas canvas { display: block; width: 100%; height: 100%; }
+  .tools { display: flex; align-items: center; justify-content: space-between; }
+  .tools .chips { gap: 6px; }
+  .sizes { display: flex; align-items: center; gap: 4px; }
+  .colors { display: flex; justify-content: space-between; }
+  .swatch { position: relative; width: 44px; height: 44px; }
+  /* 색 선택 링 — color-black-selected.svg의 링(2px, #111)과 같은 모양.
+     검정은 링이 에셋에 들어 있어서 data-on/off 이미지 교체로 처리해요. */
+  .colors .swatch.is-selected:not([data-on])::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--color-ink); border-radius: 50%; }
+  .hdr-right button:disabled { pointer-events: none; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="05-group-mission.html" data-back aria-label="닫기"><span class="ic s-22"><img src="../img/ui/icons/close.svg" alt=""></span></a>
+    <div class="hdr-right">
+      <button type="button" id="undo" aria-label="되돌리기"><span class="ic s-22"><img src="../img/ui/icons/undo.svg" alt=""></span></button>
+      <button type="button" id="redo" aria-label="다시 하기" disabled><span class="ic s-22"><img src="../img/ui/icons/redo-disabled.svg" alt=""></span></button>
+    </div>
+  </header>
+
+  <div class="mission-title">
+    <span class="fw-6 c-2" style="font-size: 13px;">오늘의 그림</span>
+    <span class="fw-7" style="font-size: 20px;">요즘 제일 웃겼던 순간</span>
+  </div>
+
+  <div class="canvas"><canvas id="pad"></canvas></div>
+
+  <div class="tools">
+    <div class="chips" data-select id="mode">
+      <button class="chip is-selected" type="button" data-option data-mode="pen">펜</button>
+      <button class="chip" type="button" data-option data-mode="eraser">지우개</button>
+    </div>
+    <div class="sizes" data-select id="sizes">
+      <button class="swatch" type="button" data-option data-size="2" data-on="size-s-selected" data-off="size-s" aria-label="얇게"><span class="ic s-44"><img src="../img/ui/draw/size-s.svg" alt=""></span></button>
+      <button class="swatch is-selected" type="button" data-option data-size="4" data-on="size-m-selected" data-off="size-m" aria-label="보통"><span class="ic s-44"><img src="../img/ui/draw/size-m-selected.svg" alt=""></span></button>
+      <button class="swatch" type="button" data-option data-size="8" data-on="size-l-selected" data-off="size-l" aria-label="굵게"><span class="ic s-44"><img src="../img/ui/draw/size-l.svg" alt=""></span></button>
+    </div>
+  </div>
+
+  <div class="colors" data-select id="colors">
+    <button class="swatch is-selected" type="button" data-option data-color="#111111" data-on="color-black-selected" data-off="color-black" aria-label="검정"><span class="ic s-44"><img src="../img/ui/draw/color-black-selected.svg" alt=""></span></button>
+    <button class="swatch" type="button" data-option data-color="#8e8e93" aria-label="회색"><span class="ic s-44"><img src="../img/ui/draw/color-gray.svg" alt=""></span></button>
+    <button class="swatch" type="button" data-option data-color="#e5484d" aria-label="빨강"><span class="ic s-44"><img src="../img/ui/draw/color-red.svg" alt=""></span></button>
+    <button class="swatch" type="button" data-option data-color="#f5a623" aria-label="주황"><span class="ic s-44"><img src="../img/ui/draw/color-orange.svg" alt=""></span></button>
+    <button class="swatch" type="button" data-option data-color="#f2d64b" aria-label="노랑"><span class="ic s-44"><img src="../img/ui/draw/color-yellow.svg" alt=""></span></button>
+    <button class="swatch" type="button" data-option data-color="#2fa36b" aria-label="초록"><span class="ic s-44"><img src="../img/ui/draw/color-green.svg" alt=""></span></button>
+    <button class="swatch" type="button" data-option data-color="#3a5bff" aria-label="파랑"><span class="ic s-44"><img src="../img/ui/draw/color-blue.svg" alt=""></span></button>
+  </div>
+
+  <div class="spacer"></div>
+  <a class="btn btn-primary" href="11-result-drawing.html">올리기</a>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+<script>
+  (function () {
+    var canvas = document.getElementById('pad');
+    var ctx = canvas.getContext('2d');
+    var ratio = window.devicePixelRatio || 1;
+    var state = { color: '#111111', size: 4, mode: 'pen' };
+    var history = [], future = [];
+    var undoBtn = document.getElementById('undo'), redoBtn = document.getElementById('redo');
+
+    function resize() {
+      var r = canvas.getBoundingClientRect();
+      canvas.width = r.width * ratio;
+      canvas.height = r.height * ratio;
+      ctx.scale(ratio, ratio);
+    }
+    function snapshot() { return ctx.getImageData(0, 0, canvas.width, canvas.height); }
+    function restore(img) { ctx.putImageData(img, 0, 0); }
+    function syncButtons() {
+      undoBtn.disabled = history.length === 0;
+      redoBtn.disabled = future.length === 0;
+      undoBtn.style.opacity = undoBtn.disabled ? .3 : 1;
+      // 디자인에 '다시 하기' 비활성(회색) 에셋만 있어서, 활성일 땐 기본 redo 아이콘으로 바꿔요
+      redoBtn.querySelector('img').src = '../img/ui/icons/' + (redoBtn.disabled ? 'redo-disabled' : 'redo') + '.svg';
+    }
+
+    resize();
+    // 목업 상태: Figma에 그려진 예시 그림을 처음에 깔아둬요
+    var sample = new Image();
+    sample.onload = function () {
+      var r = canvas.getBoundingClientRect();
+      history.push(snapshot());
+      syncButtons();
+      ctx.drawImage(sample, (r.width - 176) / 2, (r.height - 205) / 2 + 4, 176, 205);
+    };
+    sample.src = '../img/ui/draw/sample-drawing.svg';
+
+    var drawing = false;
+    function point(e) { var r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    canvas.addEventListener('pointerdown', function (e) {
+      drawing = true;
+      history.push(snapshot()); future = []; syncButtons();
+      var p = point(e);
+      ctx.globalCompositeOperation = state.mode === 'eraser' ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = state.color;
+      ctx.lineWidth = state.mode === 'eraser' ? state.size * 4 : state.size;
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', function (e) {
+      if (!drawing) return;
+      var p = point(e); ctx.lineTo(p.x, p.y); ctx.stroke();
+    });
+    ['pointerup', 'pointercancel'].forEach(function (t) { canvas.addEventListener(t, function () { drawing = false; }); });
+
+    undoBtn.addEventListener('click', function () { if (!history.length) return; future.push(snapshot()); restore(history.pop()); syncButtons(); });
+    redoBtn.addEventListener('click', function () { if (!future.length) return; history.push(snapshot()); restore(future.pop()); syncButtons(); });
+
+    // 선택 상태가 에셋에 들어 있는 스와치는 data-on / data-off 이미지로 바꿔요
+    function swapImages(group) {
+      [].forEach.call(group.querySelectorAll('[data-on]'), function (b) {
+        var name = b.classList.contains('is-selected') ? b.dataset.on : b.dataset.off;
+        b.querySelector('img').src = '../img/ui/draw/' + name + '.svg';
+      });
+    }
+    document.getElementById('mode').addEventListener('select', function (e) { state.mode = e.detail.dataset.mode; });
+    document.getElementById('sizes').addEventListener('select', function (e) { state.size = Number(e.detail.dataset.size); swapImages(this); });
+    document.getElementById('colors').addEventListener('select', function (e) { state.color = e.detail.dataset.color; swapImages(this); });
+    syncButtons();
+  })();
+</script>
+</body>
+</html>

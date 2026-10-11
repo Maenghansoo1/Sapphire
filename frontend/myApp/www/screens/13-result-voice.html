@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>결과 공개 · 음성</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .hdr-title { font-size: 15px; font-weight: 600; }
+  .title { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 18px; }
+  .title h1 { font-size: 22px; font-weight: 700; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .play-all { display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border: 1px solid var(--color-border); border-radius: 14px; font-size: 15px; font-weight: 600; }
+  .voice { flex-direction: row; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; }
+  .play { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; background: var(--color-ink); }
+  .voice.is-playing .play { background: var(--color-primary); }
+  .voice-body { display: flex; flex: 1 0 0; flex-direction: column; gap: 6px; min-width: 0; }
+  .voice-hd { display: flex; align-items: center; justify-content: space-between; white-space: nowrap; }
+  .who { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="05-group-mission.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">10월 8일 · 음성</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <div class="title">
+    <h1>오늘 하루를 10초로 말해줘</h1>
+    <p class="c-2" style="font-size: 13px;">5명 모두 완료 · 눌러서 듣고 댓글을 남겨보세요</p>
+  </div>
+
+  <section class="list">
+    <button class="play-all" type="button"><span class="ic s-16"><img src="../img/ui/icons/play.svg" alt=""></span>전체 이어 듣기</button>
+
+    <div class="card voice" data-href="14-detail-voice.html">
+      <button class="play" type="button" aria-label="재생"><span class="ic s-16"><img src="../img/ui/icons/play-white.svg" alt=""></span></button>
+      <div class="voice-body">
+        <div class="voice-hd">
+          <span class="who"><span class="avatar a-24"><span class="ic"><img src="../img/ui/chars/potato.svg" alt=""></span></span>민준</span>
+          <span class="c-2" style="font-size: 12px;">0:09 · 댓글 2</span>
+        </div>
+        <div class="wave sm" data-wave="6 10 16 22 14 20 24 12 8 18 22 16 10 6 12 20 24 18 12 8 14 20 16 10 6 10 14 8"></div>
+      </div>
+    </div>
+
+    <div class="card voice is-playing" data-href="14-detail-voice.html">
+      <button class="play" type="button" aria-label="일시정지"><span class="ic s-16"><img src="../img/ui/icons/pause-white.svg" alt=""></span></button>
+      <div class="voice-body">
+        <div class="voice-hd">
+          <span class="who"><span class="avatar a-24"><span class="ic"><img src="../img/ui/chars/flower.svg" alt=""></span></span>지우</span>
+          <span class="c-2" style="font-size: 12px;">0:12 · 댓글 3</span>
+        </div>
+        <div class="wave sm" data-progress="12" data-wave="20 24 12 8 18 22 16 10 6 12 20 24 18 12 8 14 20 16 10 6 10 14 8 6 10 16 22 14"></div>
+      </div>
+    </div>
+
+    <div class="card voice" data-href="14-detail-voice.html">
+      <button class="play" type="button" aria-label="재생"><span class="ic s-16"><img src="../img/ui/icons/play-white.svg" alt=""></span></button>
+      <div class="voice-body">
+        <div class="voice-hd">
+          <span class="who"><span class="avatar a-24"><span class="ic"><img src="../img/ui/chars/drop.svg" alt=""></span></span>서연</span>
+          <span class="c-2" style="font-size: 12px;">0:10 · 댓글 1</span>
+        </div>
+        <div class="wave sm" data-wave="16 10 6 12 20 24 18 12 8 14 20 16 10 6 10 14 8 6 10 16 22 14 20 24 12 8 18 22"></div>
+      </div>
+    </div>
+
+    <div class="card voice" data-href="14-detail-voice.html">
+      <button class="play" type="button" aria-label="재생"><span class="ic s-16"><img src="../img/ui/icons/play-white.svg" alt=""></span></button>
+      <div class="voice-body">
+        <div class="voice-hd">
+          <span class="who"><span class="avatar a-24"><span class="ic"><img src="../img/ui/chars/film.svg" alt=""></span></span>현우</span>
+          <span class="c-2" style="font-size: 12px;">0:07 · 댓글 0</span>
+        </div>
+        <div class="wave sm" data-wave="22 14 20 24 12 8 18 22 16 10 6 12 20 24 18 12 8 14 20 16 10 6 10 14 8 6 10 16"></div>
+      </div>
+    </div>
+
+    <div class="card voice" data-href="14-detail-voice.html">
+      <button class="play" type="button" aria-label="재생"><span class="ic s-16"><img src="../img/ui/icons/play-white.svg" alt=""></span></button>
+      <div class="voice-body">
+        <div class="voice-hd">
+          <span class="who"><span class="avatar a-24"><span class="ic"><img src="../img/ui/chars/bear.svg" alt=""></span></span>과대표 하늘</span>
+          <span class="c-2" style="font-size: 12px;">0:11 · 댓글 1</span>
+        </div>
+        <div class="wave sm" data-wave="8 18 22 16 10 6 12 20 24 18 12 8 14 20 16 10 6 10 14 8 6 10 16 22 14 20 24 12"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+<script>
+  (function () {
+    var rows = [].slice.call(document.querySelectorAll('.voice'));
+
+    function drawWave(el) {
+      var on = Number(el.dataset.progress || 0);
+      el.innerHTML = el.dataset.wave.split(' ').map(function (h, i) {
+        return '<i' + (i < on ? ' class="on"' : '') + ' style="height:' + h + 'px"></i>';
+      }).join('');
+    }
+    function setPlaying(row, playing) {
+      row.classList.toggle('is-playing', playing);
+      var btn = row.querySelector('.play');
+      btn.setAttribute('aria-label', playing ? '일시정지' : '재생');
+      btn.querySelector('img').src = '../img/ui/icons/' + (playing ? 'pause-white' : 'play-white') + '.svg';
+    }
+
+    rows.forEach(function (row) {
+      drawWave(row.querySelector('.wave'));
+      row.addEventListener('click', function (e) {
+        if (!e.target.closest('.play')) { location.href = row.dataset.href; return; }
+        var playing = !row.classList.contains('is-playing');
+        rows.forEach(function (r) { if (r !== row) setPlaying(r, false); });
+        setPlaying(row, playing);
+      });
+    });
+  })();
+</script>
+</body>
+</html>

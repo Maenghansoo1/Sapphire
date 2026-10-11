@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>내 그룹</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .hdr h1 { font-size: 26px; font-weight: 700; }
+  .date { padding: 6px 0 20px; font-size: 14px; color: var(--color-text-secondary); }
+  .groups { display: flex; flex-direction: column; gap: 12px; }
+  .group { gap: 14px; padding: 18px; }
+  .group-name { display: flex; flex-direction: column; gap: 4px; }
+  .mission { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 14px; background: var(--color-surface); font-weight: 600; }
+  .foot { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--color-text-secondary); }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <h1>내 그룹</h1>
+    <div class="hdr-right">
+      <a href="02-group-create.html" aria-label="새 그룹"><span class="ic"><img src="../img/ui/icons/plus.svg" alt=""></span></a>
+      <a href="17-mypage.html" aria-label="마이페이지"><span class="ic s-22"><img src="../img/ui/icons/person.svg" alt=""></span></a>
+    </div>
+  </header>
+  <p class="date">10월 11일 일요일 · 그룹 3개</p>
+
+  <section class="groups">
+    <a class="card group" href="05-group-mission.html">
+      <div class="group-name">
+        <span class="fw-7" style="font-size: 18px;">컴공 동기</span>
+        <span class="c-2" style="font-size: 13px;">친구 · 5명</span>
+      </div>
+      <div class="members">
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/potato.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/friend-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/flower.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/friend-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/drop.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/friend-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/film.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/friend-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/bear.svg" alt=""></span></span>
+      </div>
+      <div class="mission">
+        <span class="c-2" style="font-size: 12px;">오늘의 미션 · 사진</span>
+        <span style="font-size: 15px;">지금 창밖으로 보이는 풍경</span>
+      </div>
+      <div class="foot">
+        <span>3 / 5명 완료</span>
+        <span class="badge badge-primary">내 미션 남음</span>
+      </div>
+    </a>
+
+    <a class="card group" href="11-result-drawing.html">
+      <div class="group-name">
+        <span class="fw-7" style="font-size: 18px;">우리 둘</span>
+        <span class="c-2" style="font-size: 13px;">연인 · 2명 · 함께한 지 128일</span>
+      </div>
+      <div class="members">
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/mongsil.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/lover-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/leaf.svg" alt=""></span></span>
+      </div>
+      <div class="mission">
+        <span class="c-2" style="font-size: 12px;">오늘의 미션 · 그림</span>
+        <span style="font-size: 15px;">요즘 제일 웃겼던 순간</span>
+      </div>
+      <div class="foot">
+        <span>2 / 2명 완료</span>
+        <span class="badge badge-soft">열어보기</span>
+      </div>
+    </a>
+
+    <a class="card group" href="05-group-mission.html">
+      <div class="group-name">
+        <span class="fw-7" style="font-size: 18px;">조별과제 B팀</span>
+        <span class="c-2" style="font-size: 13px;">웬수 · 4명</span>
+      </div>
+      <div class="members">
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/film.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/enemy-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/bear.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/enemy-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/leaf.svg" alt=""></span></span>
+        <span class="decor"><span class="ic s-14"><img src="../img/ui/decor/enemy-14.svg" alt=""></span></span>
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/mongsil.svg" alt=""></span></span>
+      </div>
+      <div class="mission">
+        <span class="c-2" style="font-size: 12px;">오늘의 미션 · 음성</span>
+        <span style="font-size: 15px;">오늘 하루를 10초로 말해줘</span>
+      </div>
+      <div class="foot">
+        <span>1 / 4명 완료</span>
+        <span class="badge badge-primary">내 미션 남음</span>
+      </div>
+    </a>
+  </section>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>

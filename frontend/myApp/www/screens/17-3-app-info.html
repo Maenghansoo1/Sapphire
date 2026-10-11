@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>앱 정보</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .app { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 28px; white-space: nowrap; }
+  .app-icon { display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; border: 1px solid var(--color-disabled); border-radius: 20px; }
+  .app .wordmark { font-size: 26px; }
+  /* Figma 17-3의 워드마크 따옴표 색 (#f3f31c) — 다른 화면(#67a0c3)과 다르니 디자인 확인 필요 */
+  .app .wordmark .apos { color: #f3f31c; }
+  .status { flex-direction: row; align-items: center; justify-content: space-between; margin-top: 22px; padding: 16px; }
+  .status .txt { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+  .rows { padding-top: 22px; }
+  .rows .list-row { height: 54px; }
+  .credit { font-size: 12px; line-height: 1.6; color: var(--color-text-secondary); text-align: center; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="17-mypage.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">앱 정보</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <section class="app">
+    <div class="app-icon"><span class="ic" style="--s: 62px;"><img src="../img/ui/logo/symbol-accent.svg" alt="HA'WE"></span></div>
+    <span class="wordmark">HA<span class="apos">'</span>WE</span>
+    <p class="c-2" style="font-size: 13px;">Hi + We, 매일 건네는 우리의 인사</p>
+    <p class="c-2" style="font-size: 14px;">버전 1.0.0</p>
+  </section>
+
+  <section class="soft status">
+    <span class="txt">
+      <span class="fw-6" style="font-size: 15px;">최신 버전을 사용 중이에요</span>
+      <span class="c-2" style="font-size: 12px;">최신 버전 1.0.0</span>
+    </span>
+    <span class="ic s-22"><img src="../img/ui/icons/check.svg" alt=""></span>
+  </section>
+
+  <nav class="rows">
+    <a class="list-row" href="#">공지사항<span class="list-row-trail"><span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="mailto:devleeekh@gmail.com">문의하기<span class="list-row-trail">devleeekh@gmail.com<span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="#">앱 평가하기<span class="list-row-trail">App Store<span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="#">오픈소스 라이선스<span class="list-row-trail"><span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+  </nav>
+
+  <div class="spacer"></div>
+  <p class="credit">Made by [팀 이름]<br>© 2026 [팀 이름]. All rights reserved.</p>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>
