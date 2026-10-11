@@ -1,13 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- icon-flash.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="22dp"
-    android:height="22dp"
-    android:viewportWidth="22"
-    android:viewportHeight="22">
-    <path android:pathData="M11.9167 1.83331L3.66669 12.8333H10.0834L9.16669 20.1666L17.4167 9.16665H11L11.9167 1.83331Z"
-        android:strokeColor="#111111"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="22dp" android:height="22dp" android:viewportWidth="22.0" android:viewportHeight="22.0"><path android:pathData="M11.9167 1.83331L3.66669 12.8333H10.0834L9.16669 20.1666L17.4167 9.16665H11L11.9167 1.83331Z" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>

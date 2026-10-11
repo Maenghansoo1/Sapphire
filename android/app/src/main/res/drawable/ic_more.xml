@@ -1,23 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- icon-more.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="22dp"
-    android:height="22dp"
-    android:viewportWidth="22"
-    android:viewportHeight="22">
-    <path android:pathData="M4.58329 11.9166C5.08955 11.9166 5.49996 11.5062 5.49996 11C5.49996 10.4937 5.08955 10.0833 4.58329 10.0833C4.07703 10.0833 3.66663 10.4937 3.66663 11C3.66663 11.5062 4.07703 11.9166 4.58329 11.9166Z"
-        android:strokeColor="#111111"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path android:pathData="M11 11.9166C11.5063 11.9166 11.9167 11.5062 11.9167 11C11.9167 10.4937 11.5063 10.0833 11 10.0833C10.4938 10.0833 10.0834 10.4937 10.0834 11C10.0834 11.5062 10.4938 11.9166 11 11.9166Z"
-        android:strokeColor="#111111"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path android:pathData="M17.4167 11.9166C17.9229 11.9166 18.3333 11.5062 18.3333 11C18.3333 10.4937 17.9229 10.0833 17.4167 10.0833C16.9104 10.0833 16.5 10.4937 16.5 11C16.5 11.5062 16.9104 11.9166 17.4167 11.9166Z"
-        android:strokeColor="#111111"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="22dp" android:height="22dp" android:viewportWidth="22.0" android:viewportHeight="22.0"><path android:pathData="M4.58329 11.9166C5.08955 11.9166 5.49996 11.5062 5.49996 11C5.49996 10.4937 5.08955 10.0833 4.58329 10.0833C4.07703 10.0833 3.66663 10.4937 3.66663 11C3.66663 11.5062 4.07703 11.9166 4.58329 11.9166Z" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M11 11.9166C11.5063 11.9166 11.9167 11.5062 11.9167 11C11.9167 10.4937 11.5063 10.0833 11 10.0833C10.4938 10.0833 10.0834 10.4937 10.0834 11C10.0834 11.5062 10.4938 11.9166 11 11.9166Z" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M17.4167 11.9166C17.9229 11.9166 18.3333 11.5062 18.3333 11C18.3333 10.4937 17.9229 10.0833 17.4167 10.0833C16.9104 10.0833 16.5 10.4937 16.5 11C16.5 11.5062 16.9104 11.9166 17.4167 11.9166Z" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>

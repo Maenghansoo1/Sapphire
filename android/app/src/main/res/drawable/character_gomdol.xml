@@ -1,24 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- character-gomdol.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="80dp"
-    android:height="80dp"
-    android:viewportWidth="80"
-    android:viewportHeight="80">
-    <path android:pathData="M18 27C22.9706 27 27 22.9706 27 18C27 13.0294 22.9706 9 18 9C13.0294 9 9 13.0294 9 18C9 22.9706 13.0294 27 18 27Z"
-        android:fillColor="#B9643F" />
-    <path android:pathData="M62 27C66.9706 27 71 22.9706 71 18C71 13.0294 66.9706 9 62 9C57.0294 9 53 13.0294 53 18C53 22.9706 57.0294 27 62 27Z"
-        android:fillColor="#B9643F" />
-    <path android:pathData="M40 72C55.464 72 68 59.464 68 44C68 28.536 55.464 16 40 16C24.536 16 12 28.536 12 44C12 59.464 24.536 72 40 72Z"
-        android:fillColor="#D98B63" />
-    <path android:pathData="M31 43C32.6569 43 34 41.6569 34 40C34 38.3431 32.6569 37 31 37C29.3431 37 28 38.3431 28 40C28 41.6569 29.3431 43 31 43Z"
-        android:fillColor="#4A2A15" />
-    <path android:pathData="M49 43C50.6569 43 52 41.6569 52 40C52 38.3431 50.6569 37 49 37C47.3431 37 46 38.3431 46 40C46 41.6569 47.3431 43 49 43Z"
-        android:fillColor="#4A2A15" />
-    <path android:pathData="M40 51C41.6569 51 43 49.6569 43 48C43 46.3431 41.6569 45 40 45C38.3431 45 37 46.3431 37 48C37 49.6569 38.3431 51 40 51Z"
-        android:fillColor="#4A2A15" />
-    <path android:pathData="M31 56C37 59.3333 43 59.3333 49 56"
-        android:strokeColor="#4A2A15"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="80dp" android:height="80dp" android:viewportWidth="80.0" android:viewportHeight="80.0"><path android:pathData="M18 27C22.9706 27 27 22.9706 27 18C27 13.0294 22.9706 9 18 9C13.0294 9 9 13.0294 9 18C9 22.9706 13.0294 27 18 27Z" android:fillColor="#B9643F" /><path android:pathData="M62 27C66.9706 27 71 22.9706 71 18C71 13.0294 66.9706 9 62 9C57.0294 9 53 13.0294 53 18C53 22.9706 57.0294 27 62 27Z" android:fillColor="#B9643F" /><path android:pathData="M40 72C55.464 72 68 59.464 68 44C68 28.536 55.464 16 40 16C24.536 16 12 28.536 12 44C12 59.464 24.536 72 40 72Z" android:fillColor="#D98B63" /><path android:pathData="M31 43C32.6569 43 34 41.6569 34 40C34 38.3431 32.6569 37 31 37C29.3431 37 28 38.3431 28 40C28 41.6569 29.3431 43 31 43Z" android:fillColor="#4A2A15" /><path android:pathData="M49 43C50.6569 43 52 41.6569 52 40C52 38.3431 50.6569 37 49 37C47.3431 37 46 38.3431 46 40C46 41.6569 47.3431 43 49 43Z" android:fillColor="#4A2A15" /><path android:pathData="M40 51C41.6569 51 43 49.6569 43 48C43 46.3431 41.6569 45 40 45C38.3431 45 37 46.3431 37 48C37 49.6569 38.3431 51 40 51Z" android:fillColor="#4A2A15" /><path android:pathData="M31 56C37 59.3333 43 59.3333 49 56" android:fillColor="#00000000" android:strokeColor="#4A2A15" android:strokeWidth="2.5" android:strokeLineCap="round" /></vector>

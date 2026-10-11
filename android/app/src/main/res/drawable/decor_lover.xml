@@ -1,10 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- decor-lover.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="14dp"
-    android:height="14dp"
-    android:viewportWidth="14"
-    android:viewportHeight="14">
-    <path android:pathData="M7 12.25L2.04167 7.35C1.49245 6.80078 1.1839 6.05588 1.1839 5.27917C1.1839 4.50245 1.49245 3.75755 2.04167 3.20833C2.59089 2.65911 3.33579 2.35057 4.1125 2.35057C4.88921 2.35057 5.63411 2.65911 6.18333 3.20833L7 4.08333L7.81667 3.20833C8.36589 2.65911 9.11079 2.35057 9.8875 2.35057C10.6642 2.35057 11.4091 2.65911 11.9583 3.20833C12.5076 3.75755 12.8161 4.50245 12.8161 5.27917C12.8161 6.05588 12.5076 6.80078 11.9583 7.35L7 12.25Z"
-        android:fillColor="#E5484D" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="14dp" android:height="14dp" android:viewportWidth="14.0" android:viewportHeight="14.0"><path android:pathData="M7 12.25L2.04167 7.35C1.49245 6.80078 1.1839 6.05588 1.1839 5.27917C1.1839 4.50245 1.49245 3.75755 2.04167 3.20833C2.59089 2.65911 3.33579 2.35057 4.1125 2.35057C4.88921 2.35057 5.63411 2.65911 6.18333 3.20833L7 4.08333L7.81667 3.20833C8.36589 2.65911 9.11079 2.35057 9.8875 2.35057C10.6642 2.35057 11.4091 2.65911 11.9583 3.20833C12.5076 3.75755 12.8161 4.50245 12.8161 5.27917C12.8161 6.05588 12.5076 6.80078 11.9583 7.35L7 12.25Z" android:fillColor="#E5484D" /></vector>

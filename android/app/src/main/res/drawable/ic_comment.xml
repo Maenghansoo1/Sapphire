@@ -1,13 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- icon-comment.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="20dp"
-    android:height="20dp"
-    android:viewportWidth="20"
-    android:viewportHeight="20">
-    <path android:pathData="M17.5 10C17.4938 11.135 17.1978 12.2497 16.6402 13.2383C16.0826 14.2269 15.2819 15.0568 14.3138 15.6493C13.3457 16.2419 12.2423 16.5774 11.1083 16.6242C9.97421 16.671 8.84698 16.4275 7.83337 15.9167L3.33337 16.6667L4.16671 12.8334C3.79098 11.0652 4.13303 9.2203 5.11759 7.70438C6.10216 6.18846 7.6486 5.12574 9.41671 4.75002C11.1848 4.3743 13.0298 4.71634 14.5457 5.70091C16.0616 6.68547 17.1243 8.23191 17.5 10Z"
-        android:strokeColor="#111111"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="20dp" android:height="20dp" android:viewportWidth="20.0" android:viewportHeight="20.0"><path android:pathData="M17.5 10C17.4938 11.135 17.1978 12.2497 16.6402 13.2383C16.0826 14.2269 15.2819 15.0568 14.3138 15.6493C13.3457 16.2419 12.2423 16.5774 11.1083 16.6242C9.97421 16.671 8.84698 16.4275 7.83337 15.9167L3.33337 16.6667L4.16671 12.8334C3.79098 11.0652 4.13303 9.2203 5.11759 7.70438C6.10216 6.18846 7.6486 5.12574 9.41671 4.75002C11.1848 4.3743 13.0298 4.71634 14.5457 5.70091C16.0616 6.68547 17.1243 8.23191 17.5 10Z" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>

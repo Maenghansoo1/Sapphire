@@ -1,18 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- character-mulbangul.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="80dp"
-    android:height="80dp"
-    android:viewportWidth="80"
-    android:viewportHeight="80">
-    <path android:pathData="M40 6C58 6 66 26 66 42C66 60 54 70 40 70C26 70 14 60 14 42C14 26 22 6 40 6Z"
-        android:fillColor="#9FB3C7" />
-    <path android:pathData="M32 45C33.6569 45 35 43.6569 35 42C35 40.3431 33.6569 39 32 39C30.3431 39 29 40.3431 29 42C29 43.6569 30.3431 45 32 45Z"
-        android:fillColor="#33475E" />
-    <path android:pathData="M48 45C49.6569 45 51 43.6569 51 42C51 40.3431 49.6569 39 48 39C46.3431 39 45 40.3431 45 42C45 43.6569 46.3431 45 48 45Z"
-        android:fillColor="#33475E" />
-    <path android:pathData="M32 52C37.3333 56 42.6667 56 48 52"
-        android:strokeColor="#33475E"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="80dp" android:height="80dp" android:viewportWidth="80.0" android:viewportHeight="80.0"><path android:pathData="M40 6C58 6 66 26 66 42C66 60 54 70 40 70C26 70 14 60 14 42C14 26 22 6 40 6Z" android:fillColor="#9FB3C7" /><path android:pathData="M32 45C33.6569 45 35 43.6569 35 42C35 40.3431 33.6569 39 32 39C30.3431 39 29 40.3431 29 42C29 43.6569 30.3431 45 32 45Z" android:fillColor="#33475E" /><path android:pathData="M48 45C49.6569 45 51 43.6569 51 42C51 40.3431 49.6569 39 48 39C46.3431 39 45 40.3431 45 42C45 43.6569 46.3431 45 48 45Z" android:fillColor="#33475E" /><path android:pathData="M32 52C37.3333 56 42.6667 56 48 52" android:fillColor="#00000000" android:strokeColor="#33475E" android:strokeWidth="2.5" android:strokeLineCap="round" /></vector>

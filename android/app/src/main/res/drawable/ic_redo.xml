@@ -1,18 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- icon-redo.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="22dp"
-    android:height="22dp"
-    android:viewportWidth="22"
-    android:viewportHeight="22">
-    <path android:pathData="M13.75 12.8334L18.3333 8.25002L13.75 3.66669"
-        android:strokeColor="#111111"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path android:pathData="M18.3334 8.25H8.25002C7.03444 8.25 5.86866 8.73289 5.00911 9.59243C4.14957 10.452 3.66669 11.6178 3.66669 12.8333C3.66669 14.0489 4.14957 15.2147 5.00911 16.0742C5.86866 16.9338 7.03444 17.4167 8.25002 17.4167H11"
-        android:strokeColor="#111111"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="22dp" android:height="22dp" android:viewportWidth="22.0" android:viewportHeight="22.0"><path android:pathData="M13.75 12.8334L18.3333 8.25002L13.75 3.66669" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M18.3334 8.25H8.25002C7.03444 8.25 5.86866 8.73289 5.00911 9.59243C4.14957 10.452 3.66669 11.6178 3.66669 12.8333C3.66669 14.0489 4.14957 15.2147 5.00911 16.0742C5.86866 16.9338 7.03444 17.4167 8.25002 17.4167H11" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>

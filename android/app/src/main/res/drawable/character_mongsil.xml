@@ -1,24 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- character-mongsil.svg (iOS Assets.xcassets 에서 변환) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="80dp"
-    android:height="80dp"
-    android:viewportWidth="80"
-    android:viewportHeight="80">
-    <path android:pathData="M40 74C57.6731 74 72 59.6731 72 42C72 24.3269 57.6731 10 40 10C22.3269 10 8 24.3269 8 42C8 59.6731 22.3269 74 40 74Z"
-        android:fillColor="#E8C4A0" />
-    <path android:pathData="M22 51C24.7614 51 27 48.7614 27 46C27 43.2386 24.7614 41 22 41C19.2386 41 17 43.2386 17 46C17 48.7614 19.2386 51 22 51Z"
-        android:fillColor="#D89B6F"
-        android:fillAlpha="0.6" />
-    <path android:pathData="M58 51C60.7614 51 63 48.7614 63 46C63 43.2386 60.7614 41 58 41C55.2386 41 53 43.2386 53 46C53 48.7614 55.2386 51 58 51Z"
-        android:fillColor="#D89B6F"
-        android:fillAlpha="0.6" />
-    <path android:pathData="M30 41C31.6569 41 33 39.6569 33 38C33 36.3431 31.6569 35 30 35C28.3431 35 27 36.3431 27 38C27 39.6569 28.3431 41 30 41Z"
-        android:fillColor="#5A4C3A" />
-    <path android:pathData="M50 41C51.6569 41 53 39.6569 53 38C53 36.3431 51.6569 35 50 35C48.3431 35 47 36.3431 47 38C47 39.6569 48.3431 41 50 41Z"
-        android:fillColor="#5A4C3A" />
-    <path android:pathData="M30 52C36.6667 57.3333 43.3333 57.3333 50 52"
-        android:strokeColor="#5A4C3A"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round" />
-</vector>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="80dp" android:height="80dp" android:viewportWidth="80.0" android:viewportHeight="80.0"><path android:pathData="M40 74C57.6731 74 72 59.6731 72 42C72 24.3269 57.6731 10 40 10C22.3269 10 8 24.3269 8 42C8 59.6731 22.3269 74 40 74Z" android:fillColor="#E8C4A0" /><path android:pathData="M22 51C24.7614 51 27 48.7614 27 46C27 43.2386 24.7614 41 22 41C19.2386 41 17 43.2386 17 46C17 48.7614 19.2386 51 22 51Z" android:fillColor="#D89B6F" android:fillAlpha="0.6" android:strokeAlpha="0.6" /><path android:pathData="M58 51C60.7614 51 63 48.7614 63 46C63 43.2386 60.7614 41 58 41C55.2386 41 53 43.2386 53 46C53 48.7614 55.2386 51 58 51Z" android:fillColor="#D89B6F" android:fillAlpha="0.6" android:strokeAlpha="0.6" /><path android:pathData="M30 41C31.6569 41 33 39.6569 33 38C33 36.3431 31.6569 35 30 35C28.3431 35 27 36.3431 27 38C27 39.6569 28.3431 41 30 41Z" android:fillColor="#5A4C3A" /><path android:pathData="M50 41C51.6569 41 53 39.6569 53 38C53 36.3431 51.6569 35 50 35C48.3431 35 47 36.3431 47 38C47 39.6569 48.3431 41 50 41Z" android:fillColor="#5A4C3A" /><path android:pathData="M30 52C36.6667 57.3333 43.3333 57.3333 50 52" android:fillColor="#00000000" android:strokeColor="#5A4C3A" android:strokeWidth="2.5" android:strokeLineCap="round" /></vector>
