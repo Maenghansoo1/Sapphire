@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
@@ -33,7 +34,7 @@ fun HNavBar(title: String? = null, leading: HNavLeading = HNavLeading.NONE,
                 if (leading != HNavLeading.NONE) HIconView(if (leading == HNavLeading.BACK) HIcon.CHEVRON_LEFT else HIcon.CLOSE)
             }
             Spacer(Modifier.weight(1f))
-            Box(Modifier.width(HLayout.minTouch).height(HLayout.minTouch), contentAlignment = Alignment.CenterEnd) { trailing() }
+            Box(Modifier.widthIn(min = HLayout.minTouch).height(HLayout.minTouch), contentAlignment = Alignment.CenterEnd) { trailing() }
         }
     }
 }

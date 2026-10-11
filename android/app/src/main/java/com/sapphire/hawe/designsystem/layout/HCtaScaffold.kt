@@ -24,15 +24,20 @@ import com.sapphire.hawe.designsystem.tokens.HLayout
 @Composable
 fun HCtaScaffold(horizontalPadding: Dp = HLayout.screenPadding, bottomInset: Dp = HLayout.ctaBottomInset,
     content: @Composable () -> Unit, cta: @Composable () -> Unit) {
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    val ctaBottom = maxOf(bottomInset, (if (keyboardOpen) 0.dp else navBottom) + 12.dp)
+    val ctaBottom = ctaBottomPadding(bottomInset)
     Column(Modifier.fillMaxSize().imePadding()) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = horizontalPadding).padding(bottom = 24.dp)) { content() }
         Column(Modifier.fillMaxWidth().padding(horizontal = horizontalPadding)
             .padding(top = 12.dp, bottom = ctaBottom)) { cta() }
     }
+}
+
+@Composable
+fun ctaBottomPadding(bottomInset: Dp = HLayout.ctaBottomInset): Dp {
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    return maxOf(bottomInset, (if (keyboardOpen) 0.dp else navBottom) + 12.dp)
 }
 
 @Preview(showBackground = true)

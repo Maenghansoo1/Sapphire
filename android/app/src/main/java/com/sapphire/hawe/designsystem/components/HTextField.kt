@@ -13,12 +13,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
@@ -28,7 +31,10 @@ import com.sapphire.hawe.designsystem.tokens.HType
 fun HTextField(value: String, onValueChange: (String) -> Unit, placeholder: String,
     modifier: Modifier = Modifier, label: String? = null, isSecure: Boolean = false,
     helper: String? = null, maxLength: Int? = null, error: String? = null,
-    keyboardType: KeyboardType = KeyboardType.Text, textSize: Int = 16) {
+    keyboardType: KeyboardType = KeyboardType.Text, textSize: Int = 16,
+    capitalization: KeyboardCapitalization = KeyboardCapitalization.Sentences,
+    autoCorrectEnabled: Boolean = true, imeAction: ImeAction = ImeAction.Default,
+    onImeAction: (() -> Unit)? = null) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (label != null) Text(label, style = HType.fieldLabel, color = HColors.textSecondary)
         val shape = RoundedCornerShape(HRadius.input)
@@ -37,7 +43,10 @@ fun HTextField(value: String, onValueChange: (String) -> Unit, placeholder: Stri
                 .border(1.dp, if (error == null) HColors.border else HColors.danger, shape)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             textStyle = HType.plex(textSize).copy(color = HColors.ink), singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = if (isSecure) KeyboardType.Password else keyboardType),
+            keyboardOptions = KeyboardOptions(keyboardType = if (isSecure) KeyboardType.Password else keyboardType,
+                capitalization = capitalization, autoCorrectEnabled = autoCorrectEnabled, imeAction = imeAction),
+            keyboardActions = if (onImeAction == null) KeyboardActions.Default
+                else KeyboardActions(onAny = { onImeAction() }),
             visualTransformation = if (isSecure) PasswordVisualTransformation() else VisualTransformation.None,
             decorationBox = { inner ->
                 Box {
