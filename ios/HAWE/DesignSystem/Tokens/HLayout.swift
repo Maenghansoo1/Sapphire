@@ -22,6 +22,10 @@ enum HLayout {
     static let headerHeight: CGFloat = 52
     /// 하단 고정 CTA 높이
     static let ctaHeight: CGFloat = 56
+    /// 하단 고정 CTA 와 화면 아래 끝 사이 (Figma 프레임 pb 36)
+    static let ctaBottomInset: CGFloat = 36
+    /// 헤더 없는 화면(A1·01)에서 Safe Area 아래 첫 내용까지 (Figma pt 96 − 상태 막대 54)
+    static let introTopInset: CGFloat = 42
     /// 최소 터치 영역
     static let minTouch: CGFloat = 44
 }
