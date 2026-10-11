@@ -20,8 +20,12 @@ struct HomeView: View {
 
                     LazyVStack(spacing: 12) {
                         ForEach(groups) { group in
-                            // TODO: 05 그룹 · 오늘의 미션 연결
-                            GroupCard(group: group)
+                            // TODO: 카드는 05 그룹 · 오늘의 미션으로 가야 해요. 05 를 만들기 전까지 16 그룹 정보로 열어요.
+                            Button { path.append(.groupInfo(.mock)) } label: {
+                                GroupCard(group: group)
+                                    .contentShape(RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }

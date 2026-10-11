@@ -12,8 +12,6 @@ struct RootView: View {
                 AuthFlowView()
             case .signedIn(let hasGroups):
                 MainFlowView(hasGroups: hasGroups)
-                    // 01 → 04 로 바뀔 때 쌓인 화면을 새로 시작해요.
-                    .id(hasGroups)
             }
         }
         .animation(.default, value: session.state)

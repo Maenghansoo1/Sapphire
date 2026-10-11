@@ -4,7 +4,7 @@ import SwiftUI
 /// 그룹 이름(최대 16자), 관계 5종, 관계별 장식 미리보기.
 /// 연인을 고르면 '우리의 1일' 날짜 입력이 나타나고 최대 인원이 2명이 돼요.
 struct CreateGroupView: View {
-    var onCreated: () -> Void = {}
+    var onCreated: (_ name: String, _ relationship: Relationship) -> Void = { _, _ in }
 
     @Environment(\.dismiss) private var dismiss
 
@@ -45,7 +45,9 @@ struct CreateGroupView: View {
                 .animation(.snappy(duration: 0.25), value: relationship)
             } cta: {
                 // TODO: 서버 연결 시 그룹 생성 요청
-                HButton("그룹 만들고 초대 코드 받기") { onCreated() }
+                HButton("그룹 만들고 초대 코드 받기") {
+                    onCreated(name.trimmingCharacters(in: .whitespaces), relationship)
+                }
                     .disabled(!canCreate)
             }
         }

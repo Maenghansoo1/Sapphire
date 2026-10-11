@@ -6,6 +6,7 @@ enum MainRoute: Hashable {
     case start
     case createGroup
     case joinGroup(code: String?)
+    case groupInfo(GroupDetail)
 }
 
 struct MainFlowView: View {
@@ -28,16 +29,25 @@ struct MainFlowView: View {
                 case .start:
                     StartView(path: $path, showsBack: true)
                 case .createGroup:
-                    CreateGroupView(onCreated: finish)
+                    CreateGroupView { name, relationship in
+                        showCreatedGroup(.newlyCreated(name: name, relationship: relationship))
+                    }
                 case .joinGroup(let code):
                     JoinGroupView(initialCode: code ?? "", onJoined: finish)
+                case .groupInfo(let group):
+                    GroupInfoView(group: group, onLeft: finish)
                 }
             }
         }
     }
 
-    /// 그룹을 만들거나 참여하면 홈으로 돌아가요.
-    /// TODO: CLAUDE.md §4 — 그룹을 만든 뒤에는 16 그룹 정보(초대 코드 공유)로 가야 해요. 3단계에서 16 을 만들면 바꿔요.
+    /// 그룹을 만든 뒤에는 16 그룹 정보(초대 코드 공유)로 가요. 거기서 뒤로 가면 홈이에요. (CLAUDE.md §4)
+    private func showCreatedGroup(_ group: GroupDetail) {
+        session.signIn(hasGroups: true)
+        path = [.groupInfo(group)]
+    }
+
+    /// 그룹에 참여하거나 나가면 홈으로 돌아가요.
     private func finish() {
         path.removeAll()
         session.signIn(hasGroups: true)
