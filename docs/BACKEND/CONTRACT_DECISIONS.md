@@ -1,0 +1,719 @@
+# 백엔드 ↔ Android·iOS 계약 결정 기록
+
+점검 결과(현황)는 `docs/BACKEND/CONTRACT_AUDIT.md`에 있다. 이 문서는 사용자 결정을 받은 항목만 API 단위로 기록한다.
+**아직 코드와 기존 설계 문서(`API_DESIGN.md`, `MISSIONS_API.md`, `BACKEND_DB.md`, `PROJECT_OVERVIEW.md`)에는 반영하지 않았다.** 후속 작업에서 API별로 "수정 대상"을 따라 반영한다. 반영이 끝나면 해당 절의 상태를 "반영됨"으로 바꾼다.
+
+- 전체 원칙 (2026-10-12): **영역별로 결정한다.** 앱 기획과 백엔드 설계 중 한쪽을 일괄 기준으로 삼지 않는다.
+- 공통 기술 결정은 §0에 있다.
+- **후속 작업 권장 순서** (뒤 단계가 앞 단계의 계약을 전제로 함): §0 공통(시간대·오류 처리) → §1 Auth + `GET /me` → §2 Group(초대 코드·정원·나가기·그룹 내 프로필) → §3 미션 생성·현재 미션 → §4 Pokes → §5 Me(프로필·탈퇴) → §6 제출·피드 → §7 반응·댓글 → §8 알림 → §9 달력. 앱 쪽 서버 연결(네트워크 계층·토큰 저장소)은 §1과 함께 시작한다.
+- **병행 작업 주의**: 그룹 계약(§2)과 미션 계약(§3)은 같은 `GroupService`·`GroupMapper`·`MissionMapper`를 건드리므로 동시에 진행하지 말고 순서대로 한다. Android 서버 연결은 9단계 푸시 코드(`core/push/`, `MainNavigation.kt`)를 그대로 재사용한다(§8).
+
+---
+
+## 0. 공통 — 상태: 결정 완료 (반영 전)
+
+정책 선택이 없는 기술 결정이다. 근거는 `CONTRACT_AUDIT.md` §2.
+
+| 항목 | 결정 | 수정 대상 |
+|---|---|---|
+| ID | 서버 id(`Long`, JSON 숫자)가 기준. 앱의 `UUID` id는 서버 값으로 바꾼다 | Android·iOS 모델 |
+| 시간대 | 서버 JVM과 DB 세션 시간대를 **Asia/Seoul**로 고정한다. 날짜 경계("오늘", `mission_date`)는 모두 Asia/Seoul 기준 | 백엔드 설정(JVM `-Duser.timezone`, JDBC·DB 세션 time_zone, Jackson time-zone) |
+| 시각 표기 | 응답의 시각은 **오프셋을 붙인 ISO-8601**(`2026-09-28T09:00:00+09:00`)로 내려준다. 날짜는 `yyyy-MM-dd`, 슬롯 시각은 `HH:mm`(기존) | 백엔드 DTO의 `LocalDateTime` → `OffsetDateTime`. `API_DESIGN.md` §0 "시각 표현" |
+| 처리 안 된 요청 오류 | 없는 경로 404 `NOT_FOUND`, 경로·쿼리 타입 오류·필수 파라미터 누락 400 `VALIDATION_ERROR`, 허용 안 된 메서드 405 `METHOD_NOT_ALLOWED`, 업로드 한도 초과 413 `FILE_TOO_LARGE`. 지금은 모두 500 | `GlobalExceptionHandler`, `CommonErrorCode` |
+| 401 처리 (앱) | `TOKEN_EXPIRED` → refresh 후 재시도, `INVALID_TOKEN`·refresh 실패 → 로그아웃 (§1) | Android·iOS 네트워크 계층 |
+| 프로필 객체 | 사람을 보여 주는 모든 응답은 `{ userId, nickname, characterKey, profileImageUrl }`를 쓰고, 그룹 안에서는 그룹 내 프로필을 적용한다 (§2-2) | 백엔드 응답 전반 |
+| 문서 상태 표기 | `API_DESIGN.md`·`MISSIONS_API.md`의 "아직 구현되지 않았다", `PROJECT_OVERVIEW.md` §10의 상태 표를 코드에 맞춘다 | 설계 문서 |
+
+---
+
+## 1. Auth — 상태: 결정 완료 (반영 전)
+
+### 1-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 로그인 식별자 | **이메일.** `loginId`를 없애고 이메일을 필수·유일 값으로 쓴다 | 앱 화면(A1·A2)이 이메일 기준이고 아이디 입력 칸이 없음. 나중에 비밀번호 찾기를 넣으려면 어차피 이메일이 유일해야 함 |
+| 간편 로그인 (Apple·카카오·Google) | **MVP에서 구현하지 않는다. 버튼과 17-2 "로그인 연결"은 화면에 남기고, 누르면 "준비 중" 안내를 띄운다** | 사용자 결정. 서버에 소셜 로그인 API를 만들지 않는다 |
+| 비밀번호 변경 | **MVP에 포함** — `PATCH /api/me/password` | 메일 인프라 없이 구현 가능 |
+| 비밀번호 찾기 (메일) | **MVP 제외.** A1 "비밀번호 찾기" 버튼은 남기고 누르면 "준비 중" 안내 (재설정 메일 화면으로 이동하지 않음) | 메일 발송 수단이 필요함. 간편 로그인과 같은 처리로 통일 (사용자 결정) |
+| 약관 동의 | **서버에 동의 시각을 저장한다.** `register`가 두 필수 동의를 받고, 하나라도 `true`가 아니면 400 | 동의 근거를 남김. 나중에 약관 버전 관리로 확장 가능 |
+| 가입 흐름 | A2(이메일·비밀번호·약관) → A3(닉네임·캐릭터/사진) 화면은 그대로. A3 "시작하기"에서 `register` → `login` → 캐릭터를 골랐으면 `PATCH /me/character`, 사진이면 `PUT /me/profile-image`(구현 후) 순서로 호출 | 화면 흐름을 바꾸지 않고 백엔드 계약도 단순하게 유지 (`register`는 토큰을 주지 않는다) |
+| 입력 규칙 | 서버가 앱과 같은 규칙을 검증한다: 이메일 형식, 비밀번호 8~100자 + 영문·숫자 포함, 닉네임 앞뒤 공백 제거 후 2~10자 | 다른 클라이언트로 규칙 밖의 값이 들어오지 않게 |
+| 내 정보 | `GET /api/me` 추가 | 로그인 응답에 토큰만 있어 앱이 닉네임·이메일·가입일·프로필을 알 수 없음 |
+| 토큰 처리 (앱) | 401 `TOKEN_EXPIRED` → `/auth/refresh` 후 원래 요청 재시도. `INVALID_TOKEN`이거나 refresh가 실패하면 로그아웃. 토큰은 iOS Keychain / Android Keystore 기반 저장소에 보관 | 현재 서버 계약으로 충분. 앱은 지금 메모리에만 세션을 두어 앱을 끄면 로그아웃됨 |
+| 로그아웃 | 서버 API 없음 (기존 결정 유지). 앱이 저장한 토큰을 지운다 | — |
+
+### 1-2. 최종 계약
+
+공통 규칙(`/api`, 에러 형식, camelCase)은 `API_DESIGN.md` §0을 따른다. 이메일은 앞뒤 공백을 제거하고 소문자로 바꿔 저장·비교한다.
+
+```json
+// POST /api/auth/register — 인증 불필요
+// Request
+{ "email": "sky@email.com", "password": "abcd1234", "nickname": "하늘",
+  "agreeTerms": true, "agreePrivacy": true }
+// Response 201
+{ "id": 1, "email": "sky@email.com", "nickname": "하늘" }
+```
+- 검증 실패: 400 `VALIDATION_ERROR` (이메일 형식, 비밀번호 8~100자 + 영문·숫자, 닉네임 trim 후 2~10자, `agreeTerms`·`agreePrivacy`가 `true`가 아님)
+- 서버는 가입 시각을 `users.terms_agreed_at`, `users.privacy_agreed_at`에 저장한다. 응답과 `GET /me`에는 내려주지 않는다.
+- 이미 가입된 이메일: 409 `EMAIL_TAKEN` (기존 `LOGIN_ID_TAKEN` 대체)
+
+```json
+// POST /api/auth/login — 인증 불필요
+// Request
+{ "email": "sky@email.com", "password": "abcd1234" }
+// Response 200
+{ "accessToken": "...", "refreshToken": "..." }
+```
+- 401 `INVALID_CREDENTIALS` ("이메일 또는 비밀번호가 올바르지 않습니다")
+
+```json
+// POST /api/auth/refresh — 변경 없음
+{ "refreshToken": "..." }  →  { "accessToken": "...", "refreshToken": "..." }
+```
+- 401 `INVALID_TOKEN`, `TOKEN_EXPIRED`
+
+```json
+// GET /api/me — 인증 필요
+// Response 200
+{ "id": 1, "email": "sky@email.com", "nickname": "하늘",
+  "characterKey": "mongsil", "profileImageUrl": null,
+  "createdAt": "2026-06-02T10:00:00+09:00" }
+```
+- `characterKey`: `users.character_id`가 NULL이면 `null` (앱은 `mongsil`로 표시). 기존 `PATCH /me/character` 응답의 `svgKey`와 같은 값이다.
+- `profileImageUrl`: 프로필 사진 구현 전에는 항상 `null`.
+- 시각 형식은 §0 공통 규칙(오프셋 포함 ISO-8601)을 따른다.
+- 앱의 `MyAccount.signUpProvider`·`linkedProviders`는 서버에서 내려주지 않는다. 간편 로그인이 없으므로 앱은 항상 이메일 가입으로 본다. 17-2에서 "비밀번호 변경"은 모든 사용자에게 활성이다.
+
+```json
+// PATCH /api/me/password — 인증 필요
+// Request
+{ "currentPassword": "abcd1234", "newPassword": "efgh5678" }
+// Response 204
+```
+- 400 `VALIDATION_ERROR` (새 비밀번호 규칙), 401 `INVALID_CREDENTIALS` 대신 **400 `WRONG_CURRENT_PASSWORD`** — 401은 앱이 토큰 문제로 보고 로그아웃할 수 있으므로 쓰지 않는다.
+- 비밀번호를 바꿔도 이미 발급된 토큰은 만료 전까지 유효하다 (stateless, 미결 1-4).
+
+### 1-3. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | `RegisterRequest`/`LoginRequest`/`RegisterResponse`의 `loginId` → `email`. `AuthErrorCode.LOGIN_ID_TAKEN` → `EMAIL_TAKEN`, 메시지 수정. 비밀번호·닉네임 검증 강화. `UserMapper`를 이메일 기준으로. 새 마이그레이션: `users.email` NOT NULL + UNIQUE, `login_id` 제거, `terms_agreed_at`·`privacy_agreed_at` DATETIME 추가. `GET /me`, `PATCH /me/password` 추가 (새 `user`/`me` 기능 패키지 또는 `auth`에 둘지 구현 계획에서 정함). `PasswordErrorCode` 등 새 오류 코드 |
+| Android | 네트워크 계층·토큰 저장소 신설(서버 연결 단계). A1 로그인, A3 가입 완료 시 API 호출. 간편 로그인 버튼 3개, 17-2 연결/해제, A1 "비밀번호 찾기"를 "준비 중" 안내로 (`PasswordResetScreen`은 진입하지 않음). A3 가입 요청에 A2 약관 동의 값을 넘김. 17-2 비밀번호 변경 활성 조건을 "항상"으로. `accountForLogin`(목업 계정 생성) 제거 |
+| iOS | Android와 같음 (`LoginView.logIn`, `LoginView.links`의 비밀번호 찾기, `SignupAccountModel` 동의 값 전달, `SignupProfileView`, `UserInfoView`, `ChangePasswordView`) |
+| 설계 문서 | `API_DESIGN.md` §1 Auth 계약 교체, `GET /me`·`PATCH /me/password` 추가. `BACKEND_DB.md` users 테이블. `PROJECT_OVERVIEW.md` §8 "아이디/비밀번호 자체 가입" → 이메일. Postman `HAWE_AUTH` 컬렉션 |
+
+### 1-4. 미결
+
+- 약관 버전 관리 (약관이 바뀌었을 때 재동의) — MVP 이후.
+- 기존 개발 DB의 `email`이 NULL이거나 중복인 사용자 처리 — 마이그레이션 작성 시 결정 (개발 데이터뿐이면 초기화도 가능).
+- 비밀번호 변경·탈퇴 때 기존 토큰 무효화 (현재 stateless라 불가) — 구현 계획에서 정한다 (§5-4와 같은 문제).
+
+---
+
+## 2. Group — 상태: 결정 완료 (반영 전)
+
+### 2-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 관계 코드 | 서버 코드 `COUPLE/FAMILY/FRIEND/RIVAL/CASUAL`을 쓴다. 앱 `lover/friend/family/rival/soso`는 앱 표시용으로만 남기고 서버 값과 1:1 대응 (`lover`↔`COUPLE`, `soso`↔`CASUAL`) | 앱 주석에서도 임시 값이라고 밝힘 |
+| 초대 방식 | **그룹마다 6자리 초대 코드**를 DB에 저장한다. 만료 없음. 그룹장이 재발급하면 이전 코드는 즉시 무효. 기존 JWT 초대 토큰(`hawe://join?token=`)은 폐지 | 앱 화면(03 코드 입력·미리보기, 16 코드 카드) 그대로. 정원이 작아(최대 6명) 유출 위험이 제한적이고, 재발급으로 막을 수 있음 (사용자 결정) |
+| 초대 권한 | **모든 멤버**가 코드를 보고 복사·공유할 수 있다. **재발급은 그룹장만** | 친한 소규모 그룹에서 멤버가 직접 데려오는 흐름 (사용자 결정). 무효화는 그룹 전체에 영향이 있어 그룹장 권한 |
+| 참여 전 미리보기 | 코드로 그룹 이름·관계·인원·멤버 아바타를 미리 본 뒤 참여한다 | 앱 03 화면 흐름 |
+| 정원 | **서버가 보장한다.** COUPLE 2명, 그 외 6명. 가득 차면 가입 409 `GROUP_FULL` | 사용자 결정. 앱 규칙(`Relationship.maxMembers`)과 같음 |
+| 연인 "우리의 1일" | **서버에 저장한다** (`startDate`, COUPLE 그룹만) | 처음에는 저장하지 않기로 했다가, 앱 기능을 유지하기 위해 서버 저장으로 바꿈 (사용자 결정). 기기에만 저장하면 두 사람의 값이 달라짐 |
+| 그룹장 나가기 | **그룹장이 후임자를 골라서 나간다.** 다른 멤버가 있으면 후임자 지정이 필수 | 사용자 결정. 앱의 "가장 먼저 들어온 멤버에게 자동 이전" 문구·동작은 바뀐다 |
+| 마지막 멤버가 나가기 | **그룹을 삭제한다.** 초대 코드도 무효 | 혼자 있는 그룹이라 다른 사람에게 영향이 없음 (사용자 결정) |
+| 탈퇴하는 그룹장 | 다른 멤버가 있는 그룹의 그룹장이면 먼저 후임자를 골라 나가야 탈퇴할 수 있다 (§5) | 사용자 결정. 나가기 규칙과 일관 |
+| 그룹 내 프로필 | **서버에 둔다 — 닉네임 + 캐릭터 + 사진 모두.** 그룹 내 프로필이 있으면 그 그룹의 모든 응답(멤버, 피드, 댓글 등)에서 그 프로필로 보이고, 없으면 기본 프로필 | 앱 16-1 기능 그대로 (사용자 결정) |
+| 그룹 이름 | 앞뒤 공백 제거 후 1~16자. 설정 변경에서도 빈 이름 거부 | 앱 입력 제한(16자)과 맞춤. 현재 `PATCH settings`는 빈 이름을 저장하는 버그가 있음 |
+| 그룹 목록 정렬 | 내가 참여한 순서(`group_members.joined_at` 오름차순) | 앱이 "참여 순"으로 그리고, 푸시 대상이 없을 때 "첫 그룹"을 쓰는 기준과 같음 |
+
+### 2-2. 최종 계약
+
+모든 그룹 API는 인증 필요. 아래에서 "프로필 객체"는 다음 모양이며, 그룹 안에서는 그룹 내 프로필이 있으면 그것을, 없으면 기본 프로필을 담는다.
+```json
+{ "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null }
+```
+- `profileImageUrl`이 있으면 사진, 없으면 `characterKey`(NULL이면 앱에서 `mongsil`)로 표시한다.
+- 요청에서 캐릭터는 기존 `PATCH /me/character`와 같이 **`characterId`(Long)** 로 보내고, 응답은 **`characterKey`** 로 내려준다. 앱은 `GET /characters`(인증 불필요)로 키↔id를 대응한다.
+
+#### GET /api/groups — 내 그룹 목록
+```json
+{ "content": [
+  { "id": 1, "name": "컴공 동기", "relationType": "FRIEND",
+    "memberCount": 5, "maxMembers": 6,
+    "members": [ { "userId": 1, "nickname": "과대표 하늘", "characterKey": "gomdol", "profileImageUrl": null } ],
+    "startDate": null,
+    "submittedToday": false,
+    "todayMission": { "missionId": 10, "media": "PHOTO", "content": "지금 창밖으로 보이는 풍경",
+                      "submittedCount": 3, "submittedByMe": false } }
+], "page": 0, "size": 20, "totalPages": 1, "totalElements": 3 }
+```
+- 정렬: 내가 참여한 순서. `members`는 그룹 안 표시 프로필, 참여 순.
+- `todayMission`: 지금 열려 있는 미션(§3 "현재 미션") 요약. 없으면 `null`. 홈 카드의 유형·주제·제출 인원·내 제출 여부에 쓴다.
+- `submittedToday`는 `todayMission.submittedByMe`와 같은 값이 되므로 반영 시 제거를 검토한다.
+
+#### POST /api/groups — 그룹 만들기
+```json
+// Request
+{ "name": "우리 둘", "relationType": "COUPLE", "startDate": "2026-06-02" }
+// Response 201 — GET /api/groups/{id} 와 같은 모양
+```
+- `name`: trim 후 1~16자. `relationType` 생략 시 `CASUAL`.
+- `startDate`: COUPLE일 때만 받는다(선택). 다른 관계에서 보내면 400 `VALIDATION_ERROR`. 미래 날짜(Asia/Seoul 기준)는 400.
+- `dailyMissionCount`, `missionSlots`는 기존대로 선택 필드로 남지만 MVP에서는 하루 1개만 허용한다 (§3). 앱은 보내지 않는다.
+- 생성 직후 오늘 미션을 연다 (§3 "첫 미션").
+
+#### GET /api/groups/{groupId} — 그룹 상세 (멤버만)
+```json
+{ "id": 1, "name": "컴공 동기", "ownerId": 1, "relationType": "FRIEND",
+  "createdAt": "2026-06-02T10:00:00+09:00",
+  "memberCount": 5, "maxMembers": 6,
+  "inviteCode": "K7Q2PX",
+  "inviteUrl": "https://hawe.app/invite/K7Q2PX",
+  "startDate": null,
+  "dailyMissionCount": 1,
+  "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ],
+  "missionCount": 142,
+  "myNotify": true }
+```
+- 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`.
+- `myNotify`: 이 그룹 알림을 내가 켰는지 (§8 그룹별 알림).
+- `missionSlots[0].publishTime`이 앱의 "주제 도착 시각"이다. `missionCount`는 지금까지 이 그룹에 열린 미션 수(16 화면 "미션 142개").
+
+#### PATCH /api/groups/{groupId}/settings — 그룹 설정 (그룹장만)
+- 부분 수정. `name`(trim 후 1~16자, 공백 거부), `relationType`, `startDate`, `dailyMissionCount`, `missionSlots`.
+- 관계를 바꿀 때 현재 인원이 새 정원보다 많으면 409 `GROUP_FULL`. COUPLE이 아닌 관계로 바꾸면 `startDate`는 `null`이 된다.
+- 앱의 주제 도착 시각 변경: `{ "missionSlots": [ { "slotNo": 1, "publishTime": "21:30" } ] }` (전체 교체 규칙이라 마감 시각은 기본값으로 돌아간다 — 앱에 마감 설정 UI가 없으므로 문제없음). 적용 시점은 `MISSIONS_API.md` §2 규칙대로: 오늘 미션이 이미 열렸으면 내일부터.
+- 에러: 403 `NOT_GROUP_OWNER`, 400 `VALIDATION_ERROR`.
+
+#### GET /api/groups/{groupId}/members — 멤버 목록 (멤버만)
+```json
+{ "content": [
+  { "userId": 1, "nickname": "과대표 하늘", "characterKey": "gomdol", "profileImageUrl": null,
+    "hasGroupProfile": true, "role": "owner",
+    "submissionCountThisMonth": 12, "stampedToday": true }
+], "page": 0, "size": 20, "totalPages": 1, "totalElements": 5 }
+```
+- 정렬: 참여 순 (기존과 같음). `nickname`·`characterKey`·`profileImageUrl`은 그룹 안 표시 프로필.
+- `hasGroupProfile`: 그룹 내 프로필을 쓰는지. 16-1에서 "기본 프로필 사용" 상태를 보여 줄 때 쓴다.
+- "나"는 `GET /me`의 `id`와 `userId`를 비교해 판별한다.
+- `submissionCountThisMonth`·`stampedToday`는 앱이 쓰지 않는다. 유지·삭제는 반영 시 정한다 (§9-4).
+
+#### 초대 코드
+```json
+// GET /api/invites/{code} — 참여 전 미리보기 (로그인 필요)
+// Response 200
+{ "groupId": 1, "name": "컴공 동기", "relationType": "FRIEND",
+  "memberCount": 5, "maxMembers": 6,
+  "members": [ { "userId": 1, "nickname": "과대표 하늘", "characterKey": "gomdol", "profileImageUrl": null } ] }
+```
+- 에러: 404 `INVITE_NOT_FOUND`, 409 `ALREADY_MEMBER`, 409 `GROUP_FULL` — 앱의 `notFound`/`alreadyMember`/`full`과 1:1.
+
+```json
+// POST /api/groups/join — 참여
+// Request
+{ "code": "K7Q2PX" }
+// Response 200
+{ "groupId": 1, "name": "컴공 동기" }
+```
+- 서버는 코드를 대문자로 바꿔 비교한다. 에러는 미리보기와 같다 (동시 가입으로 정원이 찼으면 `GROUP_FULL`).
+
+```json
+// POST /api/groups/{groupId}/invite-code — 재발급 (그룹장만)
+// Response 200
+{ "inviteCode": "M8R3TQ", "inviteUrl": "https://hawe.app/invite/M8R3TQ" }
+```
+- 이전 코드는 즉시 무효. 에러: 403 `NOT_GROUP_OWNER`.
+- 코드 형식: 6자리, 문자 집합 `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`(혼동 문자 0·O·1·I 제외), 전체 그룹에서 유일. 그룹 생성 시 서버가 만든다.
+- 기존 `POST /api/groups/{groupId}/invite`(JWT 링크 발급)는 삭제.
+
+#### DELETE /api/groups/{groupId}/members/me — 나가기
+- 일반 멤버: 204.
+- 그룹장 + 다른 멤버 있음: 쿼리 `successorUserId`가 필수. 지정한 멤버에게 그룹장을 넘기고 나간다(한 트랜잭션). 204.
+  - 없으면 409 `SUCCESSOR_REQUIRED`, 그 그룹 멤버가 아니거나 나 자신이면 400 `INVALID_SUCCESSOR`.
+- 그룹장 혼자: 그룹을 삭제하고 204.
+- 내가 올린 작품·댓글은 그룹에 남는다 (앱 확인 문구와 같음). 기존 `OWNER_CANNOT_LEAVE`는 폐지.
+
+#### 그룹 내 프로필 (16-1)
+```json
+// PUT /api/groups/{groupId}/members/me/profile — 그룹 내 프로필 설정·교체 (캐릭터)
+{ "nickname": "과대표 하늘", "characterId": 3 }
+// Response 200 — 프로필 객체
+```
+```text
+PUT    /api/groups/{groupId}/members/me/profile-image   multipart, 파트 file + nickname — 그룹 내 프로필을 사진으로
+DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해제 → 기본 프로필로 (204)
+```
+- 그룹 내 프로필은 "닉네임 + (캐릭터 또는 사진)" 한 벌로 저장한다 (앱 `GroupMember.groupProfile`과 같은 단위). 닉네임 규칙은 가입과 같다(trim 후 2~10자).
+- 파일 규칙은 기본 프로필 사진(`API_DESIGN.md` §8 설계)과 같다: 이미지 ≤ 10MB, `jpg`/`png`/`webp`, 415 `UNSUPPORTED_FILE_TYPE`, 413 `FILE_TOO_LARGE`.
+- 기본 프로필을 바꿔도 그룹 내 프로필이 있는 그룹에는 반영되지 않는다 (앱 동작과 같음).
+
+### 2-3. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | 새 마이그레이션: `groups.invite_code CHAR(6) NOT NULL UNIQUE`(기존 그룹 채움), `groups.start_date DATE NULL`, `group_members`에 그룹 내 프로필 컬럼(`nickname_override`, `character_id_override`, `profile_image_url_override`). `GroupSummaryResponse`·`GroupResponse`·`GroupMemberResponse` 확장. 그룹 목록 정렬 변경. 이름 검증(`@NotBlank` + trim, 16자). 정원 검증(가입·관계 변경). 초대: 미리보기·코드 가입·재발급 추가, `JoinRequest.token`→`code`, `InviteResponse`·`createInvite`·`JwtTokenProvider.createInviteToken`/`validateInviteTokenAndGetGroupId`·`jwt.invite-token-validity-seconds` 제거. 나가기: 후임자 지정·혼자면 그룹 삭제. `GroupErrorCode`: `INVITE_NOT_FOUND`, `GROUP_FULL`, `SUCCESSOR_REQUIRED`, `INVALID_SUCCESSOR` 추가, `INVALID_INVITE_TOKEN`·`INVITE_EXPIRED`·`OWNER_CANNOT_LEAVE` 제거. 그룹 내 프로필 API 3개. 멤버를 보여 주는 모든 응답에 표시 프로필 적용 |
+| Android | `Relationship`에 서버 코드 대응. `DataStore.createGroup/lookUpInvite/join/leave/setMyGroupProfile`를 API로. 16 화면: 재발급 버튼(그룹장만). 나가기: 그룹장이고 다른 멤버가 있으면 **후임자 선택 화면** 추가, `leaveMessage`의 "가장 먼저 들어온 멤버에게 넘어가요" 문구 변경. 혼자인 그룹장 문구("그룹이 삭제돼요")도 필요. `AppLinks.invite`는 서버 `inviteUrl` 사용 |
+| iOS | Android와 같음 (`DataStore`, `GroupInfoView`의 나가기 alert·초대 카드, `JoinGroupView`). 그룹 만들기·나가기 중복 탭 방지 추가 |
+| 설계 문서 | `API_DESIGN.md` §0-1(초대·그룹장 탈퇴 결정 교체), §2 Group 전체. `BACKEND_DB.md` groups·group_members. `PROJECT_OVERVIEW.md` §2·§3(정원, 초대). Postman `HAWE_GROUP` |
+
+### 2-4. 미결
+
+- 연인 시작일 변경 UI: 앱에는 생성 때만 고르는 화면이 있다. 서버는 `PATCH settings`로 바꿀 수 있게 열어 두고, 앱 화면 추가는 나중에 정한다.
+- **그룹 삭제 방식**: 실제 삭제 vs 삭제 표시(soft delete), 미션·제출물·댓글·파일 처리 — 구현 계획에서 정한다.
+- **초대 링크 도메인**: 앱이 쓰는 `https://hawe.app/invite/{code}`는 임시 도메인. Universal Links / App Links 검증 파일 호스팅이 필요하다.
+- **코드 대입 시도 제한**: 6자리(약 10억 가지)라 무차별 대입은 어렵지만 미리보기·가입 API에 요청 제한을 둘지 구현 시 검토.
+
+---
+
+## 3. Missions (조회·생성 규칙) — 상태: 결정 완료, 일부 세부 미결 (반영 전)
+
+제출·피드는 §6 이후에서 따로 정한다. 이 절은 미션이 언제 열리고 닫히는지와 조회 응답을 다룬다.
+
+### 3-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 미션 모델 | **단계적으로 간다.** 서버의 슬롯·틀 구조(`MISSIONS_API.md`)는 유지한다. **MVP는 하루 1개**이고, 앱의 지금 4개 화면(사진/음성/글/그림)으로 제출할 수 있는 틀만 뽑는다. 나머지 틀과 하루 여러 개는 앱 화면이 생기면 켠다 | 사용자 결정. 서버 설계를 버리지 않으면서 앱 작업량을 MVP에 맞춤 |
+| MVP 하루 미션 수 | 1로 고정. `hawe.mission.max-daily-count=1`로 설정해 서버 검증으로 막는다. 앱에는 하루 미션 수 설정 UI가 없다 | 코드 변경 없이 설정값으로 나중에 늘릴 수 있음 |
+| MVP 틀 풀 | `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`(사진 화면), `VOICE_LINE`(음성 화면), `DRAW_SKETCH`, `DRAW_A_TO_B`(그림 화면), `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`(글 화면). **제외**: `TEXT_ONE_WORD`(캡션 칸), `TEXT_REVIEW`(별점), `TEXT_BALANCE`(A/B 선택), `SLIDER_*`(슬라이더), `VOICE_MIMIC`·`VOICE_IMPRESSION`(정답 입력·맞히기) | 각 틀이 요구하는 입력이 기존 화면 하나로 끝나는지 기준. 틀 선택 규칙(`MISSIONS_API.md` §6-1, 하루 1개면 어제와 같은 매체 피하기)은 이 풀 안에서 적용한다. 앱의 "같은 유형 3일 연속 금지" 규칙은 서버 규칙으로 대체 |
+| 유형 표시 | 앱은 서버 `media`(`PHOTO/VOICE/TEXT/DRAW`, 나중에 `SLIDER`)로 화면을 고르고, `content`를 주제 문장으로 보여 준다 | 앱의 `topic` 자리에 서버 `content`를 그대로 씀 |
+| 시간 규칙 | **마감 + 지각, 다음 미션이 열리면 제출 종료.** 발행~마감 전은 정상, 마감~다음 미션 발행 전은 지각(`isLate=true`)으로 제출 가능, 그 뒤로는 제출 불가 | 사용자 결정. 지각 규칙(`PROJECT_OVERVIEW`)을 지키면서 며칠 지난 미션에 제출하는 일을 막음 |
+| 첫 미션 | 그룹을 만들 때 오늘 발행 시각이 이미 지났으면 **바로 연다.** 아직 안 지났으면 오늘 발행 시각에 연다 | 사용자 결정. 첫 경험이 비지 않게 (앱 현재 동작) |
+| 미션 번호 | 응답에 `number`(그룹에서 몇 번째 미션인지)를 넣는다 | 앱 05 화면 "#142" 유지. 계산 비용이 작음 |
+| 대상 멤버 표시 | `content`는 서버가 대상 자리(`[대상]`)를 그 그룹의 표시 닉네임으로 채워서 내려준다. `params.target`도 그대로 둔다 | 앱이 틀마다 문장을 조립하지 않게. 닉네임이 바뀌어도 응답 시점 값으로 보임 |
+
+### 3-2. 시간 계산 규칙 (서버)
+
+모든 시각은 Asia/Seoul 기준이다 (§0).
+
+- **발행 시각** `publishedAt`: 슬롯의 발행 시각(지정 없으면 `hawe.mission.default-publish-time`). 첫 미션을 바로 열 때는 그룹 생성 시각.
+- **마감 시각** `deadlineAt`: `publishedAt` 이후 **처음 오는** 슬롯 마감 시각(지정 없으면 `default-deadline-time`). 예: 주제 도착 시각 23:30, 마감 기본 23:00이면 마감은 다음 날 23:00이고, 다음 미션 발행(다음 날 23:30)보다 앞선다. 따라서 마감은 항상 발행 후 24시간 안이다.
+- **제출 종료**: 같은 그룹·같은 슬롯에 **다음 미션이 발행되는 순간** 이전 미션은 닫힌다. 닫힌 미션에 제출하면 409 `MISSION_CLOSED`(새 오류 코드). 응답의 `closesAt`은 다음 발행 예정 시각(그룹 설정이 바뀌면 달라질 수 있는 예정값)이다.
+- **지각**: `submittedAt > deadlineAt`이면 `isLate=true`.
+- **현재 미션**: 슬롯마다 가장 최근에 발행된 미션. "오늘"을 `CURDATE()`로 판단하지 않는다 — 23:30에 열린 미션은 자정이 지나도 다음 발행 전까지 현재 미션이다. 그룹 목록의 `submittedToday`·`todayMission`, 멤버 목록의 `stampedToday`, 콕 찌르기의 "이미 제출함" 판단도 이 기준으로 바꾼다.
+- `mission_date`는 발행 시각의 날짜(Asia/Seoul)다. 달력은 이 날짜로 묶는다.
+
+### 3-3. 최종 계약
+
+#### GET /api/groups/{groupId}/missions/today — 현재 미션 (멤버만)
+경로는 유지하지만 의미는 "현재 열려 있는 미션"이다.
+```json
+{
+  "date": "2026-09-28",
+  "dailyMissionCount": 1,
+  "nextPublishAt": "2026-09-29T09:00:00+09:00",
+  "missions": [
+    {
+      "missionId": 10, "groupId": 1, "slotNo": 1, "number": 142,
+      "content": "지금 창밖으로 보이는 풍경", "category": "일상",
+      "template": "PHOTO_NOW", "media": "PHOTO",
+      "params": { "subject": "창밖 풍경" },
+      "publishedAt": "2026-09-28T09:00:00+09:00",
+      "deadlineAt": "2026-09-28T23:00:00+09:00",
+      "closesAt": "2026-09-29T09:00:00+09:00",
+      "submittedByMe": false,
+      "members": [ { "userId": 1, "submitted": true }, { "userId": 3, "submitted": false } ]
+    }
+  ]
+}
+```
+- `date`: 현재 미션의 `mission_date`. 현재 미션이 없으면 오늘 날짜.
+- `missions`: 현재 미션이 없으면 빈 배열(첫 발행 전, 생성 실패 등). 앱은 05 화면에 빈 상태("다음 미션까지 N시간", `nextPublishAt` 사용)를 보여 줘야 한다.
+- `nextPublishAt`: 다음 미션 발행 예정 시각 (= 현재 미션의 `closesAt`).
+- `members`: 그룹 멤버별 이 미션 제출 여부. 이름·아바타는 멤버 목록 API에서 가져온다. 콕 찌르기 상태 필드는 §4 결정에서 추가한다.
+- 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`.
+
+#### GET /api/missions/{missionId}
+위 `missions[]` 항목 하나와 같은 모양. 에러: 404 `MISSION_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`.
+
+#### GET /api/mission-templates
+변경 없음. MVP 풀 밖의 틀도 그대로 목록에 있다 (앱은 사용하지 않음). 풀 여부를 내려줄지는 미결.
+
+### 3-4. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | **미션 생성 구현**(스케줄러 + 틀 선택 + AI 호출, 현재 전혀 없음) — MVP 틀 풀, 첫 미션 즉시 발행, 마감 계산 규칙(3-2). `MissionResponse`에 `number`, `closesAt`, `members` 추가. "오늘" 판단을 `CURDATE()`에서 "현재 미션"으로 (`MissionMapper.findTodayByGroupId`, `GroupMapper.findSummariesByUserId`, `GroupMemberMapper` 의 `stamped_today`, `PokeMapper.existsTodaySubmission`). `content`의 대상 자리 치환. `application.properties`의 `hawe.mission.max-daily-count=1`. `MissionErrorCode.MISSION_CLOSED`(제출 구현 때) |
+| Android | `MissionType`을 서버 `media`로 대응(`TEXT`↔`WRITE`). `TodayMission.topic` → `content`, `opensAt/closesAt` → `publishedAt/closesAt`, `deadlineAt` 추가. 05 화면: 마감 표시, 마감 뒤 "지각" 안내, 미션 없는 빈 상태. 홈 카드는 목록 응답의 `todayMission`. 글 화면: 틀별 길이·형식(`TEXT_FILL_BLANK` ≤ 100자, `TEXT_ACROSTIC` 3줄·각 줄 첫 글자) 검사와 안내. 그림 화면: `DRAW_SKETCH`일 때 `params.seconds` 타이머(설계상 시간 제한은 클라이언트가 강제). 16 화면 주제 도착 시각은 `missionSlots[0].publishTime`. `DataStore.refreshTodayMissions`/`makeMission`/`TopicPool`(앱 안 미션 생성) 제거 |
+| iOS | Android와 같음 (`TodayMission`, `MissionView`, `WriteMissionView`, `DrawMissionView`, `GroupInfoView`, `DataStore`) |
+| 설계 문서 | `MISSIONS_API.md`: §0 "지각" 규칙에 제출 종료 추가, §2 today 응답(`number`·`closesAt`·`members`·현재 미션 의미), §3 `MISSION_CLOSED`, §6 첫 미션 즉시 발행·마감 계산, §6-1에 MVP 틀 풀, §10 오류 코드. `PROJECT_OVERVIEW.md` §3 마감과 지각, §5(MVP 하루 1개), §11-6(자정 넘는 마감 → 3-2 규칙으로 해결). `CLAUDE.md`의 미션 설명은 사용자가 요청할 때만 수정 |
+
+### 3-5. 미결
+
+- `DRAW_SKETCH` 타이머를 앱에 넣지 못하면 MVP 풀에서 뺀다.
+- 미션 생성 실패(AI 오류 등) 시 재시도·대체 문장 정책.
+- `/mission-templates`에 MVP 풀 여부(`enabled`)를 내려줄지.
+- 그룹 생성 직후 첫 미션의 `deadlineAt`이 생성 시각과 너무 가까운 경우(예: 22:55 생성, 23:00 마감) 그대로 둘지.
+- 하루 여러 개를 켤 때 홈 카드·05 화면 구성과 그룹 목록 `todayMission`의 모양 (MVP 이후).
+
+---
+
+## 4. Pokes — 상태: 결정 완료 (반영 전)
+
+### 4-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 횟수 제한 | **현재 미션마다, 받는 사람별로, 종류별 1회.** (보낸 사람, 받는 사람, 미션, 종류) 기준 — 콕 1번과 똥뿌리기 1번까지 보낼 수 있다. 같은 종류 두 번째는 409 `ALREADY_POKED` | 사용자 결정. 콕 뒤에도 안 내면 똥을 뿌리는 단계적 재촉. MVP(하루 1개)에서는 앱의 "하루 1회"와 같고, 자정을 넘는 미션에서도 기준이 흔들리지 않음 |
+| 똥뿌리기(`fling`) | **앱에 추가한다.** 서버의 `type: "poke" \| "fling"`은 유지 | 사용자 결정. 기획(`PROJECT_OVERVIEW` 재촉 규칙)에 두 종류가 있음 |
+| 대상 조건 | 받는 사람은 같은 그룹 멤버이고 나 자신이 아니며 **현재 미션**에 아직 제출하지 않았어야 한다 | `CURDATE()` 기준(어떤 미션이든 오늘 제출)을 현재 미션 기준으로 바꿈 (§3-2) |
+| 콕 상태 조회 | 현재 미션 응답의 `members[]`에 내가 그 멤버에게 보낸 재촉을 넣는다 | 앱 05 화면이 "찔렀어요" 상태를 다시 그릴 수 있어야 함 |
+| 알림 | `poke`·`fling` 푸시를 받는 사람에게 보낸다. 알림 설정에서는 둘 다 "콕 찌르기" 항목을 따른다 (§8) | 사용자 결정 |
+
+### 4-2. 최종 계약 (현재까지)
+
+```json
+// POST /api/groups/{groupId}/pokes — 멤버만
+// Request
+{ "toUserId": 7, "type": "poke" }
+// Response 201
+{ "id": 1, "toUserId": 7, "type": "poke", "missionId": 10, "sentAt": "2026-09-28T15:41:48+09:00" }
+```
+- 서버가 그 그룹의 현재 미션을 찾아 `pokes.mission_id`에 저장한다. 현재 미션이 없으면 409 `NO_OPEN_MISSION`.
+- 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`, 400 `CANNOT_POKE_SELF`, 404 `TARGET_NOT_GROUP_MEMBER`, 409 `TARGET_ALREADY_SUBMITTED`, 409 `ALREADY_POKED`, 400 `VALIDATION_ERROR`(`type`).
+- 현재 미션 응답(§3-3)의 `members[]` 항목: `{ "userId": 7, "submitted": false, "pokedByMe": ["poke"] }` — 내가 이 미션에서 그 멤버에게 보낸 종류 목록(`"poke"`, `"fling"`), 안 보냈으면 빈 배열. 앱은 종류별로 버튼을 "보냈어요" 상태로 바꾼다.
+
+### 4-3. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | 새 마이그레이션: `pokes.mission_id` + 유니크 키 `(from_user_id, to_user_id, mission_id, type)`. `PokeService` 현재 미션 조회·횟수 검사, `PokeErrorCode.ALREADY_POKED`·`NO_OPEN_MISSION`. `PokeResponse.missionId`. 현재 미션 응답 `members[].pokedByMe`. 보내면 받는 사람에게 `poke`/`fling` 알림 발송(§8) |
+| Android | 05 화면 `MissionMemberRow`에 똥뿌리기 버튼, 종류별 보낸 상태, 토스트 문구. `DataStore.poke` → API, `StoredMission.poked` → 서버 `pokedByMe`. 409 `ALREADY_POKED`/`TARGET_ALREADY_SUBMITTED`는 상태를 새로고침하고 조용히 처리. `PushKind`에 `fling` 추가, `poke` 채널로 표시(§8) |
+| iOS | Android와 같음 (`MissionView.status(for:)`, `DataStore.poke`, `PushKind`) |
+| 설계 문서 | `API_DESIGN.md` §5 Poke(횟수 제한·`missionId`·오류 코드). `BACKEND_DB.md` pokes. `PROJECT_OVERVIEW.md` §3 재촉 |
+
+### 4-4. 미결
+
+- 똥뿌리기 버튼 디자인(아이콘·문구)은 Figma에 없음.
+
+---
+
+## 5. Me (내 정보·프로필·탈퇴) — 상태: 결정 완료 (반영 전)
+
+`GET /me`, `PATCH /me/password`는 §1 Auth에 있다. 그룹 내 프로필은 §2에 있다.
+
+### 5-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 캐릭터 | V5 마이그레이션대로 7종, `svgKey` = 앱 캐릭터 키. 목록 순서는 서버 `id` 순, 앱은 자체 순서로 표시하고 키로 대응 | 이미 정리된 내용을 확정. V5 주석이 이 문서를 참조함 |
+| 기본 프로필 닉네임 변경 | `PATCH /api/me/profile`로 바꾼다 (17-1 프로필 편집) | 앱에 화면이 있고 저장할 API만 없음. 정책 선택 없음 |
+| 기본 프로필 사진 | `API_DESIGN.md` §8 설계(`PUT/DELETE /me/profile-image`)대로 | 기존 설계 유지 |
+| 탈퇴 — 데이터 | **내 작품(제출물·파일)과 댓글을 삭제한다.** 복구 불가 | 사용자 결정. 앱 탈퇴 화면 문구와 같음 (그룹 나가기는 작품이 남는 것과 다름) |
+| 탈퇴 — 그룹장 | **다른 멤버가 있는 그룹의 그룹장이면 탈퇴할 수 없다.** 먼저 그 그룹에서 후임자를 골라 나가야 한다. 혼자인 그룹은 탈퇴 때 삭제한다 | 사용자 결정. 나가기 규칙(후임자 선택)과 일관 |
+
+### 5-2. 최종 계약 (현재까지)
+
+```json
+// PATCH /api/me/profile — 기본 프로필 닉네임
+{ "nickname": "하늘" }
+// Response 200 — GET /api/me 와 같은 모양
+```
+- 닉네임 규칙은 가입과 같다(trim 후 2~10자). 그룹 내 프로필이 있는 그룹에는 반영되지 않는다.
+
+```text
+PATCH  /api/me/character        기존 (요청 characterId, 응답 characterId/name/svgKey)
+PUT    /api/me/profile-image    설계 (multipart file)
+DELETE /api/me/profile-image    설계
+```
+- 앱에서 사진 프로필이던 사용자가 캐릭터를 고르면 `PATCH /me/character` 후 `DELETE /me/profile-image`를 호출한다 (기존 설계 규칙).
+
+```text
+DELETE /api/me — 회원 탈퇴, 204
+```
+- 다른 멤버가 있는 그룹의 그룹장이면 409 `OWNER_MUST_TRANSFER` ("그룹장인 그룹에서 먼저 나가 주세요"). 앱은 내 그룹 목록에서 `ownerId == 내 id && memberCount > 1`인 그룹을 미리 찾아 탈퇴 화면에서 안내한다.
+- 처리 순서(한 트랜잭션): 혼자인 그룹 삭제 → 모든 그룹에서 나감 → 내 제출물·업로드 파일·댓글 삭제 → 내 반응·정답 시도·콕 기록·알림·기기 토큰·알림 설정 정리 → 계정 삭제.
+- 같은 이메일로 다시 가입할 수 있다 (새 계정).
+
+### 5-3. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | `PATCH /me/profile`, `DELETE /me` (새 기능 패키지에서), `OWNER_MUST_TRANSFER` 오류 코드. 탈퇴 시 삭제 범위(제출물·파일·댓글·반응·정답 시도·콕·알림·그룹 멤버십). 캐릭터는 변경 없음 (V5 반영됨) |
+| Android | 17-1 프로필 편집 → API(닉네임·캐릭터·사진). 17-5 탈퇴: 그룹장 그룹이 남아 있으면 안내하고 진행 막기, 성공 시 토큰 삭제 후 A1. `AppSession.withdraw`·`DataStore.reset`은 로컬 정리로 남김 |
+| iOS | Android와 같음 (`ProfileEditView`, `WithdrawView`, `AppSession.withdraw`) |
+| 설계 문서 | `API_DESIGN.md`에 Me 절 신설(`GET /me`, `PATCH /me/profile`, `PATCH /me/password`, `DELETE /me`), §8 캐릭터는 이미 반영됨. `PROJECT_OVERVIEW.md` §3·§11 |
+
+### 5-4. 미결
+
+- 탈퇴 후에도 남은 액세스 토큰(최대 30분)·refresh 토큰(최대 14일)이 유효하다. 필터에서 사용자 존재를 확인할지, 토큰 버전 컬럼을 둘지 — 구현 계획에서 결정 (비밀번호 변경 후 무효화와 같은 문제, §1-4).
+- 삭제된 사용자의 작품에 달린 다른 사람 댓글·반응 처리(작품과 함께 삭제).
+- 활동 요약 API는 §9, 알림 설정·기기 토큰 API는 §8에 있다.
+
+---
+
+## 6. Submissions · Feed (미구현, 설계 기준) — 상태: 결정 완료, 일부 미결 (반영 전)
+
+코드는 없다. `MISSIONS_API.md` §3·§4 설계를 기준으로, 앱과 다른 점만 결정했다.
+
+### 6-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 제출 엔드포인트·형식 | 설계대로 `POST /api/missions/{missionId}/submissions`, `multipart/form-data`, 틀별 필수 필드 검증, 1인 1회(`ALREADY_SUBMITTED`), 수정·삭제 없음 | 앱도 "한 번 올리면 수정·삭제 불가" — 같음 |
+| 제출 기한 | §3-2 규칙: 다음 미션이 열리면 409 `MISSION_CLOSED`, 마감 뒤는 `isLate=true` | §3 결정 |
+| 음성 길이 | **최대 30초** (설계의 20초를 바꿈). 파일 ≤ 5MB 유지 | 사용자 결정. 앱 녹음 화면이 30초에서 자동 정지. m4a 30초는 보통 1MB 이하 |
+| 음성 길이·파형 전달 | 음성 제출 때 앱이 `duration`(초, 소수)과 `waveform`(0~1 실수 배열, 최대 64개)을 함께 보낸다. 서버는 `duration ≤ 30`을 검사하고 둘 다 `answer_data`에 저장해 피드에 내려준다 | 결과 화면이 파형 막대를 그림. 서버에서 오디오를 분석하려면 별도 라이브러리가 필요하고, 그림 제작 시간처럼 클라이언트 값을 신뢰하는 것이 설계의 기존 원칙과 같음 (기술 결정) |
+| 이미지 | 사진 JPEG(3:4로 잘림), 그림 PNG — 설계의 `jpg/png/webp ≤ 10MB` 안에 들어감 | 변경 없음 |
+| 글 길이 | 틀별 규칙을 따른다 (`TEXT_FILL_BLANK` ≤ 100자, `TEXT_ACROSTIC` 3줄). 앱의 일괄 300자 제한은 틀별 제한으로 바꾼다 | 서버 검증과 앱 입력 제한이 같아야 함 |
+| 캡션 | 서버는 선택 필드로 받지만 MVP 앱은 보내지 않는다 | MVP 틀 풀에서 캡션이 필수인 틀이 없음 (§3) |
+| 피드 잠금 | 설계대로 미션별: 그 미션에 내가 제출해야 피드·상세를 볼 수 있다(423 `FEED_LOCKED`) | 앱 규칙(내가 올린 미션만 결과 공개)과 같음 |
+| 피드 작성자 표시 | 피드·상세의 작성자는 §2의 **프로필 객체**(그룹 내 프로필 적용)로 내려준다 | 앱이 아바타를 그려야 함. 설계에는 `nickname`만 있었음 |
+| 아직 안 낸 멤버 | 피드에 넣지 않는다. 앱은 현재 미션 응답의 `members[]`(현재 미션일 때)와 멤버 목록으로 계산한다. 지난 미션은 달력 결정(§8)에서 정한다 | 피드는 제출물 목록 — 책임 분리 |
+| 지각 표시 | 피드·상세 응답의 `isLate`를 앱 결과 화면에 표시한다 | 지각 규칙을 채택했으므로 |
+
+### 6-2. 최종 계약 (설계와 달라지는 부분만)
+
+```text
+POST /api/missions/{missionId}/submissions   (multipart)
+  음성 틀: file(m4a/mp3/aac/webm ≤ 5MB), duration(초, ≤ 30), waveform(JSON 배열 문자열, 0~1, 최대 64개)
+```
+```json
+// 피드 항목 (GET /api/missions/{missionId}/submissions) — 음성 예
+{ "id": 100,
+  "author": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
+  "template": "VOICE_LINE", "mediaUrl": "...", "mediaType": "AUDIO",
+  "duration": 9.4, "waveform": [0.25, 0.42, 0.67],
+  "reactions": [ { "stickerType": "heart", "count": 2, "reactedByMe": true, "userIds": [1, 3] } ],
+  "commentCount": 2,
+  "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
+```
+- 설계의 `userId`·`nickname` 최상위 필드는 `author` 객체로 바꾼다. 상세(`GET /api/submissions/{id}`)도 같다.
+- 오류 코드에 `MISSION_CLOSED`(409) 추가. 나머지는 설계와 같다.
+
+### 6-3. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | 제출·피드·상세 구현(신규). multipart 한도(`spring.servlet.multipart.*`), 파일 저장소, 음성 `duration`·`waveform` 검증·저장, 작성자 프로필 객체, `MISSION_CLOSED` |
+| Android | `DataStore.submit`/`result` → API. `SubmissionContent.Voice`의 길이·파형 전송. 글 화면 틀별 제한. 결과 화면 지각 표시, 423 처리(05로 돌려보냄). `Submission.mediaURL`은 서버 URL |
+| iOS | Android와 같음 (`DataStore.submit/result`, `WriteMissionView.maxLength`, `ResultsView`) |
+| 설계 문서 | `MISSIONS_API.md` §3-1(음성 필드), §3-2(음성 30초), §3-3·§4 응답(`author`, `duration`, `waveform`, `reactions`), §10 오류 코드 |
+
+### 6-4. 미결
+
+- 업로드 파일 저장소(로컬/S3)와 URL 공개 방식(서명 URL 여부) — 설계상 "개발=로컬, 운영=S3".
+- 사진·그림 파일 크기를 앱에서 줄여 보낼지(현재 원본 품질 그대로).
+
+---
+
+## 7. Reactions · Comments (미구현, 설계 기준) — 상태: 결정 완료 (반영 전)
+
+### 7-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 반응 | **스티커 여러 종류 토글** (설계 유지). 앱의 하트 좋아요 1종을 스티커 선택 UI로 바꾼다. 한 사람이 한 작품에 여러 종류를 누를 수 있고, 같은 종류를 다시 누르면 취소 | 사용자 결정 |
+| 스티커 종류 | **초안 5종**: `heart`(하트), `laugh`(웃김), `wow`(놀람), `sad`(슬픔), `fire`(최고). 서버는 이 목록 밖의 값을 400으로 거부한다 | 사용자 결정. 디자인이 나오면 이름·종류를 바꿀 수 있게 서버는 한 곳(enum)에서 관리 |
+| 누른 사람 표시 | **스티커별로 누른 멤버를 보여 준다** | 소규모 친한 그룹에서 누가 반응했는지가 재미 요소 (사용자 결정). 앱의 "○○님 외 N명"을 스티커별로 확장 |
+| 내 작품에 반응 | 허용 (설계에 금지 규칙 없음) | 정책 변경 없음 |
+| 댓글 멘션 | **MVP에 포함.** 설계대로 앱이 `mentionedUserIds`를 명시적으로 보낸다 | 사용자 결정. 앱에 멤버 선택 UI 필요 |
+| 댓글 이미지 | **MVP에 포함** | 사용자 결정. 앱에 사진 선택·표시 UI 필요 |
+| 내 댓글 삭제 | **MVP에 포함** — `DELETE /api/comments/{commentId}` (본인만) | 사용자 결정. 앱에 이미 있는 기능, 설계에 API가 없었음 |
+| 댓글 이미지 업로드 방식 | 댓글 작성 API가 파일을 직접 받는다 (`multipart/form-data`) | 제출 API와 같은 방식. 별도 업로드 API·고아 파일 정리가 필요 없음 (기술 결정) |
+| 댓글 작성자 표시 | §2 프로필 객체 | 피드와 같은 이유 |
+
+### 7-2. 최종 계약
+
+```json
+// POST /api/submissions/{id}/reactions — 토글
+// Request
+{ "stickerType": "heart" }
+// Response 200 — 이 작품의 반응 전체(토글 후)
+{ "reactions": [
+  { "stickerType": "heart", "count": 2, "reactedByMe": true, "userIds": [1, 3] },
+  { "stickerType": "fire", "count": 1, "reactedByMe": false, "userIds": [5] }
+] }
+```
+- 피드 항목·상세의 `reactions`도 같은 배열이다 (0개인 종류는 빼고, 앱이 정한 순서로 표시). 이름·아바타는 멤버 목록에서 `userIds`로 찾는다. 그룹을 나간 사람의 반응은 남되 앱은 이름 대신 "나간 멤버"로 표시한다.
+- 에러: 404 `SUBMISSION_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`, 423 `FEED_LOCKED`, 400 `VALIDATION_ERROR`(목록 밖 종류).
+- 설계의 응답 `{ stickerType, reacted, count }`를 위 모양으로 바꾼다 — 토글 뒤 화면 전체를 다시 그리기 쉽게.
+
+
+```text
+POST /api/submissions/{id}/comments   multipart/form-data
+  content          text, 1~300자 (이미지만 있으면 빈 값 허용 여부는 7-4)
+  mentionedUserIds 반복 필드 (같은 그룹 멤버만, 아니면 400)
+  file             선택, 이미지 jpg/png/webp ≤ 10MB
+```
+```json
+// Response 201, 목록 항목도 같은 모양
+{ "id": 2,
+  "author": { "userId": 3, "nickname": "잎사귀", "characterKey": "ipsagwi", "profileImageUrl": null },
+  "content": "@몽실이 이거 뭐야", "imageUrl": null, "mentionedUserIds": [1],
+  "createdAt": "2026-09-28T21:10:00+09:00", "mine": true }
+```
+- 목록 `GET /api/submissions/{id}/comments`: 설계대로 페이지네이션, 정렬은 작성 순.
+- `DELETE /api/comments/{commentId}` — 본인 댓글만, 204. 남의 댓글이면 403 `NOT_COMMENT_OWNER`, 없으면 404 `COMMENT_NOT_FOUND`. 첨부 이미지도 삭제.
+- 댓글 작성·조회·삭제 모두 피드 잠금 규칙(423 `FEED_LOCKED`)을 따른다.
+- `mine`: 앱의 `SubmissionComment.isMine`. 내 id와 비교해도 되지만 응답에 넣어 단순화한다.
+
+### 7-3. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | 댓글 API 3개, 반응 토글 API, 스티커 종류 enum, 오류 코드(`CommentErrorCode` 등). `reactions` 테이블에 `(submission_id, user_id, sticker_type)` 유니크 키 확인 |
+| Android | 결과·상세 화면: 하트 좋아요 → 스티커 선택·집계 UI, 댓글 입력에 멘션(멤버 선택)·이미지 첨부, 이미지 댓글 표시. `DataStore.toggleLike/addComment/deleteComment` → API. `Submission.likeCount/likedByMe/likerNames` 모델 교체 |
+| iOS | Android와 같음 (`ResultComponents`의 좋아요, `SubmissionDetailView`, `ResultFeed`) |
+| 설계 문서 | `API_DESIGN.md` §0-1(스티커 결정 보완), §4: 댓글 multipart·삭제 API·`author`·`mine`, 반응 응답·스티커 5종. `MISSIONS_API.md` §4 피드·상세의 `reactions` 모양 |
+
+### 7-4. 미결
+
+- 이미지만 있는 댓글(본문 없음) 허용 여부.
+- 댓글 작성 시 `comment`(작품 작성자)·`mention`(멘션된 멤버) 알림을 보낸다 (§8). 반응에는 알림이 없다.
+- 스티커 선택·멘션·이미지 댓글 UI 디자인은 Figma에 없음.
+
+---
+
+## 8. Notifications (미구현) — 상태: 결정 완료, 일부 미결 (반영 전)
+
+### 8-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| MVP 범위 | **서버 푸시 발송(FCM·APNs) + 기기 토큰 등록, 알림 설정 저장, 그룹별 알림, 앱 안 알림 목록** 모두 포함 | 사용자 결정 |
+| 알림 종류 | `topic`(주제 도착), `poke`(콕), `fling`(똥뿌리기), `friend_done`(친구 완료), `comment`(내 작품에 댓글), `mention`(댓글 멘션) — 6종 | 사용자 결정. 앞의 4종은 앱 푸시 처리(`PushKind`)에 이미 있는 값 그대로 |
+| 알림 설정 항목 | 앱 17-1 항목 그대로: 전체, 주제 도착, 콕 찌르기(**똥뿌리기 포함**), 친구 완료(기본 OFF), 댓글(**멘션 포함**) | 사용자 결정 (기존 항목에 묶기). 앱 화면·채널을 늘리지 않음 |
+| 설정·그룹 알림 적용 대상 | 설정과 그룹별 알림은 **푸시 발송만** 거른다. 앱 안 알림 목록에는 모두 쌓인다 | 목록은 받은편지함 역할, 푸시는 방해 여부 — 역할 분리 (제안, 이견 있으면 변경) |
+| 그룹별 알림 | 멤버마다 저장. 끄면 그 그룹에서 오는 모든 종류의 푸시를 보내지 않는다 | 앱 주석의 서버 필터 규칙(`notification_prefs` + `group_members.notify`)과 같음 |
+| 자기 자신 | 내 행동으로 나에게 알림을 보내지 않는다 (내 작품에 내가 댓글 등) | — |
+| 중복 | 내 작품 댓글에서 나를 멘션하면 `mention` 하나만 보낸다 | 같은 댓글로 두 번 울리지 않게 |
+
+### 8-2. 발송 규칙
+
+| 종류 | 받는 사람 | 시점 | 설정 항목 |
+|---|---|---|---|
+| `topic` | 그룹 멤버 전원 | 미션 발행 | 주제 도착 |
+| `poke` / `fling` | 받는 사람 | 전송 즉시 | 콕 찌르기 |
+| `friend_done` | 제출자를 뺀 멤버 | 제출 즉시 | 친구 완료 (기본 OFF) |
+| `comment` | 작품 작성자 | 댓글 작성 | 댓글 |
+| `mention` | 멘션된 멤버 | 댓글 작성 | 댓글 |
+
+### 8-3. 최종 계약
+
+```json
+// POST /api/me/devices — 기기 토큰 등록 (로그인 직후, 토큰이 바뀔 때)
+{ "platform": "ANDROID", "token": "fcm-or-apns-token" }   // platform: ANDROID | IOS
+// Response 204
+```
+```text
+DELETE /api/me/devices/{token}    로그아웃 시 해제, 204 (없는 토큰도 204)
+```
+- 같은 토큰이 다른 계정으로 등록되면 이전 계정에서 떼어 낸다 (한 기기에 한 계정).
+
+```json
+// GET /api/me/notification-prefs
+{ "all": true, "topic": true, "poke": true, "friendDone": false, "comment": true }
+// PATCH /api/me/notification-prefs — 일부만 보내도 됨, 응답은 전체
+{ "friendDone": true }
+```
+- 처음 가입한 사용자는 위 기본값. 앱 `NotificationPrefs`와 필드가 같다.
+
+```json
+// PATCH /api/groups/{groupId}/members/me/notify — 그룹별 알림 (멤버 누구나)
+{ "notify": false }
+// Response 200
+{ "notify": false }
+```
+- 그룹 상세(§2) `myNotify`에 이 값이 들어간다.
+
+```json
+// 푸시 payload (FCM data / APNs custom keys)
+{ "type": "comment", "group_id": "1", "mission_id": "10", "submission_id": "100" }
+// 알림 표시: title = 그룹 이름, body = 서버가 만든 문장 (예: "서연님이 내 작품에 댓글을 남겼어요")
+```
+- 키 이름은 앱이 이미 처리하는 snake_case(`type`, `group_id`, `submission_id`)를 유지하고 `mission_id`를 더한다. 값은 문자열.
+- 종류별 포함 키: `topic`·`poke`·`fling`·`friend_done` → `group_id`, `mission_id` / `comment`·`mention` → + `submission_id`.
+- 앱 이동 규칙: `topic`·`poke`·`fling`·`friend_done` → 그 그룹 05 화면, `comment`·`mention` → 그 미션 결과 화면(내가 제출했을 때, 아니면 05). 앱의 "그룹을 못 찾으면 첫 그룹" 임시 규칙은 서버 연결 뒤 "못 찾으면 이동하지 않음"으로 바꾼다.
+
+```json
+// GET /api/notifications — 앱 안 알림 목록 (최신순, 페이지네이션)
+{ "content": [
+  { "id": 1, "type": "poke", "groupId": 1, "groupName": "컴공 동기",
+    "fromUser": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
+    "missionId": 10, "submissionId": null, "body": "서연님이 콕 찔렀어요",
+    "isRead": false, "createdAt": "2026-09-28T15:41:48+09:00" }
+], "page": 0, "size": 20, "totalPages": 1, "totalElements": 6 }
+```
+```text
+PATCH /api/notifications/{id}/read     204
+PATCH /api/notifications/read-all      204
+```
+- 설계의 `payload` 객체 대신 필요한 id를 평평하게 내린다. `fromUser`는 그 그룹의 표시 프로필, `topic`이면 `null`. 설계의 `mission_open`은 `topic`으로 이름을 바꾼다.
+
+### 8-4. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | FCM·APNs 발송 모듈(새 의존성·자격 증명), 새 테이블: `device_tokens`, `notification_prefs`(또는 users 컬럼), `group_members.notify`. 알림 생성·발송을 미션 발행·콕·제출·댓글에 연결. 알림 목록·읽음 API |
+| Android | FCM 연결(`google-services.json`, `FirebaseMessagingService`) → 기존 `PushNotifier.show` 재사용, 토큰 등록/해제. 채널은 4개 유지 — `fling`은 `poke` 채널, `mention`은 `comment` 채널로. `PushKind`에 `fling`·`mention` 추가. `pushTarget`이 payload의 `group_id`/`mission_id`를 쓰도록. 17-1 설정·16 그룹 알림 → API(문구에 "똥뿌리기 포함", "멘션 포함" 반영). **알림 목록 화면 신설**과 진입점 |
+| iOS | Android와 같음 (`PushNotifications.swift`의 `PushKind`·`PushCenter`, APNs 토큰 등록, `NotificationSettingsView`, `GroupInfoView`, 알림 목록 화면 신설) |
+| 설계 문서 | `API_DESIGN.md` §6 Notification 전면 수정(종류·응답·기기 토큰·설정·그룹 알림). `BACKEND_DB.md` 새 테이블·컬럼. `PROJECT_OVERVIEW.md` §3 알림 |
+
+### 8-5. 미결
+
+- 알림 목록 화면 디자인과 진입점(홈 상단 종 아이콘 등) — Figma에 없음.
+- 푸시 문장(body) 문구 전체 목록.
+- 알림 보관 기간(예: 30일 뒤 삭제).
+- Firebase 프로젝트·APNs 인증 키 준비 (`docs/FRONTEND/ANDROID.md` §8 결정 필요 항목).
+
+---
+
+## 9. Calendar · 활동 요약 (미구현) — 상태: 결정 완료, 일부 미결 (반영 전)
+
+### 9-1. 결정
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 달력 범위 | **그룹별 달력** (앱 15 화면 기준). 설계의 마이페이지 통합 달력 `/me/calendar`는 폐지 | 사용자 결정 |
+| 도장 | 그룹 달력에 **내 도장**을 표시한다: `GOOD`(참잘했어요), `LATE`(지각 전용 도장), `PENALTY`(벌점) | 사용자 결정. 지각은 별도 도장 (디자인 1종 추가 필요) |
+| 벌점 범위 | 그 미션 때 내가 그룹에 있었고 **미션이 닫힌** 날만 벌점. 들어오기 전, 아직 제출할 수 있는 현재 미션, 미션이 없던 날은 도장 없음 | 사용자 결정 |
+| 도장 계산 | 저장하지 않고 제출 기록·`isLate`·멤버십으로 계산 (기존 원칙) | `PROJECT_OVERVIEW` 핵심 규칙 |
+| 활동 요약 (17) | 앱 정의 그대로 서버가 계산: 완료 미션 수(지각 포함 제출 수), 연속 일수(오늘 또는 어제부터 거꾸로 하루도 빠짐없이 제출한 날 수, 모든 그룹 합산), 그룹 수, 유형별 수 | 앱에 화면이 있고 정의도 있음. 정책 변경 없음 |
+
+### 9-2. 최종 계약
+
+```json
+// GET /api/groups/{groupId}/calendar?month=2026-09 — 멤버만
+{ "month": "2026-09",
+  "days": [
+    { "date": "2026-09-01",
+      "missions": [ { "missionId": 101, "media": "DRAW", "content": "오늘 기분을 날씨로 그려줘",
+                      "submittedCount": 4, "memberCount": 5, "stamp": "GOOD" } ] },
+    { "date": "2026-09-02",
+      "missions": [ { "missionId": 102, "media": "PHOTO", "content": "오늘의 하늘",
+                      "submittedCount": 3, "memberCount": 5, "stamp": "PENALTY" } ] }
+  ] }
+```
+- 미션이 있었던 날만 `days`에 넣는다. `date`는 `mission_date`. MVP는 하루 1개라 `missions`는 원소 1개지만, 하루 여러 개를 대비해 배열로 둔다.
+- `stamp`: `GOOD` / `LATE` / `PENALTY` / `null`(도장 없음 — 9-1 범위 밖).
+- 날짜를 누르면 결과 화면(`GET /missions/{id}/submissions`, 피드 잠금 규칙 적용). 내가 제출하지 않은 날은 결과를 볼 수 없다 (앱 현재 동작과 같음).
+- 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`, 400 `VALIDATION_ERROR`(month 형식).
+
+```json
+// GET /api/me/stats — 17 마이페이지 활동 요약
+{ "completedMissions": 42, "streakDays": 5, "groupCount": 3,
+  "byMedia": { "DRAW": 10, "PHOTO": 15, "TEXT": 9, "VOICE": 8 } }
+```
+
+### 9-3. 수정 대상
+
+| 대상 | 내용 |
+|---|---|
+| 백엔드 | 그룹 달력 API, 활동 요약 API, 도장 계산(멤버십 시작 시각·미션 닫힘 기준) |
+| Android | 15 `RecordCalendarScreen`: `DataStore.records` → API, 도장 3종 표시(지각 도장 추가). 17 활동 요약 → API (`DataStore.stats` 제거) |
+| iOS | Android와 같음 (`RecordCalendarView`, `MyPageView`, `DataStore.records/stats`) |
+| 설계 문서 | `API_DESIGN.md` §7 교체(그룹 달력·활동 요약, `/me/calendar` 삭제). `PROJECT_OVERVIEW.md` §3 도장(지각 도장 추가)·§3 마이페이지·§11-8(통합 달력 → 그룹별로 결정) |
+
+### 9-4. 미결
+
+- `memberCount`: 멤버 이력이 저장되지 않아(나가면 행 삭제) 과거 미션의 당시 인원을 알 수 없다. MVP는 현재 인원으로 표시하거나, 그 미션에 제출한 사람 + 현재 멤버로 근사한다.
+- 나갔다가 다시 들어온 사용자는 다시 들어온 시점부터 도장이 계산된다 (이전 기간은 `null`).
+- 하루 여러 미션일 때 날짜 단위 도장 규칙(`PROJECT_OVERVIEW` §11-1) — MVP 이후.
+- 도장 3종 디자인 (지각 도장 포함).
+- 멤버 목록의 `submissionCountThisMonth`·`stampedToday`는 앱이 쓰지 않는다. 유지·삭제를 반영 시 정한다.
