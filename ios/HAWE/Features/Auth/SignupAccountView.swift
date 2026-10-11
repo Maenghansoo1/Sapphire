@@ -96,7 +96,7 @@ final class SignupAccountModel {
     // MARK: 입력 검사 — 빈 칸일 때는 오류를 보여 주지 않아요.
 
     var isEmailValid: Bool {
-        email.wholeMatch(of: /[^@\s]+@[^@\s]+\.[^@\s]+/) != nil
+        email.wholeMatch(of: #/[^@\s]+@[^@\s]+\.[^@\s]+/#) != nil
     }
 
     /// 8자 이상, 영문·숫자 포함 (Figma 안내 문구 기준)
