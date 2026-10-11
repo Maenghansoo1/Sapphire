@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// 로그인 뒤 화면 흐름: 01 시작 또는 04 홈에서 02 그룹 만들기 / 03 초대 코드로 참여
+/// 04 홈의 + 는 01 시작을 (뒤로 가기와 함께) 띄워요.
 enum MainRoute: Hashable {
+    case start
     case createGroup
     case joinGroup(code: String?)
 }
@@ -23,6 +25,8 @@ struct MainFlowView: View {
             }
             .navigationDestination(for: MainRoute.self) { route in
                 switch route {
+                case .start:
+                    StartView(path: $path, showsBack: true)
                 case .createGroup:
                     CreateGroupView(onCreated: finish)
                 case .joinGroup(let code):
