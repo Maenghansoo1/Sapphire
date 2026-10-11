@@ -13,10 +13,10 @@ extension ShapeStyle where Self == Color {
     static var ink: Color { Color(hex: 0x111111) }
     static var textSecondary: Color { Color(hex: 0x6E6E73) }
     static var textTertiary: Color { Color(hex: 0x8E8E93) }
-    /// Figma 화면 CTA·배지·워드마크 색 (사용자 결정 2026-10-12, 변수 color/accent #1E5C91 대신)
-    static var accent: Color { Color(hex: 0x164F7D) }
+    /// Figma 화면 CTA·배지·워드마크·로고 '오늘 칸' 색 (사용자 결정 2026-10-12, Figma 화면 값 #67A6C3)
+    static var accent: Color { Color(hex: 0x67A6C3) }
     /// Figma 에 눌림 색이 없어서 accent 를 한 단계 어둡게 잡았어요.
-    static var accentPressed: Color { Color(hex: 0x103D61) }
+    static var accentPressed: Color { Color(hex: 0x5591B0) }
     static var accentSubtle: Color { Color(hex: 0xEAF1F7) }
     static var onAccent: Color { Color(hex: 0xFFFFFF) }
     static var danger: Color { Color(hex: 0xC92A2A) }
