@@ -8,6 +8,8 @@ enum MainRoute: Hashable {
     case joinGroup(code: String?)
     case groupInfo(GroupDetail)
     case mission(TodayMission)
+    case results(MissionResult)
+    case calendar(GroupDetail)
 }
 
 struct MainFlowView: View {
@@ -39,6 +41,10 @@ struct MainFlowView: View {
                     GroupInfoView(group: group, onLeft: finish)
                 case .mission(let mission):
                     MissionView(mission: mission, path: $path)
+                case .results(let result):
+                    ResultsView(result: result)
+                case .calendar(let group):
+                    RecordCalendarView(group: group, path: $path)
                 }
             }
         }

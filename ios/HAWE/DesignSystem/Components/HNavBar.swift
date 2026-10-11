@@ -9,11 +9,13 @@ struct HNavBar<Trailing: View>: View {
     }
 
     private let title: String?
+    private let titleFont: Font
     private let leading: Leading
     private let trailing: Trailing
 
-    init(_ title: String? = nil, leading: Leading = .none, @ViewBuilder trailing: () -> Trailing) {
+    init(_ title: String? = nil, titleFont: Font = .navTitle, leading: Leading = .none, @ViewBuilder trailing: () -> Trailing) {
         self.title = title
+        self.titleFont = titleFont
         self.leading = leading
         self.trailing = trailing()
     }
@@ -22,7 +24,7 @@ struct HNavBar<Trailing: View>: View {
         ZStack {
             if let title {
                 Text(title)
-                    .font(.navTitle)
+                    .font(titleFont)
                     .foregroundStyle(.ink)
                     .lineLimit(1)
                     .padding(.horizontal, HLayout.minTouch + 8)
@@ -59,8 +61,8 @@ struct HNavBar<Trailing: View>: View {
 }
 
 extension HNavBar where Trailing == EmptyView {
-    init(_ title: String? = nil, leading: Leading = .none) {
-        self.init(title, leading: leading) { EmptyView() }
+    init(_ title: String? = nil, titleFont: Font = .navTitle, leading: Leading = .none) {
+        self.init(title, titleFont: titleFont, leading: leading) { EmptyView() }
     }
 }
 

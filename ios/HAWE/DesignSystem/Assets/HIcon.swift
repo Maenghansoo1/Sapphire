@@ -1,11 +1,11 @@
 import SwiftUI
 
 /// Figma `icon/*` 컴포넌트 (Assets.xcassets/Icons, template 렌더링이라 색을 입힐 수 있어요)
-/// 아직 받지 않은 아이콘(heart, comment)은 해당 화면 단계에서 추가해요.
+/// heartFill 은 Figma icon/heart 를 채운 모양이에요 (좋아요 누른 상태, Figma 에 없음).
 enum HIcon: String, CaseIterable {
     case calendar, camera, check, checkSmall = "check-small"
     case chevronLeft = "chevron-left", chevronRight = "chevron-right"
-    case close, copy, flash, flip, image, lock, mic, more
+    case close, comment, copy, flash, flip, heart, heartFill = "heart-fill", image, lock, mic, more
     case pause, pencil, person, play, plus, redo, text, undo
 }
 

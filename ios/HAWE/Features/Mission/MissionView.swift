@@ -19,8 +19,7 @@ struct MissionView: View {
         VStack(spacing: 0) {
             HNavBar(mission.group.name, leading: .back { dismiss() }) {
                 HStack(spacing: 16) {
-                    // TODO: 15 기록 캘린더 연결
-                    headerButton(.calendar, label: "기록 캘린더") {}
+                    headerButton(.calendar, label: "기록 캘린더") { path.append(.calendar(mission.group)) }
                     headerButton(.more, label: "그룹 정보") { path.append(.groupInfo(mission.group)) }
                 }
             }
@@ -100,8 +99,7 @@ struct MissionView: View {
             }
 
             if mission.didSubmit {
-                // TODO: 10~13 결과 공개 화면 연결 (5단계)
-                HButton("친구들 작품 보기") {}
+                HButton("친구들 작품 보기") { path.append(.results(.mock(for: mission))) }
             } else {
                 HButton(mission.type.actionTitle) { isPerforming = true }
             }
