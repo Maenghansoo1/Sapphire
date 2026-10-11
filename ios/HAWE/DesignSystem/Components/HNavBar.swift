@@ -45,10 +45,7 @@ struct HNavBar<Trailing: View>: View {
         case .back(let action):
             iconButton("뒤로", action: action) { HIconView(icon: .chevronLeft) }
         case .close(let action):
-            // icon/close 는 4단계 화면에서 받을 예정이라 SF Symbol 로 대신해요.
-            iconButton("닫기", action: action) {
-                Image(systemName: "xmark").font(.system(size: 18, weight: .medium)).foregroundStyle(.ink)
-            }
+            iconButton("닫기", action: action) { HIconView(icon: .close, size: 22) }
         }
     }
 

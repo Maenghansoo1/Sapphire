@@ -204,7 +204,8 @@ struct GroupInfoView: View {
     // MARK: - Helpers
 
     private var leaveMessage: String {
-        var text = "'\(group.name)'에서 나가면 다시 들어올 때 초대 코드가 필요해요."
+        // 나간 뒤에도 내가 올린 작품·댓글은 그룹에 남아요 (사용자 결정 2026-10-12).
+        var text = "'\(group.name)'에서 나가도 내가 올린 작품과 댓글은 그룹에 남아요. 다시 들어오려면 초대 코드가 필요해요."
         if group.amIOwner, group.members.count > 1 {
             text += "\n방장은 가장 먼저 들어온 멤버에게 넘어가요."
         }
