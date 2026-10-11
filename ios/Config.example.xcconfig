@@ -1,0 +1,5 @@
+// 이 파일을 Config.xcconfig 로 복사한 뒤 실제 값을 넣어 주세요. (Config.xcconfig 는 git 에 올라가지 않아요)
+// xcconfig 에서는 "//" 가 주석이라 URL 은 https:/$()/ 형태로 써야 해요.
+
+SUPABASE_URL = https:/$()/your-project.supabase.co
+SUPABASE_ANON_KEY = your-anon-key
