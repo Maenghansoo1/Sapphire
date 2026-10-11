@@ -44,8 +44,8 @@ fun HAlert(title: String, message: String, confirmTitle: String, onCancel: () ->
                 .padding(start = 22.dp, end = 22.dp, top = 28.dp, bottom = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(title, style = HType.plex(20, FontWeight.Bold), color = HColors.ink)
-                Text(message, style = HType.plex(14, lineHeightMultiple = 1.6f), color = HColors.textSecondary,
-                    textAlign = TextAlign.Center)
+                if (message.isNotEmpty()) Text(message, style = HType.plex(14, lineHeightMultiple = 1.6f),
+                    color = HColors.textSecondary, textAlign = TextAlign.Center)
                 Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     HButton(cancelTitle, Modifier.weight(1f), HButtonKind.GRAY, 50.dp, onClick = onCancel)
                     HButton(confirmTitle, Modifier.weight(1f), confirmKind, 50.dp, onClick = onConfirm)

@@ -22,17 +22,18 @@ class CharacterMapperTests {
     void seededCharactersAreListedInIdOrder() {
         var rows = characters.findAll(0L, 20);
 
-        assertEquals(8, rows.size());
-        assertEquals(8, characters.count());
-        assertEquals("monsili", rows.getFirst().getSvgKey());
+        assertEquals(7, rows.size());
+        assertEquals(7, characters.count());
+        assertEquals("mongsil", rows.getFirst().getSvgKey());
         assertEquals("곰돌이", rows.get(2).getName());
-        assertEquals("film", rows.getLast().getSvgKey());
+        assertEquals("pilleum", rows.getLast().getSvgKey());
         assertEquals(3, characters.findAll(3L, 3).size());
     }
 
     @Test
     void findByIdReturnsNullForUnknownCharacter() {
-        assertEquals("bear", characters.findById(3L).getSvgKey());
+        assertEquals("gomdol", characters.findById(3L).getSvgKey());
+        assertNull(characters.findById(4L));
         assertNull(characters.findById(999L));
     }
 

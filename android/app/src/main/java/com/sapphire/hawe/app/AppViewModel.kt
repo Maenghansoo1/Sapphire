@@ -4,9 +4,11 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.push.PushCenter
 import java.io.File
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     val dataStore = DataStore(File(application.cacheDir, "hawe-media"))
     val appSession = AppSession()
+    val push = PushCenter()
 }

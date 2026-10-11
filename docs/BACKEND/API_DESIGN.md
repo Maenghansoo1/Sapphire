@@ -276,8 +276,10 @@ Response 204.
 
 ### GET /characters
 ```json
-{ "content": [ { "id": 1, "name": "몽실이", "svgKey": "monsili" } ], "page": 0, "size": 20, "totalPages": 1, "totalElements": 9 }
+{ "content": [ { "id": 1, "name": "몽실이", "svgKey": "mongsil" } ], "page": 0, "size": 20, "totalPages": 1, "totalElements": 7 }
 ```
+- 7종: `mongsil`(몽실이), `ipsagwi`(잎사귀), `gomdol`(곰돌이), `mulbangul`(물방울), `gamja`(감자), `kkotnim`(꽃님), `pilleum`(필름이). `svgKey`는 iOS·Android 앱의 캐릭터 키(`ProfileCharacter`)와 같다 (V5 마이그레이션). 목록은 `id` 오름차순이며, 앱은 자체 표시 순서를 쓰고 `svgKey`로 대응한다.
+- 캐릭터를 고르지 않은 사용자(`users.character_id` NULL)는 앱에서 기본 캐릭터 `mongsil`로 보인다.
 
 ### PATCH /me/character
 ```json
@@ -285,9 +287,26 @@ Response 204.
 { "characterId": 3 }
 
 // Response 200
-{ "characterId": 3, "name": "곰돌이", "svgKey": "bear" }
+{ "characterId": 3, "name": "곰돌이", "svgKey": "gomdol" }
 ```
 에러: `CHARACTER_NOT_FOUND` (404)
+
+### 프로필 사진 (설계만, 미구현)
+앱은 프로필로 캐릭터 대신 **내 사진**을 고를 수 있다 (A3 가입, 17-1 프로필 편집). 서버 설계는 아래와 같고 아직 구현하지 않았다.
+
+| Method | Path | 설명 |
+|---|---|---|
+| PUT | `/me/profile-image` | 프로필 사진 등록·교체 (`multipart/form-data`, 필드 `file`, 이미지 ≤ 10MB `jpg`/`png`/`webp`) |
+| DELETE | `/me/profile-image` | 프로필 사진 삭제 (캐릭터로 돌아감) |
+
+```json
+// PUT 응답 200
+{ "profileImageUrl": "https://.../profile/1.jpg" }
+```
+- DB: `users.profile_image_url VARCHAR(500) NULL` 추가 (새 마이그레이션).
+- 표시 규칙: `profileImageUrl`이 있으면 사진, 없으면 캐릭터. 사진이 있어도 `characterId`는 유지하며 사진을 지우면 그 캐릭터로 돌아간다. `PATCH /me/character`는 사진을 지우지 않는다 — 앱에서 캐릭터를 고르면 `DELETE /me/profile-image`도 함께 호출한다.
+- 사용자 정보를 내려주는 모든 응답(멤버 목록, 피드, 댓글, `GET /me`)에 `characterKey`와 `profileImageUrl`을 함께 넣는다.
+- 에러: `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413)
 
 ---
 

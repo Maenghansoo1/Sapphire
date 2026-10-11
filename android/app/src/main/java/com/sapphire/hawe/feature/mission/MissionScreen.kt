@@ -41,7 +41,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun MissionScreen(id: UUID, store: DataStore, onBack: () -> Unit, onGroupInfo: () -> Unit,
     submittedSignal: Boolean = false, onSubmittedHandled: () -> Unit = {},
-    onPerform: (MissionType?) -> Unit = {}) {
+    onPerform: (MissionType?) -> Unit = {}, onResults: () -> Unit = {}, onCalendar: () -> Unit = {}) {
     val mission = store.todayMission(id)
     if (mission == null) {
         Box(Modifier.fillMaxSize().background(HColors.bg))
@@ -61,7 +61,7 @@ fun MissionScreen(id: UUID, store: DataStore, onBack: () -> Unit, onGroupInfo: (
         Column(Modifier.fillMaxSize().padding(horizontal = HLayout.screenPaddingCompact)) {
             HNavBar(mission.group.name, leading = HNavLeading.BACK, onLeading = onBack, trailing = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    MissionHeaderIcon(HIcon.CALENDAR, "기록 캘린더") { toast.show("준비 중이에요") }
+                    MissionHeaderIcon(HIcon.CALENDAR, "기록 캘린더", onCalendar)
                     MissionHeaderIcon(HIcon.MORE, "그룹 정보", onGroupInfo)
                 }
             })
@@ -70,8 +70,7 @@ fun MissionScreen(id: UUID, store: DataStore, onBack: () -> Unit, onGroupInfo: (
                     val choices = MissionType.entries
                     debugType = if (debugType == null) choices.first() else
                         choices.getOrNull(choices.indexOf(debugType) + 1)
-                }, onPerform = performAction,
-                    onResults = { toast.show("준비 중이에요") })
+                }, onPerform = performAction, onResults = onResults)
                 Row(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("참여 현황", style = HType.sectionTitle, color = HColors.ink)

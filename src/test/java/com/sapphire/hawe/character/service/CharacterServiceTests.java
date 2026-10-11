@@ -39,14 +39,14 @@ class CharacterServiceTests {
 
     @Test
     void listCharactersMapsRowsAndPageInfo() {
-        when(characterMapper.findAll(0L, 20)).thenReturn(List.of(character(1L, "몽실이", "monsili"),
-                character(3L, "곰돌이", "bear")));
+        when(characterMapper.findAll(0L, 20)).thenReturn(List.of(character(1L, "몽실이", "mongsil"),
+                character(3L, "곰돌이", "gomdol")));
         when(characterMapper.count()).thenReturn(8L);
 
         var response = service.listCharacters(0, 20);
 
         assertEquals(2, response.content().size());
-        assertEquals("bear", response.content().get(1).svgKey());
+        assertEquals("gomdol", response.content().get(1).svgKey());
         assertEquals(8L, response.totalElements());
         assertEquals(1, response.totalPages());
     }
@@ -63,7 +63,7 @@ class CharacterServiceTests {
 
     @Test
     void missingUserDoesNotReturnSuccess() {
-        when(characterMapper.findById(3L)).thenReturn(character(3L, "곰돌이", "bear"));
+        when(characterMapper.findById(3L)).thenReturn(character(3L, "곰돌이", "gomdol"));
         when(characterMapper.updateUserCharacterId(42L, 3L)).thenReturn(0);
 
         BusinessException error = assertThrows(BusinessException.class,
@@ -75,26 +75,26 @@ class CharacterServiceTests {
 
     @Test
     void selectingCurrentCharacterStillSucceedsWhenUpdateCountIsZero() {
-        when(characterMapper.findById(3L)).thenReturn(character(3L, "곰돌이", "bear"));
+        when(characterMapper.findById(3L)).thenReturn(character(3L, "곰돌이", "gomdol"));
         when(characterMapper.updateUserCharacterId(42L, 3L)).thenReturn(0);
         when(userMapper.findById(42L)).thenReturn(new User());
 
         var response = service.changeMyCharacter(42L, new CharacterUpdateRequest(3L));
 
         assertEquals(3L, response.characterId());
-        assertEquals("bear", response.svgKey());
+        assertEquals("gomdol", response.svgKey());
     }
 
     @Test
     void changeMyCharacterUpdatesUserAndReturnsCharacter() {
-        when(characterMapper.findById(3L)).thenReturn(character(3L, "곰돌이", "bear"));
+        when(characterMapper.findById(3L)).thenReturn(character(3L, "곰돌이", "gomdol"));
         when(characterMapper.updateUserCharacterId(7L, 3L)).thenReturn(1);
 
         var response = service.changeMyCharacter(7L, new CharacterUpdateRequest(3L));
 
         assertEquals(3L, response.characterId());
         assertEquals("곰돌이", response.name());
-        assertEquals("bear", response.svgKey());
+        assertEquals("gomdol", response.svgKey());
         verify(characterMapper).updateUserCharacterId(7L, 3L);
         verifyNoInteractions(userMapper);
     }

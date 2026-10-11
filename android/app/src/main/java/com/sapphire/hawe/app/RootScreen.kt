@@ -20,7 +20,7 @@ fun RootScreen(viewModel: AppViewModel) {
         Box(Modifier.fillMaxSize().statusBarsPadding()) {
             when (viewModel.appSession.state) {
                 AppSession.State.SIGNED_OUT -> AuthNavHost(viewModel.appSession, viewModel.dataStore)
-                AppSession.State.SIGNED_IN -> MainNavHost(viewModel.appSession, viewModel.dataStore)
+                AppSession.State.SIGNED_IN -> MainNavHost(viewModel.appSession, viewModel.dataStore, viewModel.push)
             }
         }
     }

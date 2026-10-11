@@ -1,198 +1,163 @@
-# Plan — Android 6단계 (2/3): 06 그림 + 09 음성
+# Plan — Android 9단계: 푸시 알림 기반 (권한 · 채널 · 알림 눌림 처리)
 
 ## Goal
 
-iOS 의 **06 그림**(`DrawMissionView`)과 **09 음성**(`VoiceMissionView`)을 Android(Compose)로 옮겨 6단계(미션 수행)를 마무리한다. 이전 묶음(6단계 1/3)에서 만든 공통 틀(`MissionPerformScreen` / `MissionTitle` / `MissionHeader` / 수행 라우트 / 제출 후 05 복귀 + 토스트)을 그대로 쓴다.
+iOS 의 푸시 처리(`ios/HAWE/Core/Push/PushNotifications.swift` + `MainFlowView.open(_:)`)를 Android 로 옮긴다. **서버 푸시(FCM)는 이번 범위가 아니다** — 서버가 없고 Firebase 프로젝트도 없다. 대신 "알림이 오면 어떻게 보이고, 누르면 어디로 가는가"까지를 완성하고, FCM 이 붙을 때 `PushNotifier.show(...)` 한 곳만 호출하면 되도록 만든다.
 
-- 05 의 CTA 가 네 가지 유형(그림·사진·글·음성) 모두에서 수행 화면을 연다. **05 의 "디버그 전용 임시 제출"(DRAW/VOICE 분기)을 삭제**한다.
-- **06 그림**: 손가락으로 그리는 그림판 — 펜/지우개, 굵기 3단계, 색 7개, 되돌리기/다시 실행, 올리기 → 흰 바탕 PNG.
-- **09 음성**: 마이크 권한 → 녹음(최대 30초, m4a/AAC) → 정지 → 다시 / 미리 듣기, 실시간 파형, 올리기.
-- 작성 중 내용이 있으면 닫기·뒤로 가기에서 "그만둘까요?" 확인(공통 헤더).
+- 로그인 뒤 처음 메인 화면(01/04)에 들어오면 **알림 권한**(Android 13+ `POST_NOTIFICATIONS`)을 한 번 묻는다 (iOS: 로그인 뒤 처음 홈/01 진입 시 `requestAuthorizationIfNeeded`).
+- **알림 채널 4종**(오늘의 주제 도착 / 콕 찌르기 / 친구가 미션을 완료 / 내 작품에 댓글)을 만든다 (Android 8+).
+- **알림을 눌러 앱이 열리면** payload(`type`, `group_id`, `submission_id`)에 따라 화면 이동: 주제/콕/친구 완료 → 05 오늘의 미션, 댓글 → 내가 올렸으면 05 → 결과 공개, 아니면 05. 앱이 꺼져 있을 때(콜드 스타트)와 켜져 있을 때(웜) 모두.
+- 서버 없이도 동작을 폰에서 확인할 수 있게 **디버그 빌드 전용 알림 발송 수단**(adb 브로드캐스트)을 둔다.
 
-전체 로드맵은 `docs/FRONTEND/ANDROID.md` (§5 대응표 — PencilKit→Compose Canvas, AVAudioRecorder→MediaRecorder, AVAudioPlayer→MediaPlayer, 마이크 권한/설정 열기; §7 위험 요소).
+전체 로드맵은 `docs/FRONTEND/ANDROID.md` (§6 9단계).
 
-이번 범위 아님: 10~15, 17 계열, 알림, 서버 연결. 그림/음성의 서버 업로드는 없다(제출은 `DataStore` 임시 저장소에 파일로만 저장).
+이번 범위 아님: FCM(`google-services.json`, `FirebaseMessagingService`, 기기 토큰 등록/해제), 실제 서버 연동, 초대 링크(App Links), 알림 설정 값의 영속화, 17-1 에서 권한 상태 안내 UI.
 
 ## Findings
 
-### Android 현재 상태 (6단계 1/3 완료)
-- `app/MainNavigation.kt`: `MainRoute.MissionPerform(groupId, type: String? = null)` 라우트, 수직 슬라이드 전환, 진입 판단은 `remember(entry)` + `LaunchedEffect(entry)` 로 **한 번만**(`performEntryDecision`), 제출은 `store.submit(content, id)` → `previousBackStackEntry.savedStateHandle["submitted"] = true` → `popBackStack()`. `MissionPerformScreen(decision.type, mission.topic, onClose, onSubmit)`.
-- `feature/mission/MissionPerformScreen.kt`: `when (type)` 이 `WRITE`/`PHOTO` 만 분기, 나머지는 `else -> Unit`. 이 `when` 에 `DRAW`/`VOICE` 를 추가한다.
-- `feature/mission/MissionPerformCommon.kt`: `isPerformScreenAvailable(type)` = WRITE||PHOTO 만 true, `performEntryDecision(mission, requestedType)`(Allow/Missing/AlreadySubmitted/Unsupported), `MissionTitle(type, topic)`, `MissionHeader(hasDraft, onClose, trailing)`(닫기 X + 확인창 + `BackHandler`).
-- `feature/mission/MissionScreen.kt`: CTA `performAction` = `isPerformScreenAvailable(displayType)` 이면 `onPerform(...)`, 아니면 디버그에서 `store.submit(SubmissionContent.Text("개발용 임시 제출"), id)` + 토스트 / 릴리스에서 "준비 중이에요". 디버그 빌드 전용 `debugType`(알약 길게 누르기로 유형 순환)이 있어 테스트에서 네 유형을 모두 열 수 있다.
-- `feature/mission/WriteMissionScreen.kt` / `PhotoMissionScreen.kt`: 구현 패턴 참고 — 제출 연타 방지 플래그(`submitted`), 처리 중 플래그, 무거운 작업은 `Dispatchers.Default`, 하단 여백 `ctaBottomPadding(...)`, 헤더 `MissionHeader(hasDraft, onClose, trailing = {...})`, 권한 `rememberLauncherForActivityResult` + `ON_RESUME` 재확인 패턴(PhotoMissionScreen).
-- `core/data/DataStore.kt`: `SubmissionContent.Image(bytes, fileExtension)`(PNG 는 `"png"`), `SubmissionContent.Voice(file: File, duration: Double(초), waveform: List<Float>)`. `submit` 의 Voice 처리는 `content.file.readBytes()` 를 `mediaDir/<UUID>.m4a` 로 **복사**하고 `Submission.duration`/`waveform` 저장 → 제출 시점에 원본 임시 파일이 존재해야 하고, 제출 후에는 지워도 된다.
-- 디자인 시스템: `HButton`, `HChip(title, isSelected, modifier, onClick)`, `HAlert(title, message, confirmTitle, onCancel, onConfirm, cancelTitle = "취소", confirmKind = DANGER)`, `HIconView`, `HIcon.UNDO/REDO/PLAY/PAUSE`, `HColors`(`ink, border, line, controlBorder, surfaceStrong, waveformIdle, textTertiary, accent, onAccent, bg`), `HType.plex(size, weight, lineHeightMultiple)`, `ctaBottomPadding(bottomInset)`.
-- `app/src/main/AndroidManifest.xml`: `CAMERA` 권한 + `uses-feature camera/camera.front required=false` 만 있고 **마이크 권한 없음**.
-- 현재 테스트 40개 통과 상태.
-
 ### 원본 iOS (읽기 전용, 수정 금지)
-- `ios/HAWE/Features/Mission/DrawMissionView.swift` — 06 + `DrawingCanvasModel` + `PencilCanvas`
-- `ios/HAWE/Features/Mission/VoiceMissionView.swift` — 09 + `Waveform` + `VoiceRecorder`
-- `ios/HAWE/Features/Mission/MissionPerformView.swift` — 컨테이너/공통 요소 (이미 구현됨)
+- `ios/HAWE/Core/Push/PushNotifications.swift`:
+  - `PushKind`: `topic`, `poke`, `friendDone = "friend_done"`, `comment` — 서버 payload 의 `"type"` 값.
+  - `PushDestination(kind, groupID: String?, submissionID: String?)`.
+  - `PushCenter.shared`: `authorization`, `deviceToken`(TODO 서버 등록), `pendingDestination`; `requestAuthorizationIfNeeded()`(상태가 미결정일 때만 시스템 대화상자 → 허용이면 원격 알림 등록); `handle(userInfo:)` — `type` 이 알려진 값이 아니면 무시, 맞으면 `pendingDestination` 설정.
+  - `AppDelegate`: 앱을 보고 있을 때도 배너+소리로 보여줌(`willPresent`), 알림을 누르면(`didReceive`) `PushCenter.handle`.
+- `ios/HAWE/App/MainFlowView.swift`: `.task { requestAuthorizationIfNeeded() }` (로그인 뒤 처음 홈/01 진입 때), `.onChange(of: pendingDestination)` 에서 `open(destination)` 후 `pendingDestination = nil`. `open`: **첫 번째 그룹**을 대상으로(주석 TODO: 서버 연결 시 payload 의 groupID/submissionID 사용) —
+  - `.topic, .poke, .friendDone` → `path = [.mission(groupID)]`
+  - `.comment` → 마지막 미션에 내가 올렸으면 `path = [.mission, .results(groupID, missionID)]`, 아니면 `[.mission]`
+  - 그룹이 하나도 없으면 아무것도 하지 않음.
+- `ios/PushSamples/topic.apns`, `comment.apns`: payload 예 — `title` = 그룹 이름("컴공 동기"), `body` = "오늘의 주제가 도착했어요 · 사진" / "서연님이 내 작품에 댓글을 남겼어요", `type`, `group_id`("mock"), `submission_id`("mock").
+- 보낼지 말지(전체 알림 OFF, 그룹 알림 OFF)는 **서버가** `notification_prefs`·`group_members.notify` 를 보고 결정한다 (iOS 주석).
 
-### iOS 06 그림 명세 (그대로 구현)
-- 좌우 20, 세로 간격 16, 아래 여백 32(+ 내비게이션 바 inset — `ctaBottomPadding(32.dp)`), 배경 `bg`.
-- 헤더: 닫기 + 오른쪽 `HIcon.UNDO`, `HIcon.REDO` (각 22, 간격 16, 터치 영역 넓게). 활성 = ink, 비활성 = `controlBorder`(회색) + 눌림 불가. 접근성 라벨 "되돌리기", "다시 실행". `hasDraft` = 캔버스가 비어 있지 않음.
-- `MissionTitle(DRAW, 주제)`.
-- **캔버스**: 흰 바탕, 모서리 `HRadius.card`(20) 클립 + 테두리 `line` 1dp, 높이 **최소 220 ~ 최대 400**(작은 화면에서는 줄어듦), 가로 가득. 손가락으로 그린다.
-- **도구 줄**: 왼쪽 `HChip("펜")`, `HChip("지우개")`(간격 6, 선택된 쪽이 selected), 오른쪽 굵기 버튼 3개(간격 4): 각 44×44 원, 고른 것만 `surfaceStrong` 바탕(아니면 `bg`), 가운데 ink 점 지름 4 / 8 / 14, 접근성 라벨 "가는 굵기"/"보통 굵기"/"굵은 굵기".
-- **색 줄**: 7색 팔레트 — `ink(#111111)`, `#8E8E93`, `#E5484D`, `#F5A524`, `#F2D74E`, `#30A46C`, `#2F5BFF`. 각 칸 44×44 에 지름 30 원, 줄 전체에 균등 분포(Spacer 사이사이). 색을 누르면 그 색 선택 **그리고 도구가 펜으로 바뀜**. 선택 표시 = ink 테두리 2dp, 단 **도구가 펜일 때만** 표시(지우개 상태에서는 색 선택 표시 없음). 접근성 라벨 "색 1" … "색 7".
-- 기본값: 도구 펜, 굵기 보통(medium), 색 0(ink).
-- 실제 펜 굵기(dp): 가는 3 / 보통 6 / 굵은 12. 지우개 굵기 = 펜 굵기 × 3 (9 / 18 / 36).
-- 남는 공간 Spacer, 맨 아래 `HButton("올리기")` — 캔버스가 비어 있으면 비활성. 누르면 PNG(흰 바탕, 해상도 = 캔버스 크기(dp) × 2) → `SubmissionContent.Image(png, "png")`.
-- 되돌리기/다시 실행: 획(pen 또는 eraser 한 번의 드래그) 단위. 새 획을 그리면 다시 실행 목록은 비워진다.
-- 지우개는 **픽셀 지우개**(PencilKit `.bitmap`) — 이미 그린 획의 일부를 지운다.
-
-### iOS 09 음성 명세 (그대로 구현)
-- 좌우 20, 아래 여백 32(+ 내비게이션 바 inset), 배경 `bg`. 세로 순서: 헤더 → `MissionTitle(VOICE, 주제)` → (위 72) 시간·파형·안내 블록(간격 28) → Spacer(최소 24) → 컨트롤(아래 32) → `HButton("올리기")`.
-- 헤더: 닫기만(오른쪽 비어 있음). `hasDraft` = 녹음된 파일이 있음 **또는** 녹음 중.
-- 시간 텍스트 `mm:ss`(44 SemiBold, ink, 고정폭 숫자) — `Int(elapsed 내림)` 의 분:초. 그 아래 파형, 그 아래 "최대 30초"(13, textSecondary).
-- **파형**: 막대 32개(`barCount`), 막대 폭 4, 간격 4, 모서리 2, 컨테이너 높이 80(가운데 정렬 — iOS `HStack` 기본). 녹음된 막대 높이 = `8 + 72 × level`(level 0..1), 아직 녹음 안 된 막대(level = -1)는 높이 8 색 `waveformIdle`. 녹음된 막대 색: 미리 듣기 중이 아니면 ink; 미리 듣기 중이면 재생 진행률(0..1)보다 앞쪽(`index / count < progress`)은 ink, 뒤쪽은 `textTertiary`. 높이 변화는 짧은 선형 애니메이션(0.1초) 허용(선택).
-- **컨트롤**(가운데, 간격 36): 
-  - "다시" — 56×56 원, 테두리 `border` 1dp, 글자 13 SemiBold ink. 녹음된 것이 있고 녹음 중이 아닐 때만 활성(아니면 투명도 0.4 + 비활성). 누르면 `reset`. 라벨 "다시 녹음".
-  - 녹음 — 84×84 `accent` 원. 대기: 가운데 흰(`onAccent`) 원 지름 28. 녹음 중: 흰 둥근 네모 26×26 모서리 6(정지 모양). 라벨 "녹음 시작"/"녹음 멈추기". 누르면 토글.
-  - 미리 듣기 — 56×56 원, 테두리 `border`, `HIcon.PLAY`/`HIcon.PAUSE`(20). 활성 조건은 "다시"와 같음. 라벨 "미리 듣기"/"일시정지".
-- `HButton("올리기")`: 녹음이 있고 녹음 중이 아닐 때만 활성. 누르면 재생 정지 후 `SubmissionContent.Voice(file, duration = elapsed(초), waveform = levels 중 0 이상인 값만)`.
-- **권한**: 녹음 버튼을 처음 누를 때 마이크 권한 요청. 거부되면 알림창 — 제목 "마이크 권한이 필요해요", 메시지 "설정 > HA'WE 에서 마이크를 켜 주세요.", 버튼 "취소"(회색) / "설정 열기"(PRIMARY, 앱 설정 화면으로 이동). 허용되면 바로 녹음 시작.
-- **녹음**: AAC, 모노, 44.1kHz, m4a 컨테이너. 최대 30초가 되면 자동 정지. 시작 시 이전 녹음은 지운다(`reset`). 100ms 간격으로 `elapsed`(최대 30) 와 소리 크기를 갱신: 소리 크기 level = `clamp((dB + 50) / 50, 0, 1)` (dB = 평균 파워, -50dB~0dB → 0~1), 현재 막대 `index = min(31, floor(elapsed / 30 × 32))` 에 `levels[index] = max(levels[index], level)`.
-- **정지**: 정지/자동 정지 시 `hasRecording = elapsed > 0`.
-- **미리 듣기**: 녹음 파일을 재생, 100ms 마다 진행률 갱신(`currentPosition / max(duration, 0.1초)`), 끝나면 자동으로 정지 상태로 복귀(진행률 0). 재생 중 다시 누르면 정지. 
-- 화면이 사라질 때 모든 것 `reset`(녹음·재생 정지, 임시 파일 삭제).
+### Android 현재 상태 (8단계 + 15 완료)
+- `MainActivity.kt`: `ComponentActivity`, `enableEdgeToEdge()`, `setContent { HaweTheme { RootScreen(viewModel<AppViewModel>()) } }`. `onNewIntent`/인텐트 처리 없음. 매니페스트 액티비티: `exported`, `screenOrientation=portrait`, 런처 인텐트 필터만 있고 **`launchMode` 없음**, `<application>` 에 `android:name`(Application 서브클래스) 없음, `POST_NOTIFICATIONS` 권한 없음.
+- `app/AppViewModel.kt`: `AndroidViewModel` — `dataStore`, `appSession` 소유. (Activity 범위 ViewModel 이라 Activity 가 완전히 종료되면 상태가 모두 사라지는 것이 iOS 와 같은 "메모리 전용" 동작이다.)
+- `app/RootScreen.kt`: `SIGNED_OUT` → `AuthNavHost(session, store)`, `SIGNED_IN` → `MainNavHost(session, store)`.
+- `app/MainNavigation.kt`: `MainRoute` = `Home`(루트), `Start`, `CreateGroup`, `JoinGroup`, `GroupInfo`, `GroupProfile`, `Mission(groupId)`, `Calendar`, `MissionPerform`, `Results(groupId, missionId)`, `SubmissionDetail`, `MyPage` 계열. `MainNavHost(session, store)`. 각 UUID 라우트 컴포저블은 `runCatching { UUID.fromString }` + **진입 시 한 번만**(`LaunchedEffect(entry)`) 방어한다. 화면 컴포저블은 데이터가 사라져도 내비게이션 없이 빈 배경만 그린다(4단계 "퇴장 중 `popBackStack`" 버그 재발 방지 규칙).
+- `core/data/DataStore.kt`: `groups: List<StoredGroup>`(읽기 전용 스냅샷, 순서 = 참여 순), `StoredGroup(detail, missions)`, `StoredMission(id, type, topic, number, opensAt, closesAt, submissions, poked)`, `Submission.isMine`, `group(id): GroupDetail?`, `todayMission(groupID)`, `result(groupID, missionID)`(내가 올린 미션만 반환).
+- `core/model/MyAccount.kt`: `NotificationPrefs(all, topic, poke, friendDone = false, comment)`; `AppSession.notificationPrefs`(17-1 알림 설정에서 바뀜). `GroupDetail.notify`(그룹별 알림, 16 에서 바뀜).
+- 리소스: `res/drawable/logo_symbol_small.xml` — 120×120 뷰포트의 **둥근 사각 타일 4개**(`M43 14H27C19.82 14 14 19.82 …` 등, 색 #111111/#67A0C3). 알림 작은 아이콘은 **알파만 쓰므로** 이 타일 4개를 모두 흰색 한 가지로 칠한 단색 벡터를 새로 만들어 쓴다. 앱 이름 `@string/app_name`("HA'WE"), 액센트 색 `HColors.accent`(#67A0C3).
+- 의존성: Compose, activity-compose 1.11, lifecycle, navigation-compose 2.9.5. **새 의존성 불필요**(`androidx.core.app.NotificationCompat` 은 이미 `core-ktx` 가 transitive 로 제공 — 컴파일되지 않으면 `androidx.core` 를 확인하되 새 라이브러리를 임의 추가하지 말고 보고서에 적는다).
+- 현재 테스트 58개 통과.
 
 ## Root Cause / Key Implementation Points
 
-1. **그림판은 Compose `Canvas` + 자체 상태**. 획(stroke) = 점 목록(dp 단위) + 색 + 굵기(dp) + 지우개 여부. 화면과 PNG 내보내기 모두 **같은 그리기 코드**(`android.graphics.Canvas` 에 그리는 `drawStrokes(canvas, strokes, scale)`)를 쓴다 — 화면에서는 `drawIntoCanvas { it.nativeCanvas }` 로 호출(scale = density), 내보내기에서는 `Bitmap` 위 `Canvas`(scale = 2)로 호출해 결과가 같게 한다.
-   - 픽셀 지우개는 `Paint.xfermode = PorterDuffXfermode(CLEAR)` 로 이미 그려진 획을 지운다. CLEAR 는 **투명 레이어**에서만 의미가 있으므로 화면 쪽은 캔버스 Composable 에 `Modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)` 를 적용하고 흰 배경은 그 레이어 **밖**(아래)에서 칠한다. 내보내기는 (1) 투명 `Bitmap` 레이어에 획 그리기 → (2) 흰색으로 채운 최종 `Bitmap` 위에 레이어를 합성해 PNG 로 압축.
-   - 획 그리기: 연속된 점을 `Path` 로 이어 `quadTo` 로 부드럽게(`moveTo(p0)`; 각 구간 중점으로 `quadTo`), `Paint(ANTI_ALIAS, STYLE=STROKE, CAP=ROUND, JOIN=ROUND)`. 점이 하나뿐인(탭만 한) 획은 같은 점으로 `drawPoint`/선 길이 0 + ROUND cap 으로 **점이 찍힌다**.
-2. **제스처**: `pointerInput` 안에서 `awaitEachGesture { val down = awaitFirstDown(); … drag(down.id) { change.consume() … } }` 로 첫 포인터만 처리(멀티터치 무시). 점은 캔버스 로컬 좌표(px) → dp 로 변환해 저장. 드래그 중 현재 획은 별도 상태로 두어 매 이벤트마다 전체 목록을 복사하지 않는다(`SnapshotStateList` 의 마지막 원소에 점을 추가하거나 `mutableStateOf` + 버전 카운터로 다시 그리기). 손을 떼면 획 확정. 획이 확정될 때만 undo 스택에 들어가고 redo 스택이 비워진다.
-3. **상태/규칙은 순수 클래스로 분리** (`DrawingModel`, Compose·android.graphics 비의존) → 단위 테스트: 도구/굵기/색, 팔레트, 굵기별 dp, 지우개 굵기 = ×3, `strokes`/`redoStack`, `undo()`/`redo()`/`canUndo`/`canRedo`, `isEmpty`, 색 선택 시 도구가 펜으로. **`isEmpty` 정의**: 펜 획이 하나도 없으면 true(iOS 는 PencilKit `strokes.isEmpty` 인데 픽셀 지우개로 모두 지우면 true 가 되는 동작을 Android 에서는 재현하지 않는다 — 전부 지워도 펜 획 기록이 남아 있으면 비어 있지 않은 것으로 본다. 보고서에 차이로 적는다). 지우개 획만 있는 경우도 `isEmpty = true`.
-4. **레이아웃 높이**: 헤더(52) + 제목 + 캔버스(220~400) + 도구(44) + 색(44) + 버튼(56) + 간격 16×N + 아래 32. 캔버스 높이 = `(남는 높이).coerceIn(220.dp, 400.dp)`. 구현은 `BoxWithConstraints` 로 가용 높이를 받아 계산하거나, 열의 나머지를 먼저 측정하는 레이아웃 중 하나를 쓰되, 결과: 360×640 같은 작은 화면에서도 내용이 화면 밖으로 넘치지 않고(세로 스크롤을 넣지 않는다 — 스크롤이 캔버스 드래그와 충돌) 올리기 버튼이 항상 아래에 고정되며, 큰 화면에서는 캔버스가 400dp 로 고정되고 남는 공간은 버튼 위 여백이 된다.
-5. **09 녹음기는 Compose 밖의 컨트롤러 클래스**(`VoiceRecorderController`)로: `MediaRecorder`(API 31+ `MediaRecorder(context)`, 그 미만 `@Suppress("DEPRECATION") MediaRecorder()`), `setAudioSource(MIC)`, `setOutputFormat(MPEG_4)`, `setAudioEncoder(AAC)`, `setAudioChannels(1)`, `setAudioSamplingRate(44100)`, `setAudioEncodingBitRate(128_000)`, `setMaxDuration(30_000)`, `setOutputFile(path)`, `prepare()`, `start()`. `setOnInfoListener` 로 `MEDIA_RECORDER_INFO_MAX_DURATION_REACHED` 를 받으면 정지 처리. 파일은 `cacheDir/mission-voice.m4a`.
-   - `stop()` 은 시작 직후 호출하면 `RuntimeException` 을 던질 수 있다 → 잡아서 "녹음 없음"(`hasRecording = false`, 파일 삭제)으로 처리. `start()`/`prepare()` 실패도 잡아서 녹음 상태를 되돌린다(사용자에게 별도 오류 UI 없음, iOS 와 동일).
-   - 소리 크기: 100ms 마다 `getMaxAmplitude()`(0..32767, 호출 사이의 최대값) → 순수 함수 `levelFromAmplitude(amplitude)`: `amplitude <= 0` → 0, 아니면 `dB = 20·log10(amplitude / 32767.0)`, `level = clamp((dB + 50) / 50, 0, 1)`.
-   - 경과 시간: `SystemClock.elapsedRealtime()` 차이로 계산(`MediaRecorder` 에는 `currentTime` 이 없다), 최대 30초로 clamp, 정지 후 값 고정.
-   - 재생: `MediaPlayer`(`setDataSource(path)`, `prepare()`, `start()`), `setOnCompletionListener` 로 정지 처리, 진행률 = `currentPosition / max(duration, 100ms)`. 한 번에 하나(녹음 중에는 재생 불가 — UI 에서 이미 비활성).
-   - 화면을 떠날 때(`DisposableEffect` onDispose) `reset()`: 녹음 중이면 `stop()`(예외 무시)·`release()`, 재생 정지·`release()`, 임시 파일 삭제. **제출 직후 퇴장 애니메이션 중에도 안전**하도록 이미 해제된 객체를 다시 만지지 않는다.
-   - 앱이 백그라운드로 가면(`ON_STOP`) 녹음 중이면 **정지**(그때까지 녹음분 유지)하고 재생 중이면 정지한다 — Android 는 백그라운드 마이크 접근을 제한하므로 무음이 녹음되는 것을 막는다.
-6. **마이크 권한**: `RECORD_AUDIO` 를 매니페스트에 추가, `<uses-feature android:name="android.hardware.microphone" android:required="false" />`. 녹음 버튼을 누를 때 `checkSelfPermission` → 허용이면 시작, 아니면 `RequestPermission` 런처 → 결과가 허용이면 시작, 거부면 알림창 상태(`showsPermissionAlert`) 켜기. "설정 열기" = `Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))`. 권한 요청 중/직후 화면 재개(`ON_RESUME`) 때 자동 시작하지 않는다(사용자가 다시 눌러야 함).
-7. **05 정리**: `isPerformScreenAvailable` 은 네 유형 모두 true(함수는 유지 — 단위 테스트 변경). `MissionScreen.performAction` 은 `onPerform(if (debug) debugType else null)` 만 호출하고 임시 제출 분기·`SubmissionContent`/`store.submit` import 를 제거한다. 디버그 유형 전환(`debugType`, 알약 길게 누르기)은 **남긴다** — 오늘 미션 유형이 랜덤이라 네 유형을 폰에서 확인하려면 필요하다. 주석을 `// 개발용 유형 전환(디버그 전용). 서버 연결 단계에서 삭제해요.` 로 갱신.
-8. **PNG/무거운 작업은 메인 스레드 밖**: PNG 렌더링+압축, (필요하면) 오디오 파일 읽기는 `Dispatchers.Default/IO`. 처리 중 "올리기" 연타 방지(`submitted`/`processing` 플래그).
+1. **FCM 없이 "수신 → 표시 → 탭 → 이동" 파이프라인만 만든다.** `PushNotifier.show(context, kind, title, body, groupId, submissionId)` 가 알림을 만들어 띄우고, 알림의 `PendingIntent` 가 `MainActivity` 를 `type`/`group_id`/`submission_id` extras 와 함께 연다. 미래의 `FirebaseMessagingService.onMessageReceived` 는 data payload 를 이 함수에 그대로 넘기면 된다(이번에 구현하지 않는다).
+2. **순수 로직을 분리**(Compose·android 비의존, 단위 테스트):
+   - `PushKind`(value: `"topic" | "poke" | "friend_done" | "comment"`, `fromValue(String?)`), `PushDestination(kind, groupId: String?, submissionId: String?)`.
+   - `parsePushDestination(type: String?, groupId: String?, submissionId: String?): PushDestination?` — 알 수 없는/없는 `type` 이면 null. 빈 문자열 id 는 null 로 정규화.
+   - `pushTarget(destination, groups: List<PushGroupSnapshot>): PushTarget` — iOS `open()` 규칙: 그룹이 없으면 `PushTarget.None`; 대상 그룹 = `destination.groupId` 가 **존재하는 그룹 id 와 일치하면 그 그룹**, 아니면(없음/`"mock"` 같은 값/존재하지 않음) **첫 번째 그룹**(iOS 와 같음); 종류가 topic/poke/friendDone → `PushTarget.Mission(groupId)`; comment → 그 그룹의 마지막 미션에 내가 올렸으면 `PushTarget.Results(groupId, missionId)` (백스택은 `Mission → Results`), 아니면 `PushTarget.Mission(groupId)`. `PushGroupSnapshot(id: UUID, lastMissionId: UUID?, lastMissionSubmittedByMe: Boolean)`.
+   - `isNotificationEnabled(prefs: NotificationPrefs, kind: PushKind, groupNotify: Boolean? = null): Boolean` — 서버가 할 필터링을 흉내 내는 순수 함수(미래 FCM 처리와 디버그 수단에서 쓰기 위함): `prefs.all` 이 꺼지면 false; 종류별 값(`topic`/`poke`/`friendDone`/`comment`); `groupNotify == false` 면 false.
+   - `defaultPushTexts(kind, groupName)`(기본 제목/본문; iOS 샘플 문구 기준): 제목 = 그룹 이름(없으면 "HA'WE"), 본문 = topic "오늘의 주제가 도착했어요", poke "누군가 콕 찔렀어요", friend_done "친구가 미션을 완료했어요", comment "내 작품에 댓글이 달렸어요".
+   - `pushChannelSpecs`: 4개 채널의 id/이름/설명 상수 목록.
+3. **`PushCenter`**(Compose 상태를 가진 작은 클래스, `AppViewModel` 이 소유): `pendingDestination: PushDestination?`(읽기 전용 노출), `handle(intent: Intent?)`(extras 파싱 → `pendingDestination` 설정; 알 수 없으면 무시), `consume()`(처리 뒤 null). iOS `PushCenter.shared` 의 싱글턴 대신 ViewModel 소유(Activity 범위) — 새 Activity 인스턴스가 생기면 새 `PushCenter` 가 생긴다.
+4. **인텐트 연결**: `MainActivity` — `onCreate` 에서 `savedInstanceState == null` 일 때만 `intent` 를 `PushCenter.handle` 에 넘기고(회전/재생성 때 같은 알림을 다시 처리하지 않게), `onNewIntent(intent)` 에서 `setIntent(intent)` 후 `handle`. 매니페스트에 `android:launchMode="singleTop"` 을 추가해 앱이 이미 떠 있을 때 알림을 누르면 새 Activity 가 아니라 `onNewIntent` 로 들어오게 한다. `PendingIntent` 는 `FLAG_IMMUTABLE | FLAG_UPDATE_CURRENT`, 알림마다 고유 `requestCode`(예: `System.nanoTime().toInt()` 또는 증가 카운터)로 extras 가 섞이지 않게 한다. `FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TOP`.
+5. **화면 이동은 `MainNavHost` 에서만**: `MainNavHost(session, store, push)` 가 `push.pendingDestination` 을 관찰(`LaunchedEffect(push.pendingDestination)`)하고, null 이 아니면 `pushTarget(...)` 로 계산한 뒤 → `push.consume()` → 백스택 정리(`nav.popBackStack(MainRoute.Home, inclusive = false)`) 후 `Mission(groupId)` 으로 이동, 댓글+제출했으면 이어서 `Results(groupId, missionId)`. `PushTarget.None`(그룹 없음)이면 소비만 하고 이동 없음. **로그아웃 상태에서 알림을 눌렀다면** `MainNavHost` 가 아직 없으므로 `pendingDestination` 은 남아 있고, 로그인해서 `MainNavHost` 가 뜬 뒤 처리된다(iOS 와 동일; 그룹이 없으면 무시).
+   - 이동 코드는 화면이 사라지는 중에 호출되지 않는다(`MainNavHost` 는 항상 살아 있는 최상위 컴포저블이고 `LaunchedEffect` 는 컴포지션에 묶여 있다).
+6. **권한 요청**: `MainNavHost` 가 처음 컴포지션될 때(`LaunchedEffect(Unit)`) `Build.VERSION.SDK_INT >= 33` 이고 `POST_NOTIFICATIONS` 가 허용되지 않았으면 `rememberLauncherForActivityResult(RequestPermission())` 로 한 번 요청한다(결과는 무시 — iOS 와 같이 거부돼도 앱 사용엔 지장 없음). 33 미만은 요청 없음. 같은 `MainNavHost` 수명 동안 한 번만(`rememberSaveable` 플래그) — 로그아웃 뒤 다시 로그인하면 새 `MainNavHost` 이므로 다시 시도될 수 있다(시스템이 이미 영구 거부면 대화상자가 뜨지 않고 즉시 결과만 돌아옴; 허용).
+7. **채널**: `PushChannels.ensure(context)` — 4개 `NotificationChannel`(id = `topic`, `poke`, `friend_done`, `comment`; 이름 "오늘의 주제"/"콕 찌르기"/"친구 완료"/"댓글"; 설명은 iOS 17-1 문구 참고; 중요도 `IMPORTANCE_DEFAULT`; 한국어). 멱등(여러 번 호출해도 안전). API 26 미만은 no-op(minSdk 26 이라 사실상 항상 실행). 호출 위치: **`HaweApplication.onCreate`**(아래).
+8. **`HaweApplication`**(새 `Application` 서브클래스, 매니페스트 `android:name=".HaweApplication"`): `onCreate` 에서 `PushChannels.ensure(this)`. 그리고 **디버그 빌드(`FLAG_DEBUGGABLE`)에서만** `DebugNotificationReceiver` 를 동적으로 등록한다(`ContextCompat.registerReceiver(…, RECEIVER_EXPORTED)` — adb 쉘이 보내는 브로드캐스트를 받아야 하므로 export 필요, 릴리스에서는 등록 코드가 실행되지 않는다).
+9. **디버그 알림 발송**: 액션 `com.sapphire.hawe.debug.NOTIFY`, extras `type`(필수: topic/poke/friend_done/comment), 선택 `group_id`, `submission_id`, `title`, `body`. 수신하면 기본 문구(`defaultPushTexts`)로 `PushNotifier.show(...)`. **권한이 없으면 아무것도 표시되지 않는다**(`NotificationManagerCompat.areNotificationsEnabled()` 이 false 이면 조용히 무시; 33+ 에서는 `POST_NOTIFICATIONS` 필요). 코드에 `// 개발용(디버그 빌드 전용). FCM 연결 단계에서 삭제해요.` 주석. (프로세스가 살아 있어야 하므로 앱을 한 번 실행한 뒤 홈으로 보낸 상태에서 쓰는 방식 — Application 에 등록돼 있어 Activity 가 닫혀도 프로세스가 살아 있는 동안은 동작.)
+10. **알림 작은 아이콘**: `res/drawable/ic_stat_hawe.xml` — `logo_symbol_small.xml` 의 타일 4개 경로를 그대로 쓰되 `android:fillColor` 를 모두 `#FFFFFF` 로 한 단색 벡터. 알림 색(`setColor`)은 `0xFF67A0C3`(accent).
 
 ## Files / Functions to Change
 
-새 파일 (`android/app/src/main/java/com/sapphire/hawe/feature/mission/` 기준):
-- `DrawingModel.kt` — 순수 상태/규칙: `DrawTool`, `DrawThickness`(dot 4/8/14, penWidthDp 3/6/12, label), `DrawPalette`(색 7개 ARGB `Long`/`Int` 값과 라벨), `DrawStroke(points: List<StrokePoint>, color, widthDp, isEraser)`, `DrawingModel`(undo/redo, `isEmpty`, 도구 선택 규칙, 지우개 굵기 ×3)
-- `DrawingRenderer.kt` — `android.graphics` 기반 `drawStrokes(canvas, strokes, scale)` 와 PNG 렌더링 `renderDrawingPng(strokes, widthDp, heightDp, scale = 2f): ByteArray`
-- `DrawMissionScreen.kt` — 06 화면(헤더 되돌리기/다시 실행, 제목, 캔버스, 도구 줄, 색 줄, 올리기)
-- `VoiceLogic.kt` — 순수 함수/상태: `levelFromAmplitude`, `barIndexFor(elapsedSeconds)`, `updatedLevels(levels, elapsed, level)`, `voiceTimeText(seconds)`, `waveformBarState(index, count, level, progress)`, 컨트롤 활성 규칙(`VoiceUiState`: `canRecord…`, `controlsEnabled`, `canSubmit`, `hasDraft`)
-- `VoiceRecorderController.kt` — `MediaRecorder`/`MediaPlayer`/타이머/상태(Compose 상태 노출), `start()/stop()/reset()/togglePlayback()/release()`
-- `VoiceMissionScreen.kt` — 09 화면(시간·파형·컨트롤·올리기·권한 알림창)
+새 파일 (`android/app/src/main/java/com/sapphire/hawe/` 기준):
+- `core/push/PushModel.kt` — `PushKind`, `PushDestination`, `parsePushDestination`, `PushGroupSnapshot`, `PushTarget`, `pushTarget`, `isNotificationEnabled`, `defaultPushTexts`, `PushChannelSpec` 상수
+- `core/push/PushCenter.kt` — Compose 상태를 가진 `PushCenter`(`pendingDestination`, `handle(Intent?)`, `consume()`)
+- `core/push/PushNotifier.kt` — `PushChannels.ensure(context)`, `PushNotifier.show(...)`(알림 구성, `PendingIntent`, 권한/차단 확인)
+- `core/push/DebugNotificationReceiver.kt` — 디버그 전용 브로드캐스트 수신기 + 등록 헬퍼
+- `HaweApplication.kt` — 채널 생성 + 디버그 수신기 등록
+- `res/drawable/ic_stat_hawe.xml` — 알림 작은 아이콘
 
 수정할 파일:
-- `feature/mission/MissionPerformScreen.kt` — `DRAW`/`VOICE` 분기 추가: `DrawMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }`, `VoiceMissionScreen(topic, onClose) { file, duration, waveform -> onSubmit(SubmissionContent.Voice(file, duration, waveform)) }`.
-- `feature/mission/MissionPerformCommon.kt` — `isPerformScreenAvailable` = 네 유형 true. (`PerformEntryDecision.Unsupported` 는 잘못된 유형 문자열 방어용으로 유지.)
-- `feature/mission/MissionScreen.kt` — 위 7번.
-- `app/src/main/AndroidManifest.xml` — `RECORD_AUDIO` + `uses-feature microphone required=false`.
-- 변경 금지(원칙): `core/data/DataStore.kt`, `core/model/*`, `app/MainNavigation.kt`(필요 없을 것으로 보임 — 수행 라우트는 이미 유형 일반), `app/AuthNavigation.kt`, `feature/auth/*`, `feature/groups/*`, `designsystem/components/*`. 필요해 보이면 최소 변경 후 보고서에 이유 기재.
+- `AndroidManifest.xml` — `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />`, `<application android:name=".HaweApplication" …>`, 액티비티 `android:launchMode="singleTop"`.
+- `MainActivity.kt` — `AppViewModel.push.handle(intent)`(`onCreate` 에서 `savedInstanceState == null` 일 때, `onNewIntent` 에서 `setIntent` 후).
+- `app/AppViewModel.kt` — `val push = PushCenter()`.
+- `app/RootScreen.kt` — `MainNavHost(session, store, push)`.
+- `app/MainNavigation.kt` — `MainNavHost` 시그니처에 `push: PushCenter` 추가, 권한 요청 `LaunchedEffect`, `pendingDestination` 처리(`pushTarget` → 백스택 정리 + `Mission`/`Results` 이동).
+- 변경 금지(원칙): `core/data/DataStore.kt`, `core/model/*`, `core/AppSession.kt`, `app/AuthNavigation.kt`, 기존 화면들. 17-1 알림 설정 화면은 수정하지 않는다.
 
-테스트 (`android/app/src/test/java/com/sapphire/hawe/feature/mission/`):
-- `DrawingModelTest.kt`, `VoiceLogicTest.kt`, 기존 `MissionPerformCommonTest.kt` 수정(네 유형 모두 available)
+테스트 (`android/app/src/test/java/com/sapphire/hawe/core/push/`):
+- `PushModelTest.kt`
 
 ## Implementation Steps
 
 0. **환경**(이전 단계와 동일, 준비됨): `cd C:\hawe\android`, `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot"`, SDK `C:\Android\Sdk`(`local.properties` 있음). `.\gradlew.bat assembleDebug testDebugUnitTest lintDebug installDebug`. 폰은 USB 연결(`C:\Android\Sdk\platform-tools\adb.exe devices` 에 `device`); 안 보이면 설치만 건너뛰고 보고서에 적는다.
-1. `DrawingModel.kt` + `DrawingModelTest` (순수 규칙부터).
-2. `DrawingRenderer.kt` (그리기·PNG), `DrawMissionScreen.kt` (제스처, 헤더 undo/redo, 도구/색 줄, 높이 계산, 올리기).
-3. `VoiceLogic.kt` + `VoiceLogicTest`.
-4. `VoiceRecorderController.kt`, `VoiceMissionScreen.kt` (파형, 컨트롤, 권한 요청/알림창, 라이프사이클 정리).
-5. 매니페스트, `MissionPerformScreen` 분기, `isPerformScreenAvailable`, `MissionScreen` 정리 + 테스트 수정.
-6. 빌드·테스트·lint·설치, 결과를 `.agent/report.md` 에 기록.
+1. `PushModel.kt` + `PushModelTest`.
+2. `ic_stat_hawe.xml`, `PushNotifier.kt`(채널 + 표시), `PushCenter.kt`.
+3. `HaweApplication.kt` + `DebugNotificationReceiver.kt` + 매니페스트 수정.
+4. `AppViewModel` / `MainActivity` / `RootScreen` 연결.
+5. `MainNavigation.kt` — 권한 요청 + 대기 중 목적지 처리.
+6. 빌드·테스트·lint·설치, 폰에서 adb 로 발송해 확인(`Validation Steps`), 결과를 `.agent/report.md` 에 기록.
 
 ## Constraints
 
 - 변경 범위는 `android/` 안. `ios/`, `src/`(백엔드), `cordova/`, `frontend/`, `docs/`, 루트 `.gitignore`, `AGENTS.md`/`CLAUDE.md` 수정 금지. git 상태를 바꾸는 명령 금지(commit/checkout/stash/reset/clean 등).
-- iOS 파일은 읽기 전용. 문구·수치는 iOS 와 동일.
-- **새 의존성 추가 금지**(그림판·녹음 모두 플랫폼 API 로 구현). Material 기본 시각 컴포넌트 사용 금지(`HButton`, `HChip`, `HAlert` 등 기존 컴포넌트와 직접 그리기).
-- `DataStore`/모델 시그니처·불변 규칙 변경 금지. 서버 호출·영속화 없음.
-- **화면이 사라지는 중에도 내비게이션 호출 금지**(4단계 버그 재발 방지). 진입 방어는 이미 `MainNavigation.kt` 에서 한 번만 한다.
+- iOS 파일은 읽기 전용. 문구·이동 규칙은 iOS 와 동일(확장: payload 의 `group_id` 가 실제 그룹과 일치하면 그 그룹 사용 — 그 외에는 iOS 와 같이 첫 번째 그룹).
+- **FCM/Firebase 추가 금지**(`google-services`, `firebase-messaging`, 서비스 클래스 등). 새 라이브러리 추가 금지.
+- `DataStore`/모델/`AppSession` 시그니처·불변 규칙 변경 금지. 서버 호출·영속화 없음.
+- 디버그 전용 코드는 **`FLAG_DEBUGGABLE` 일 때만 실행**되게 가드한다. 릴리스에서 수신기를 등록하지 않는다. 디버그 수신기는 `exported` 이므로 릴리스에 남지 않는 것이 중요하다.
+- 알림 payload 의 extras 는 **신뢰하지 않는다** — 알 수 없는 `type` 은 무시, id 는 UUID 파싱 실패 시 무시, 존재하지 않는 그룹이면 첫 번째 그룹/무시.
+- 화면이 사라지는 중에도 내비게이션 호출 금지(4단계 버그). 이동은 `MainNavHost` 의 `LaunchedEffect` 안에서만.
 - 한글이 들어간 파일은 **UTF-8(BOM 없음)**. PowerShell `Set-Content`/`Out-File` 로 한글 소스를 쓰지 않는다.
-- 코드 주석은 iOS 처럼 한국어로 짧게, 화면 문구는 Kotlin 안 한국어 리터럴.
+- 코드 주석은 iOS 처럼 한국어로 짧게, 문구는 Kotlin 안 한국어 리터럴.
 
 ## Edge Cases
 
-**06 그림**
-- 아무것도 그리지 않음 → "올리기" 비활성, `hasDraft` false(닫기 확인 없음), undo/redo 둘 다 비활성(회색).
-- 탭만 한 번 → 점이 찍히고 비어 있지 않음. 아주 빠른 짧은 획, 캔버스 가장자리 밖으로 드래그(좌표가 캔버스 밖이어도 크래시 없음 — 클리핑됨).
-- 되돌리기 → 다시 실행 → 새 획을 그리면 다시 실행 비활성화. 되돌리기를 모두 하면 비어 있음으로 돌아간다. 지우개 획도 한 번 되돌리기로 복원된다.
-- 지우개: 이미 그린 획 위에서만 지워지고 흰 바탕이 파이지 않는다(PNG 에서도 배경이 투명/검정이 되지 않고 흰색). 지우개 상태에서 색을 누르면 펜으로 바뀌고 그 색이 선택 표시된다. 지우개 상태에서는 색 선택 표시가 없다.
-- 굵기 변경은 이후 획에만 적용(이미 그린 획 불변).
-- 두 손가락/멀티터치: 첫 포인터만 그리고 나머지는 무시(획이 튀지 않음).
-- 화면 가장자리에서 시작하는 시스템 뒤로 가기 제스처와 캔버스 드래그가 충돌하지 않도록 캔버스는 좌우 20dp 여백 안에 있다.
-- 작은 화면(360×640): 캔버스 최소 220, 내용이 넘치지 않음. 큰 화면: 캔버스 400 고정.
-- 올리기 연타 → 제출 한 번. PNG 인코딩 중에도 UI 가 멈추지 않는다. 구성 변경(글자 크기 등)으로 Activity 가 재생성되면 그림이 사라질 수 있다(보존 불필요 — 보고서에 한계 기재).
-- 전부 지운 뒤(펜 획 기록은 남음) 올리면 흰 빈 이미지가 제출될 수 있다(iOS 와 다른 점, 허용).
-
-**09 음성**
-- 최초 녹음 버튼 → 시스템 권한 대화상자 → 허용 즉시 녹음 시작 / 거부 → 알림창 "마이크 권한이 필요해요" → "설정 열기" 로 앱 설정 이동, "취소" 로 닫기. "다시 묻지 않음" 후에는 대화상자 없이 곧바로 알림창.
-- 30초 자동 정지: 시간 표시 00:30, 마지막 막대까지 채워지고 녹음 버튼이 대기 모양으로, "다시/미리 듣기/올리기" 활성.
-- 녹음을 아주 짧게(0.1~0.3초) 시작하자마자 멈춤 → `MediaRecorder.stop()` 예외 가능 → 녹음 없음으로 정리(크래시·고착 금지). 연속으로 녹음 버튼을 빠르게 두 번 눌러도 상태가 꼬이지 않는다.
-- "다시" → 시간 00:00, 파형 초기화(전부 높이 8 `waveformIdle`), 파일 삭제, 컨트롤 비활성. 다시 녹음하면 새 파일.
-- 미리 듣기 중 "다시"/"올리기"/닫기 → 재생 정지 후 처리. 재생이 끝나면 자동으로 정지 상태(아이콘 play). 재생 중 파형 진행 색 변화.
-- 녹음 중 닫기 X → "그만둘까요?" 확인(`hasDraft` 가 녹음 중도 포함); 확정 시 녹음이 정리되고 임시 파일이 지워진다.
-- 앱을 백그라운드로 보냈다 돌아오면: 녹음 중이었다면 이미 정지되어 있고(그때까지 녹음분 유지) 화면이 정상, 재생 중이었다면 정지.
-- 전화 수신/다른 앱의 오디오 포커스 — 별도 처리 없음(범위 밖). 단 크래시가 없어야 한다.
-- 올리기 연타 → 제출 한 번. 제출 후 퇴장 애니메이션 동안 `release()` 된 recorder/player 를 다시 만지지 않는다.
-- 마이크가 없는 기기: 녹음 시작 실패 → 상태 되돌림(`isRecording=false`), 알림창은 띄우지 않는다.
-
-**공통**: 3버튼/제스처 내비게이션에서 하단 버튼이 가려지지 않는다. 같은 그룹의 오늘 미션을 이미 올렸다면 수행 화면에 들어올 수 없다(기존 진입 방어). 디버그 유형 전환으로 열린 06/09 에서 제출하면 `Submission.type` 은 실제 `mission.type` 으로 저장된다(개발용).
+- **권한 요청**: Android 13+ 에서만 대화상자. 이미 허용이면 요청하지 않음. 거부해도 앱은 정상 동작(알림이 표시되지 않을 뿐). 12 이하에서는 요청 없이 알림이 표시된다. 로그인 직후 01/홈이 먼저 그려진 뒤 대화상자가 뜬다.
+- **채널**: 이미 만든 채널을 다시 만들어도 사용자의 채널 설정(소리 끄기 등)은 유지된다(Android 동작). 채널 이름/설명 변경은 최초 생성 시에만 반영됨 — 개발 중 이름을 바꾸면 앱 정보에서 데이터 삭제가 필요할 수 있음(보고서에 한 줄).
+- **알림 누르기 — 콜드 스타트**: 프로세스가 죽은 상태에서 알림을 누르면 새 Activity+새 ViewModel 이 만들어져 **로그아웃 상태(A1)** 로 열린다(메모리 전용 상태 — iOS 와 동일). `pendingDestination` 은 유지되고, 로그인 후 `MainNavHost` 가 처리하되 그룹이 없으면 무시된다. 이 경우 에러·무한 반복이 없다.
+- **알림 누르기 — 웜**(앱이 켜진 상태/백그라운드): `singleTop` + `onNewIntent` 로 기존 Activity 에 전달되어 현재 백스택이 `Home` 까지 정리된 뒤 목적지로 이동한다. 이미 05 에 있을 때 같은 05 알림을 눌러도 `Home → Mission` 으로 정리되고 단일 인스턴스.
+- **같은 인텐트 재처리 금지**: 화면 회전(세로 고정이라 드묾)/구성 변경으로 Activity 가 재생성돼도 `savedInstanceState != null` 이면 인텐트를 다시 처리하지 않는다. `pendingDestination` 은 처리 뒤 `consume()` 로 비워 같은 알림이 두 번 이동하지 않는다.
+- **로그아웃 상태에서 알림**: 위 6번. 로그인 뒤 처리, 그룹 없으면 소비만.
+- **comment 알림**: 마지막 미션에 내가 올렸을 때만 `Results` 까지. 안 올렸으면 `Mission` 만(결과 공개는 올려야 볼 수 있다).
+- **존재하지 않는 `group_id`**(예: 샘플의 `"mock"`): 첫 번째 그룹으로. 그룹이 하나도 없으면 이동 없음.
+- **빈/누락된 extras**: `type` 없음 → 아무 일도 하지 않음(앱은 그냥 열림).
+- **알림 표시**: 앱이 포그라운드일 때도 알림이 표시된다(Android 기본). 알림 탭 시 알림은 자동으로 사라진다(`setAutoCancel(true)`).
+- **디버그 수신기**: 앱 프로세스가 죽어 있으면 수신 못 함(앱을 한 번 실행). `type` 누락/알 수 없는 값이면 무시. 권한 없으면 표시 없음(로그 한 줄).
+- **작은 아이콘**: 단색(알파)이어야 하며 컬러 아이콘이면 회색 사각형으로 보인다 — `ic_stat_hawe.xml` 사용.
 
 ## Regression Risks
 
-- `MissionScreen` CTA 변경: 5·6단계(1/3)에서 확인된 카운트다운, 콕 찌르기, 16 이동, 글/사진 수행·제출 후 토스트가 그대로여야 한다. 임시 제출 분기 삭제로 **릴리스에서 그림/음성이 "준비 중이에요" 토스트였던 동작은 사라진다**(이제 정상 수행 화면).
-- 매니페스트 권한 추가는 설치/실행에 영향 없음. `uses-feature microphone required=false` 누락 시 마이크 없는 기기에서 설치가 막힌다.
-- 수행 라우트의 전환 애니메이션·진입 방어·제출 신호 흐름은 변경하지 않는다(유형만 늘어남). 그림/음성 화면이 `MissionHeader` 를 쓰므로 닫기 확인과 `BackHandler` 가 글/사진과 같이 동작해야 한다.
-- 녹음 파일 `cacheDir/mission-voice.m4a` 는 `DataStore.submit` 이 복사한 뒤 화면 정리에서 지워진다 — 제출 전에 지우면 `Submission.mediaURL` 이 null 이 된다(순서 유의: 제출 → 복귀 → onDispose 정리).
-- 그림판의 `graphicsLayer(Offscreen)` 이 낮은 사양 기기에서 성능에 영향 — 이번엔 문제 없음. 점 수가 매우 많은 긴 획에서도 입력 지연이 심하지 않은지 폰에서 확인.
+- `launchMode="singleTop"`: 런처에서 앱을 다시 열 때 동작(새 인스턴스가 아니라 기존 인스턴스 사용)이 바뀐다 — 기존 흐름(로그인, 화면 이동, 카메라/사진 선택/권한 대화상자 복귀)에 영향이 없어야 한다. 특히 시스템 권한 대화상자·사진 선택기에서 돌아올 때 Activity 가 재생성되지 않는지.
+- `MainNavHost` 시그니처 변경: 호출부는 `RootScreen.kt` 한 곳.
+- `AppViewModel` 에 `push` 추가: 기존 `dataStore`/`appSession` 생성과 무관.
+- 새 `Application` 서브클래스: 기존에 `android:name` 이 없었으므로 처음 도입 — 앱 시작 시간/동작 영향 없음(채널 생성은 가볍다).
+- 권한 대화상자가 로그인 직후 뜨면서 키보드/화면 전환과 겹치지 않는지(01/04 진입 뒤). 대화상자가 떠 있는 동안 화면 회전/백그라운드 전환에서 크래시가 없어야 한다.
+- 17-1 알림 설정은 앱 내부 값만 바꾸며 이번 변경과 무관(서버 필터링을 흉내 내는 `isNotificationEnabled` 는 순수 함수로만 존재하고 UI 에 연결하지 않는다).
 
 ## Tests Required
 
-JVM 단위 테스트(JUnit4), 기존 40개 + 6단계 1/3 에서 늘어난 개수 통과 유지:
-- `DrawingModelTest`:
-  - 초기값: 펜, 보통 굵기, 색 0, `isEmpty`, `canUndo/canRedo` false, 팔레트 7개와 색상 값(`#111111, #8E8E93, #E5484D, #F5A524, #F2D74E, #30A46C, #2F5BFF`)
-  - 굵기: dot 4/8/14, 펜 dp 3/6/12, 지우개 dp = 펜 × 3 (9/18/36)
-  - 획 추가 → `isEmpty` false, `canUndo` true, undo → 비어 있음·`canRedo` true, redo → 복원, undo 후 새 획 → redo 비워짐, 빈 상태 undo/redo 는 무동작
-  - 지우개 획만 있는 경우 `isEmpty` true, 펜 획 + 지우개 획이면 false
-  - 색 선택 시 도구가 펜으로 바뀜, 지우개 상태에서는 "색 선택 표시" 규칙(`showsColorSelection`) false
-  - 굵기 변경은 기존 획에 영향 없음
-- `VoiceLogicTest`:
-  - `levelFromAmplitude`: 0 → 0, 32767 → 1, 약 -50dB 이하(예: 100) → 0, -25dB 부근 → 약 0.5, 음수 방어
-  - `barIndexFor`: 0초 → 0, 15초 → 16, 29.99초 → 31, 30초 이상 → 31(범위 clamp)
-  - `updatedLevels`: 같은 막대에서 큰 값 유지(max), 미녹음 막대는 -1 유지, 제출용 필터(`>= 0`)
-  - `voiceTimeText`: 0 → `00:00`, 5.9 → `00:05`, 59.99 → `00:59`, 61 → `01:01`, 30 → `00:30`
-  - `waveformBarState`: 미녹음 → idle(높이 8), 녹음된 막대 높이 `8 + 72·level`, 재생 진행률에 따른 색 상태(played / notPlayed), 진행률 null 이면 모두 played
-  - `VoiceUiState`: 대기/녹음 중/녹음 있음 조합에 따른 컨트롤 활성(다시·미리듣기·올리기), `hasDraft`(녹음 있음 또는 녹음 중)
-- `MissionPerformCommonTest`: `isPerformScreenAvailable` 네 유형 모두 true, 진입 판단 케이스 갱신(DRAW/VOICE 요청 → Allow).
+JVM 단위 테스트(JUnit4), 기존 58개 통과 유지:
+- `PushModelTest`:
+  - `PushKind.fromValue`: `"topic"`, `"poke"`, `"friend_done"`, `"comment"` → 각 종류, `"friendDone"`/`""`/null/`"unknown"` → null
+  - `parsePushDestination`: 올바른 값(`group_id`, `submission_id` 유지), 알 수 없는 type → null, type null → null, 빈 문자열 id → null 로 정규화
+  - `pushTarget`: 그룹 0개 → `None`; topic/poke/friendDone → `Mission(첫 그룹)`; comment + 마지막 미션 내가 올림 → `Results(group, lastMissionId)`; comment + 안 올림 → `Mission`; comment + 미션 없음(`lastMissionId == null`) → `Mission`; `groupId` 가 존재하는 두 번째 그룹과 일치 → 그 그룹; 존재하지 않는 id("mock", 랜덤 UUID) → 첫 그룹
+  - `isNotificationEnabled`: `all=false` 면 모든 종류 false, `all=true` 에서 종류별 값(`friendDone` 기본 false), `groupNotify=false` 면 false, `groupNotify=null`/true 는 영향 없음
+  - `defaultPushTexts`: 종류별 본문 4개, 그룹 이름이 제목, 이름이 비면 "HA'WE"
+  - `pushChannelSpecs`: id 4개(`topic`, `poke`, `friend_done`, `comment`)가 서로 다르고 `PushKind.value` 와 일치
 
-Canvas 제스처·MediaRecorder·MediaPlayer·권한 UI 는 자동 테스트하지 않는다 — 폰 확인으로 대체.
+알림 표시·권한 대화상자·`PendingIntent`·내비게이션의 자동 테스트는 만들지 않는다 — 폰 확인으로 대체.
 
 ## Validation Steps
 
 Codex 가 직접 실행: `.\gradlew.bat assembleDebug testDebugUnitTest lintDebug installDebug` (JDK 17). 기준: 빌드 성공, 테스트 전부 통과, lint 새 오류 0(경고 건수 보고), 폰 설치 후 `adb shell am start -n com.sapphire.hawe/.MainActivity`.
 
-사용자가 폰에서 확인할 시나리오 — 보고서에 그대로 적을 것:
-1. 가입 → 03 에서 `K7Q2PX` 참여(또는 02 로 그룹 생성) → 홈 카드 → 05. **디버그 빌드에서 "오늘은 ○○" 알약을 길게 눌러** 그림 → 06, 음성 → 09 를 번갈아 연다(글/사진은 이전 단계 확인).
-2. **06 그림**: 처음에는 "올리기" 비활성·되돌리기/다시 실행 회색. 손가락으로 그리면 선이 부드럽게 따라온다. 탭 한 번으로 점. 펜/지우개 전환, 굵기 3단계가 선 굵기와 지우개 크기에 반영, 색 7개(고르면 테두리 표시, 지우개 중에는 표시 없음, 색을 누르면 펜으로 복귀), 지우개로 선 일부가 지워지고 흰 바탕은 그대로, 되돌리기/다시 실행, 그림이 있는 상태에서 X/뒤로 → "그만둘까요?", 올리기 → 05 복귀 + 토스트 + 완료 +1.
-3. **09 음성**: 처음에는 `00:00`, 파형 전부 회색 낮은 막대, 다시/미리듣기/올리기 비활성(투명). 녹음 버튼 → 권한 대화상자 → 허용하면 시간이 올라가고 말하면 파형이 차오름, 녹음 버튼이 흰 네모로 바뀜. 정지 → 다시/미리듣기/올리기 활성. 미리 듣기 → 소리가 나고 파형이 재생 위치에 따라 진해졌다가 끝나면 자동 정지. 30초까지 두면 자동 정지. 다시 → 초기화. 올리기 → 05 복귀 + 토스트.
-4. 권한을 거부했을 때 "마이크 권한이 필요해요" 알림창 → "설정 열기" 로 앱 설정 이동 → 마이크 켜고 돌아와 다시 녹음.
-5. 녹음 중 앱을 홈으로 보냈다 돌아오면 녹음이 멈춰 있고 화면이 정상인지. 녹음 중 X → "그만둘까요?".
-6. 작은 화면 느낌 확인: 폰의 글자 크기/화면 크기를 키워도 06 의 올리기 버튼이 화면 아래에 보이는지, 3버튼/제스처 내비게이션 하단.
-7. 이전 단계 회귀: 05 카운트다운, 콕 찌르기, 16 이동·나가기 후 홈 복귀, 글/사진 수행·제출.
-8. 릴리스 동작 확인은 불가하므로 디버그 전용 코드(유형 전환)가 `FLAG_DEBUGGABLE` 로 가드되어 있고 임시 제출 분기가 삭제되었음을 코드로 확인했다고 보고서에 적기.
+사용자가 폰에서 확인할 시나리오 — 보고서에 **adb 명령까지 그대로** 적을 것 (`adb` = `C:\Android\Sdk\platform-tools\adb.exe`):
+1. 가입(A2→A3)해서 01 에 처음 들어오면 **알림 권한 대화상자**가 뜬다(Android 13+). "허용". 03 에서 `K7Q2PX` 로 그룹에 참여해 홈에 그룹이 있는 상태로 만든다.
+2. 앱을 홈으로 보낸 뒤(프로세스는 살려 둔다) 알림을 보낸다:
+   - `adb shell am broadcast -a com.sapphire.hawe.debug.NOTIFY --es type topic` → 알림 "컴공 동기"가 아닌 기본 제목(그룹 id 를 안 주면 제목 "HA'WE") + "오늘의 주제가 도착했어요".
+   - `--es type poke`, `--es type friend_done`, `--es type comment` 도 각각 표시되고, 알림 설정에서 채널이 4개(오늘의 주제 / 콕 찌르기 / 친구 완료 / 댓글)로 보인다 (앱 정보 → 알림).
+3. 알림을 누르면: topic/poke/friend_done → **05 오늘의 미션**(뒤로 가면 홈). comment → 오늘 미션을 **안 올렸다면** 05, **올렸다면** 05 위에 **결과 공개**(뒤로 → 05 → 홈). 05 에 이미 있는 상태에서 눌러도 `Home → 05` 로 정리.
+4. 직접 이동 확인(알림 없이): `adb shell am start -n com.sapphire.hawe/.MainActivity --es type comment --es group_id mock` (앱이 켜져 있으면 `onNewIntent` 경로, 꺼져 있으면 로그인 후 처리).
+5. 권한을 거부하거나 설정에서 알림을 꺼 둔 상태에서 브로드캐스트를 보내면 아무 알림도 표시되지 않고 앱은 크래시하지 않는다.
+6. 로그아웃(17) 상태에서 알림을 보내 누르면 로그인 화면이 열리고, 로그인 후(그룹이 있으면 해당 화면, 없으면 이동 없음) 크래시 없음.
+7. 이전 단계 회귀: 사진 선택기/카메라 권한 대화상자에서 돌아왔을 때 앱이 새로 시작(재생성)되지 않는다, 홈 → 05 → 수행 → 결과 공개, 마이페이지 흐름.
+8. 릴리스 빌드 확인은 불가하므로 디버그 수신기 등록이 `FLAG_DEBUGGABLE` 가드 안에만 있음을 코드로 확인했다고 보고서에 적기.
 
 ## Potential Merge Conflicts
 
 - `android/` 만 수정. 백엔드·iOS·Cordova 와 겹치지 않는다.
-- 공유 파일 수정: `feature/mission/MissionScreen.kt`, `MissionPerformScreen.kt`, `MissionPerformCommon.kt`, `AndroidManifest.xml`. 다음 단계(7단계 결과 공개 10~14: 05 의 "친구들 작품 보기" 연결, 음성 작품 재생)가 `MissionScreen.kt` 를 다시 수정하므로 이 단계를 먼저 병합한다.
-- 작업 트리에 이전 단계들의 미커밋 변경이 남아 있을 수 있다. `git status` 로 확인만 하고 커밋하지 않는다.
-- `.agent/report.md` 는 Codex 소유. 기준 iOS 커밋(`git log -1 --format=%h -- ios/`), 빌드·테스트·lint·설치 결과, iOS 와 다르게 한 부분(`isEmpty` 정의, 픽셀 지우개 구현 방식, 앰플리튜드→레벨 변환, 백그라운드 정지, 높이 계산 방식), 폰 확인 체크리스트, 남은 위험을 적는다.
+- 공유 파일 수정: `AndroidManifest.xml`, `MainActivity.kt`, `app/AppViewModel.kt`, `app/RootScreen.kt`, `app/MainNavigation.kt`. 서버 연결 단계(FCM 서비스, 토큰 등록, 서버 알림 설정 저장)가 `PushNotifier.show` 와 `PushCenter` 를 그대로 호출하므로 이 단계를 먼저 병합한다.
+- 작업 트리에 이전 단계들의 미커밋 변경(15 기록 캘린더 포함)이 남아 있을 수 있다. `git status` 로 확인만 하고 커밋하지 않는다.
+- `.agent/report.md` 는 Codex 소유. 기준 iOS 커밋(`git log -1 --format=%h -- ios/`), 빌드·테스트·lint·설치 결과, iOS 와 다르게 한 부분(그룹 id 일치 시 해당 그룹 사용, 싱글턴 대신 ViewModel 소유, 디버그 브로드캐스트), 폰 확인 체크리스트(adb 명령 포함), 남은 위험(FCM/토큰/서버 필터링 미구현, 앱이 완전히 종료되면 메모리 상태가 사라져 알림 탭 시 로그인 화면)을 적는다.

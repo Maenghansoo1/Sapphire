@@ -22,16 +22,14 @@ import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.GroupSummary
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
-import com.sapphire.hawe.designsystem.components.HToastHost
 import com.sapphire.hawe.designsystem.components.MemberRow
-import com.sapphire.hawe.designsystem.components.rememberHToastState
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.*
 import java.time.Instant
 
 @Composable
-fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (String) -> Unit) {
-    val toast = rememberHToastState()
+fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (String) -> Unit,
+    onMyPage: () -> Unit) {
     LaunchedEffect(Unit) { store.refreshTodayMissions() }
     val groups = store.summaries
     val bottom = ctaBottomPadding()
@@ -43,7 +41,7 @@ fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (String) -> Unit) {
                 Spacer(Modifier.weight(1f))
                 HeaderIcon(HIcon.PLUS, 24, "그룹 추가", onAdd)
                 Spacer(Modifier.width(16.dp))
-                HeaderIcon(HIcon.PERSON, 22, "마이페이지") { toast.show("준비 중이에요") }
+                HeaderIcon(HIcon.PERSON, 22, "마이페이지", onMyPage)
             }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = HLayout.screenPaddingCompact)
@@ -57,7 +55,6 @@ fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (String) -> Unit) {
                 }
             }
         }
-        HToastHost(toast)
     }
 }
 

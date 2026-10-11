@@ -22,6 +22,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
@@ -33,13 +34,14 @@ enum class HNavLeading { NONE, BACK, CLOSE }
 
 @Composable
 fun HNavBar(title: String? = null, leading: HNavLeading = HNavLeading.NONE,
-            onLeading: () -> Unit = {}, trailing: @Composable () -> Unit = {}) {
+            onLeading: () -> Unit = {}, titleStyle: TextStyle = HType.navTitle,
+            trailing: @Composable () -> Unit = {}) {
     var trailingWidthPx by remember { mutableIntStateOf(0) }
     val trailingPadding = with(LocalDensity.current) { trailingWidthPx.toDp() + 8.dp }
     Box(Modifier.fillMaxWidth().height(HLayout.headerHeight), contentAlignment = Alignment.Center) {
         if (title != null) Text(title,
             modifier = Modifier.fillMaxWidth().padding(horizontal = maxOf(HLayout.minTouch + 8.dp, trailingPadding)),
-            style = HType.navTitle, color = HColors.ink, textAlign = TextAlign.Center,
+            style = titleStyle, color = HColors.ink, textAlign = TextAlign.Center,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(HLayout.minTouch).then(if (leading != HNavLeading.NONE) Modifier.clickable(onClick = onLeading) else Modifier),
