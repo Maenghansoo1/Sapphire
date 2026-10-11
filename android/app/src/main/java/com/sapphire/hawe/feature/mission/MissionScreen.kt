@@ -26,7 +26,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
-import com.sapphire.hawe.core.data.SubmissionContent
 import com.sapphire.hawe.core.model.MissionMember
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.TodayMission
@@ -53,18 +52,11 @@ fun MissionScreen(id: UUID, store: DataStore, onBack: () -> Unit, onGroupInfo: (
         if (submittedSignal) { toast.show("오늘의 미션을 올렸어요"); onSubmittedHandled() }
     }
     val debug = LocalContext.current.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-    // 개발용 유형 전환, 6단계(06·09) 완료 시 삭제.
+    // 개발용 유형 전환(디버그 전용). 서버 연결 단계에서 삭제해요.
     var debugType by remember(id) { mutableStateOf<MissionType?>(null) }
     val displayType = if (debug) debugType ?: mission.type else mission.type
     val bottom = ctaBottomPadding()
-    val performAction = {
-        if (isPerformScreenAvailable(displayType)) onPerform(if (debug) debugType else null)
-        else if (debug) {
-            // 개발용 임시 제출, 6단계(06·09)에서 교체해요.
-            store.submit(SubmissionContent.Text("개발용 임시 제출"), id)
-            toast.show("오늘의 미션을 올렸어요")
-        } else toast.show("준비 중이에요")
-    }
+    val performAction = { onPerform(if (debug) debugType else null) }
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
         Column(Modifier.fillMaxSize().padding(horizontal = HLayout.screenPaddingCompact)) {
             HNavBar(mission.group.name, leading = HNavLeading.BACK, onLeading = onBack, trailing = {

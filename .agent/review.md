@@ -1,64 +1,48 @@
-# Review — Android 6단계 (1/3): 미션 수행 공통 틀 + 08 글 + 07 사진
+# Review — Android 6단계 (2/3): 06 그림 + 09 음성
 
-기준: `.agent/plan.md`, `.agent/report.md`, 작업 트리의 `android/` 미커밋 변경. 범위 밖 파일 변경 없음, 새 의존성은 CameraX 4개(1.6.2)뿐, `DataStore`/모델 변경 없음, 매니페스트는 CAMERA 권한 + `uses-feature required=false` 2개 확인.
-Codex 가 `assembleDebug` / `testDebugUnitTest`(40개 통과) / `lintDebug`(오류 0) / `installDebug` 를 직접 실행한 결과는 보고서대로라고 가정했다. 아래는 코드를 읽어 확인한 내용이며 폰에서 직접 눌러 보지는 않았다.
+기준: `.agent/plan.md`, `.agent/report.md`, 작업 트리의 `android/` 미커밋 변경. 범위 밖 파일 변경 없음, 새 의존성 없음, `DataStore`/모델/`MainNavigation.kt` 변경 없음, 매니페스트는 `RECORD_AUDIO` + `uses-feature microphone required=false` 확인.
+Codex 가 `assembleDebug` / `testDebugUnitTest`(46개 통과) / `lintDebug`(오류 0) / `installDebug` 를 직접 실행한 결과는 보고서대로라고 가정했다. 아래는 코드를 읽어 확인한 내용이며 폰에서 직접 그려 보거나 녹음해 보지는 않았다.
 
 ## 확인한 항목 (문제 없음)
-- **내비게이션**: `MissionPerform(groupId, type?)` 라우트, 수직 슬라이드 전환(진입/팝 종료에만 지정), 진입 판단(`performEntryDecision`)은 `remember(entry)` 로 한 번만 결정되고 `LaunchedEffect(entry)` 에서만 내비게이션 → 제출 직후 `didSubmit` 이 true 가 되어 재구성돼도 추가 내비게이션이 없다(4단계 버그 재발 방지 규칙 준수). 제출은 `store.submit` → `previousBackStackEntry.savedStateHandle["submitted"]=true` → `popBackStack()`, 05 가 `getStateFlow` 로 받아 토스트 후 신호를 비운다.
-- **공통 헤더**: 내용이 있을 때만 `BackHandler` 활성, 확인창이 떠 있는 동안은 비활성(`hasDraft && !confirming`), 문구·버튼 구성이 iOS 와 일치.
-- **08**: 글자(grapheme) 단위 제한·카운트, `TextFieldValue` 오버로드로 제한이 걸릴 때만 값을 되써서 IME 조합을 보호, 본문은 `rememberSaveable`, 연타 방지 플래그.
-- **07**: `PreviewView` 를 `COMPATIBLE`(TextureView)로 써서 둥근 모서리 클립 유지, 권한 요청은 진입 시 1회 + `ON_RESUME` 재확인(설정에서 켜고 돌아오면 반영), 사진이 생기면 카메라 언바인드·"다시 찍기" 로 재바인드, 촬영은 임시 파일 → 디코딩 → 삭제, 전면 카메라 플래시는 건너뜀, 반대 카메라 없으면 전환 비활성. EXIF 변환 행렬(TRANSPOSE/TRANSVERSE 포함)을 표준 변환과 대조했고 동등하다. `centerCropRect`/`sampleSizeFor` 수식 확인(4:3·3:4·정사각·세로로 긴 이미지).
-- **05 연동**: `isPerformScreenAvailable` 로 글/사진만 수행 화면으로, 그림/음성은 기존 임시 동작 유지. 디버그 유형 전환(`FLAG_DEBUGGABLE` 가드, 알약 길게 누르기)과 `HCtaScaffold` 프리뷰 문자열 복구(UTF-8) 확인.
-
----
-
-## P1
-
-### File / Location
-`android/app/src/main/java/com/sapphire/hawe/feature/mission/WriteMissionScreen.kt` — `BasicTextField(... modifier = Modifier.fillMaxWidth().height(360.dp).border(...).padding(20.dp), ...)`
-
-### Problem
-테두리·높이·안쪽 여백을 `BasicTextField` 자신의 `modifier` 에 걸었다. `BasicTextField` 의 포커스/탭 처리는 그 modifier 체인의 **안쪽(패딩 안, 글 내용 높이)** 에만 붙으므로 터치가 먹는 영역은 "글이 있는 첫 줄 높이"의 내용 영역뿐이다(여러 줄 기본 `minLines = 1`). 360dp 높이의 에디터 박스에서 안내 문구 아래의 빈 공간이나 20dp 안쪽 여백을 눌러도 키보드가 올라오지 않는다. iOS 는 에디터 영역 전체에 `onTapGesture { isFocused = true }` 가 걸려 있다(`WriteMissionView.editor`: `.contentShape(Rectangle()).onTapGesture`).
-
-### Why It Matters
-08 에 들어오면 사용자가 가장 먼저 하는 동작은 큰 박스를 누르는 것인데, 박스 중앙을 눌러서는 입력이 시작되지 않는다. 첫 줄의 아주 좁은 영역만 눌러야 하므로 "글이 안 써진다" 로 보일 수 있다. 메인 흐름이라 P1 로 본다. (코드 구조에서 확인한 내용이며 폰에서 재현하지는 않았다.)
-
-### Recommended Fix
-바깥 `Box` 가 테두리·높이 360·안쪽 여백 20 을 갖고, 그 `Box` 에 `Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { focusRequester.requestFocus(); keyboard?.show() }` 를 건다. 안쪽 `BasicTextField` 는 `Modifier.fillMaxSize().focusRequester(focusRequester)` 로 박스를 채운다(내부 스크롤은 필드가 처리). 안내 문구는 `decorationBox` 안에 그대로 둔다.
+- **그림 렌더링**: 화면과 PNG 가 같은 `drawStrokes(canvas, strokes, scale)` 를 쓰고(화면 = density, 내보내기 = 2), 지우개는 `PorterDuff.CLEAR` 를 **투명 오프스크린 레이어**(화면: `graphicsLayer(Offscreen)` 안쪽 `Canvas`, 흰 배경은 바깥 `Box`; 내보내기: 투명 `ink` 비트맵 → 흰 비트맵에 합성)에서만 적용한다. 단일 탭은 채운 원으로 찍힘(지우개도 CLEAR 복사 페인트), 곡선은 중점 `quadTo` 로 부드럽게.
+- **제스처**: `awaitEachGesture` + `awaitFirstDown` + `drag(down.id)` 로 첫 포인터만 처리, 취소돼도 `model.end()` 호출, 점은 dp 로 저장. 되돌리기/다시 실행은 획 단위이며 새 획에서 redo 가 비워지고, 도구/굵기/색 규칙(색 선택 → 펜, 지우개 폭 ×3, 팔레트 7색 값)은 iOS 명세와 일치. `isEmpty` 정의(펜 획 기준, 지우개만 있으면 true)도 계획과 같다.
+- **PNG 제출**: `Dispatchers.Default` 에서 렌더링·압축 후 메인에서 `onSubmit`, 연타 방지.
+- **녹음 컨트롤러**: `MediaRecorder` 설정 순서(source → format → encoder → channels/rate/bitrate → maxDuration → file → prepare → start), API 31 분기, `stop()` 예외를 잡아 "녹음 없음" 처리, 30초 도달 시 ticker 와 info 리스너의 중복 `stop()` 은 `isRecording` 가드로 무해, 실패 경로(`start` 예외)에서 상태 복구·파일 삭제, `ON_STOP` 에서 녹음/재생 정지, `release()` 이후 재사용 가드.
+- **음성 흐름**: 제출 시 `DataStore.submit` 이 임시 m4a 를 복사한 뒤 화면 정리(`onDispose → release → reset`)에서 원본을 지우는 순서가 맞다. 권한은 녹음 버튼에서 요청, 거부면 "마이크 권한이 필요해요" 알림창 → 앱 설정 이동. 진행 중 요청에는 버튼 비활성.
+- **05 정리**: 디버그 임시 제출 분기가 삭제되고 CTA 는 `onPerform(...)` 만 호출, 유형 전환(`debugType`)은 `FLAG_DEBUGGABLE` 가드 아래 유지. `MissionPerformScreen` 이 4개 유형을 모두 분기한다.
 
 ---
 
 ## P2
 
 ### File / Location
-`feature/mission/PhotoMissionScreen.kt` — `photo?.recycle()` 호출들(`picker` 콜백, 촬영 콜백, "다시 찍기", `DisposableEffect` 의 `onDispose { latestPhoto?.recycle() }`)
+`android/app/src/main/java/com/sapphire/hawe/feature/mission/DrawMissionScreen.kt` — `version++` 와 `drawStrokes(..., model.strokes + listOfNotNull(model.activeStroke), density)`, `DrawingModel.kt` — `strokes` / `activeStroke` 게터
 
 ### Problem
-화면에 그려지고 있는 `Bitmap`(`asImageBitmap()` 로 Compose `Image` 에 전달)을 상태를 바꾸기 **직전에** `recycle()` 한다. 이미 RenderThread 에 올라간 디스플레이 리스트가 그 비트맵을 참조하고 있는 순간에 호출되면 "Canvas: trying to use a recycled bitmap" 예외가 날 수 있다. API 26+ 에서는 비트맵 메모리가 GC 로 회수되므로 `recycle()` 이 필요하지 않다.
+(1) 포인터 이벤트마다 `version++` 를 올리고 그 값을 컴포지션 본문에서 읽기 때문에(`val drawVersion = version`) **드래그 중 매 이벤트마다 화면 전체**(헤더, 제목, 도구/색 줄, 버튼)가 재구성된다. (2) `strokes` 게터는 매번 `history.toList()`, `activeStroke` 는 `currentPoints.toList()` 로 목록을 복사하고, 그리기 때마다 이 복사본으로 모든 획의 `Paint`/`Path` 를 다시 만든다. 긴 획(수천 점)이나 획이 많아지면 입력 지연이 생길 수 있다(계획 Root Cause 2 의 "매 이벤트마다 전체 목록을 복사하지 않는다" 와 다름).
 
 ### Why It Matters
-드문 타이밍 이슈지만 발생하면 앱이 종료된다. 이득(메모리 즉시 회수)에 비해 위험이 크다.
+그림판의 입력 반응성은 06 의 핵심 체감이다. 폰(고주사율)에서 문제없을 수도 있지만, 오래 그리거나 획이 많을 때 끊김이 생길 수 있는 구조다. 현재는 정확성 문제는 아니다.
 
 ### Recommended Fix
-`recycle()` 호출을 모두 제거하고 참조만 교체한다(`photo = next`, `photo = null`). `loadCroppedPhoto` 내부의 중간 비트맵(`original`, `upright`)은 화면에 올라가지 않으므로 `recycle()` 유지해도 된다.
+(선택, 폰에서 끊김이 느껴질 때) `version` 을 캔버스 `Canvas` 의 draw 단계에서만 읽도록 분리하고(UI 상태 `canUndo/canRedo/hasDraft` 는 획 시작·종료·undo/redo 에서만 갱신하는 별도 상태 또는 `derivedStateOf`), 그리기에서는 `history` 를 복사하지 않고 읽기 전용 뷰/인덱스 접근을 쓰며 `Paint` 는 획마다 재생성하지 않고 재사용한다. 지금 고치지 않으면 보고서의 "남은 위험"에 한 줄 적어 두면 충분하다.
 
 ---
 
 ### File / Location
-`feature/mission/PhotoMissionScreen.kt` — `picker` 콜백, 촬영 콜백의 `loadCroppedPhoto(...)`, "올리기" 의 `photoJpegBytes(...)`
+`DrawMissionScreen.kt` — `BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) { val canvasHeight = minOf(maxHeight, 400.dp) ... }`
 
 ### Problem
-이미지 디코딩·회전·크롭(`loadCroppedPhoto`)과 JPEG 압축(`photoJpegBytes`)이 메인 스레드에서 동기 실행된다. 12MP 사진은 2048px 로 다운샘플해도 수백 ms 가 걸릴 수 있다.
+캔버스 높이는 `min(남는 높이, 400dp)` 라서 (a) 계획의 **최소 220dp** 하한이 없고(아주 작은 화면에서 220 미만으로 줄어듦, iOS `minHeight: 220`), (b) 남는 높이가 400dp 를 넘는 큰 화면에서는 캔버스가 박스 위쪽에 400dp 로 붙고 **남는 공간이 캔버스와 도구 줄 사이**(`weight(1f)` 박스 아래쪽)에 생긴다. iOS 는 캔버스 바로 아래에 도구/색 줄이 붙고 남는 공간은 색 줄과 올리기 버튼 사이에 생긴다.
 
 ### Why It Matters
-앨범 선택 직후/촬영 직후/올리기 직후 화면이 잠깐 멈춘다. 기능 오류는 아니고 체감 문제다.
+시각 차이(큰 화면에서 캔버스와 도구 줄이 떨어져 보임)와 아주 작은 화면에서의 캔버스 너무 작음. 기능에는 영향이 없다.
 
 ### Recommended Fix
-(선택) `rememberCoroutineScope` + `withContext(Dispatchers.Default)` 로 디코딩·압축을 옮기고, 처리 중에는 셔터/올리기를 막는다(`capturing`/`submitted` 플래그 재사용). 이번 단계에서 하지 않으면 보고서의 "남은 위험"에 한 줄 적는다.
+캔버스 `Box` 만 `heightIn(min = 220.dp, max = 400.dp)` 로 두고 나머지는 위에서 아래로 쌓은 뒤, 올리기 버튼 위에만 `Spacer(Modifier.weight(1f))` 를 둔다. 작은 화면에서 줄이는 쪽은 캔버스 높이(가용 높이 계산 기준 220~400)로 맞춘다.
 
 ---
 
 ## 결론
 
-**수정 후 재리뷰 필요** — P1 1건(08 에디터 터치 영역)을 고친 뒤 다시 리뷰한다. P2 두 건 중 `recycle()` 제거는 같이 고치는 것을 권장하고, 메인 스레드 처리는 선택이다.
-수정 후 `.agent/report.md` 에 처리 결과를 추가하고 `assembleDebug` / `testDebugUnitTest` / `lintDebug` / `installDebug` 결과를 갱신해 달라.
+**승인 가능** — P0/P1 없음. P2 두 건(그림판 재구성·복사 비용, 캔버스 높이 하한/여백 위치)은 선택이며, 폰에서 끊김이나 큰 화면의 여백이 눈에 거슬릴 때 고치면 된다. 폰에서 06·09 시나리오(그리기/지우개/되돌리기, 녹음/미리 듣기/30초 자동 정지, 권한 거부 → 설정 열기)와 이전 단계 회귀를 확인한 뒤 7단계로 넘어가도 좋다.

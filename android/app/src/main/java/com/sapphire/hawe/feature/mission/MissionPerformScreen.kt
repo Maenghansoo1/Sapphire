@@ -16,7 +16,10 @@ fun MissionPerformScreen(type: MissionType, topic: String, onClose: () -> Unit,
         when (type) {
             MissionType.WRITE -> WriteMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Text(it)) }
             MissionType.PHOTO -> PhotoMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "jpg")) }
-            else -> Unit
+            MissionType.DRAW -> DrawMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
+            MissionType.VOICE -> VoiceMissionScreen(topic, onClose) { file, duration, waveform ->
+                onSubmit(SubmissionContent.Voice(file, duration, waveform))
+            }
         }
     }
 }

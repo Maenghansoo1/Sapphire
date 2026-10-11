@@ -21,7 +21,7 @@ import com.sapphire.hawe.designsystem.components.HNavLeading
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HType
 
-fun isPerformScreenAvailable(type: MissionType) = type == MissionType.WRITE || type == MissionType.PHOTO
+fun isPerformScreenAvailable(type: MissionType) = type in MissionType.entries
 
 sealed interface PerformEntryDecision {
     data class Allow(val type: MissionType) : PerformEntryDecision

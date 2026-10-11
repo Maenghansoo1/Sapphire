@@ -11,11 +11,8 @@ class MissionPerformCommonTest {
         UUID.randomUUID(), GroupDetail.mock, type, "주제", 1, Instant.EPOCH, Instant.EPOCH,
         listOf(MissionMember(UUID.randomUUID(), Profile.mockMine, isMe = true, isDone = done)))
 
-    @Test fun onlyWriteAndPhotoAvailable() {
-        assertTrue(isPerformScreenAvailable(MissionType.WRITE))
-        assertTrue(isPerformScreenAvailable(MissionType.PHOTO))
-        assertFalse(isPerformScreenAvailable(MissionType.DRAW))
-        assertFalse(isPerformScreenAvailable(MissionType.VOICE))
+    @Test fun allTypesAvailable() {
+        MissionType.entries.forEach { assertTrue(isPerformScreenAvailable(it)) }
     }
 
     @Test fun entryDecisions() {
@@ -23,7 +20,7 @@ class MissionPerformCommonTest {
         assertEquals(PerformEntryDecision.AlreadySubmitted, performEntryDecision(mission(true), null))
         assertEquals(PerformEntryDecision.Allow(MissionType.WRITE), performEntryDecision(mission(), null))
         assertEquals(PerformEntryDecision.Allow(MissionType.PHOTO), performEntryDecision(mission(), MissionType.PHOTO))
-        assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(), MissionType.DRAW))
-        assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(), MissionType.VOICE))
+        assertEquals(PerformEntryDecision.Allow(MissionType.DRAW), performEntryDecision(mission(), MissionType.DRAW))
+        assertEquals(PerformEntryDecision.Allow(MissionType.VOICE), performEntryDecision(mission(), MissionType.VOICE))
     }
 }
