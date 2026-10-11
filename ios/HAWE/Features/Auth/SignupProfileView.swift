@@ -38,7 +38,7 @@ struct SignupProfileView: View {
                     characterGrid
                     HTextField(
                         "닉네임",
-                        placeholder: "하늘",
+                        placeholder: "닉네임을 입력해 주세요",
                         text: $nickname,
                         helper: "캐릭터와 이름은 나중에 바꿀 수 있어요",
                         maxLength: 10,
