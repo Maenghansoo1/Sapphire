@@ -23,6 +23,7 @@ import com.sapphire.hawe.feature.groups.GroupProfileScreen
 import com.sapphire.hawe.feature.groups.HomeScreen
 import com.sapphire.hawe.feature.groups.JoinGroupScreen
 import com.sapphire.hawe.feature.groups.StartScreen
+import com.sapphire.hawe.feature.mission.MissionScreen
 import com.sapphire.hawe.model.LoginProvider
 
 val LocalSession = staticCompositionLocalOf<AppSession> { error("AppSession 이 없어요") }
@@ -102,8 +103,7 @@ private fun MainFlow() {
                     onAdd = { nav.navigate("start") },
                     // TODO: 17 마이페이지 (5단계)
                     onMyPage = {},
-                    // TODO: 05 오늘의 미션 (3단계) — 그 전까지는 16 그룹 정보로 열어요.
-                    onOpenGroup = { id -> nav.navigate("groupInfo/$id") },
+                    onOpenGroup = { id -> nav.navigate("mission/$id") },
                 )
             }
         }
@@ -130,6 +130,18 @@ private fun MainFlow() {
                 store.join(code)
                 backToRoot()
             }
+        }
+        composable("mission/{id}") { entry ->
+            val id = entry.arguments?.getString("id") ?: return@composable
+            MissionScreen(
+                groupId = id,
+                onBack = { nav.popBackStack() },
+                // TODO: 15 기록 캘린더 (4단계)
+                onCalendar = {},
+                onGroupInfo = { nav.navigate("groupInfo/$id") },
+                // TODO: 10~13 결과 공개 (4단계)
+                onResults = {},
+            )
         }
         composable("groupInfo/{id}") { entry ->
             val id = entry.arguments?.getString("id") ?: return@composable
