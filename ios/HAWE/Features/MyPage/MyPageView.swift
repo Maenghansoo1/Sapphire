@@ -44,7 +44,7 @@ struct MyPageView: View {
 
     private var account: MyAccount { session.account }
     /// 활동 요약은 실제로 올린 기록으로 계산해요.
-    private var stats: ActivityStats { store.stats }
+    private var activity: ActivityStats { store.stats }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -119,11 +119,11 @@ struct MyPageView: View {
     /// surface · 모서리 18 · 위아래 16, 세 칸 사이 세로 구분선(#E5E5EA)
     private var stats: some View {
         HStack(spacing: 0) {
-            statCell("\(stats.completedMissions)", "완료한 미션")
+            statCell("\(activity.completedMissions)", "완료한 미션")
             Rectangle().fill(.disabled).frame(width: 1)
-            statCell("\(stats.streakDays)일", "연속 참여")
+            statCell("\(activity.streakDays)일", "연속 참여")
             Rectangle().fill(.disabled).frame(width: 1)
-            statCell("\(stats.groupCount)개", "참여 그룹")
+            statCell("\(activity.groupCount)개", "참여 그룹")
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 16)
@@ -151,7 +151,7 @@ struct MyPageView: View {
                     Text(type.displayName)
                         .font(.caption12)
                         .foregroundStyle(.textSecondary)
-                    Text("\(stats.byType[type] ?? 0)")
+                    Text("\(activity.byType[type] ?? 0)")
                         .font(.plex(15, .bold))
                         .foregroundStyle(.ink)
                 }
