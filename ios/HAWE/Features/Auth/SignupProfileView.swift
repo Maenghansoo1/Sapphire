@@ -3,8 +3,12 @@ import SwiftUI
 /// A3 회원가입 · 프로필 (Figma 1:256)
 /// 캐릭터 7종 + 내 사진 중 선택(기본 몽실이), 닉네임 2–10자 입력 시 '시작하기' 활성화
 struct SignupProfileView: View {
+    /// 가입 방법 — 이메일이면 A2 에서 넣은 이메일을 같이 받아요.
+    var provider: LoginProvider = .email
+    var email: String?
+
     /// 간편 로그인으로 바로 온 경우엔 A2 를 건너뛰어 "2 / 2" 를 숨겨요.
-    var showsStep = true
+    private var showsStep: Bool { provider == .email }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
@@ -43,7 +47,14 @@ struct SignupProfileView: View {
                 // TODO: 서버 연결 시 프로필 저장. 새 계정이라 그룹이 없어서 01 시작으로 가요.
                 HButton("시작하기") {
                     let profile = Profile(avatar: avatar, nickname: nickname.trimmingCharacters(in: .whitespaces))
-                    session.account.profile = profile
+                    // TODO: 간편 로그인 이메일은 서버 연결 시 각 SDK 에서 받아와요. 지금은 비워 둬요.
+                    session.account = MyAccount(
+                        profile: profile,
+                        email: email,
+                        joinedAt: .now,
+                        signUpProvider: provider,
+                        linkedProviders: [provider]
+                    )
                     store.reset()
                     store.setMyProfile(profile)
                     session.signIn()

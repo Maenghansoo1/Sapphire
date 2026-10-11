@@ -25,7 +25,7 @@ struct SignupAccountView: View {
                 }
                 .padding(.top, 12)
             } cta: {
-                HButton("다음") { path.append(.signupProfile(viaSocial: false)) }
+                HButton("다음") { path.append(.signupProfile(provider: .email, email: model.email.trimmingCharacters(in: .whitespaces))) }
                     .disabled(!model.canProceed)
             }
         }

@@ -96,7 +96,7 @@ struct MyPageView: View {
                     .font(.plex(22, .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
-                Text([account.email, "\(account.signUpProvider.displayName) 로그인"].compactMap { $0 }.joined(separator: "\n"))
+                Text(accountLines.joined(separator: "\n"))
                     .font(.caption13)
                     .plexLineHeight(1.45, size: 13)
                     .foregroundStyle(.textSecondary)
@@ -114,6 +114,14 @@ struct MyPageView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// 이메일(있으면) + 간편 로그인으로 가입했을 때만 "카카오 로그인" 같은 줄
+    private var accountLines: [String] {
+        var lines: [String] = []
+        if let email = account.email, !email.isEmpty { lines.append(email) }
+        if account.signUpProvider != .email { lines.append("\(account.signUpProvider.displayName) 로그인") }
+        return lines
     }
 
     /// surface · 모서리 18 · 위아래 16, 세 칸 사이 세로 구분선(#E5E5EA)
