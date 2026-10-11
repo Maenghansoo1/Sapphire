@@ -2,7 +2,7 @@ import StoreKit
 import SwiftUI
 
 /// 17-3 앱 정보 (Figma 1:1697)
-/// 앱 아이콘·버전·최신 여부, 공지사항, 문의하기, 앱 평가하기, 오픈소스 라이선스
+/// 앱 아이콘·버전·최신 여부, 문의하기, 앱 평가하기, 오픈소스 라이선스 (공지사항은 쓰지 않아요 — 사용자 결정)
 struct AppInfoView: View {
     @Binding var path: [MainRoute]
 
@@ -85,8 +85,6 @@ struct AppInfoView: View {
     /// 목록 줄 54
     private var rows: some View {
         VStack(spacing: 0) {
-            // TODO: 공지사항 주소를 받으면 Safari View 로 열어요.
-            HListRow("공지사항", height: 54) {}
             HListRow("문의하기", value: AppInfo.contactEmail, height: 54) {
                 if let url = URL(string: "mailto:\(AppInfo.contactEmail)") { openURL(url) }
             }
@@ -99,8 +97,7 @@ struct AppInfoView: View {
 extension AppInfo {
     /// Figma 17-3 문의하기 주소
     static let contactEmail = "devleeekh@gmail.com"
-    /// TODO: Figma 에 "[팀 이름]" 으로 비어 있어요. 이름을 받으면 바꿔요.
-    static let teamName = "[팀 이름]"
+    static let teamName = "Sapphire Developers"
 }
 
 /// 오픈소스 라이선스 — 앱에 넣은 글꼴
