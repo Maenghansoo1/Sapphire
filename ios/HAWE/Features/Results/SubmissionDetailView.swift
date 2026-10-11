@@ -62,18 +62,10 @@ struct SubmissionDetailView: View {
 
     // MARK: - Header
 
-    /// 뒤로 + 가운데(아바타 30 · 이름 15 · 날짜·유형 13) + 더보기 20, 아래 주제 13
+    /// 뒤로 + 가운데(아바타 30 · 이름 15 · 날짜·유형 13), 아래 주제 13 (Figma 의 ⋯ 메뉴는 쓰지 않아요)
     private func header(_ submission: Submission) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HNavBar(leading: .back { dismiss() }) {
-                // TODO: ⋯ 메뉴에 무엇을 넣을지 정해지면 연결 (Figma 에 메뉴 화면이 없어요)
-                Button {} label: {
-                    HIconView(icon: .more, size: 20)
-                        .contentShape(Rectangle().inset(by: -12))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("더보기")
-            }
+            HNavBar(leading: .back { dismiss() })
             .overlay {
                 HStack(spacing: 8) {
                     HAvatar(content: submission.author.avatar, size: 30)

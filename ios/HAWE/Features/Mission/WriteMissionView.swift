@@ -31,9 +31,6 @@ struct WriteMissionView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     MissionTitle(type: .write, topic: topic)
                     editor
-                    Text("모두가 올리기 전까지 아무도 볼 수 없어요.")
-                        .font(.caption13)
-                        .foregroundStyle(.textSecondary)
                 }
                 .padding(.top, 16)
             } cta: {

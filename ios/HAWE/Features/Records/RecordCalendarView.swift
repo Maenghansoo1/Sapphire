@@ -7,11 +7,13 @@ struct DayRecord: Hashable {
     var topic: String
     var doneCount: Int
     var memberCount: Int
+    /// 내가 그날 올렸는지 — 안 올린 날은 결과를 볼 수 없어요 (CLAUDE.md §5-2, 사용자 결정 2026-10-12)
+    var didSubmit: Bool
 }
 
 /// 15 기록 캘린더 (Figma 1:1311)
 /// 그룹별 월간 캘린더. 기록 있는 날에 유형 글자(그/사/글/음), 오늘 테두리,
-/// 날짜를 고르면 아래 카드 → '모아보기'로 그날 결과 공개 화면
+/// 날짜를 고르면 아래 카드 → '모아보기'로 그날 결과 공개 화면 (내가 올린 날만)
 struct RecordCalendarView: View {
     let group: GroupDetail
     @Binding var path: [MainRoute]
@@ -214,18 +216,27 @@ struct RecordCalendarView: View {
                     .font(.caption13)
                     .foregroundStyle(.textSecondary)
                 Spacer()
-                Button {
-                    path.append(.results(.mock(groupName: group.name, type: record.type, topic: record.topic, date: record.date)))
-                } label: {
-                    Text("모아보기")
-                        .font(.plex(13, .semibold))
-                        .foregroundStyle(.ink)
-                        .padding(.horizontal, 14)
+                if record.didSubmit {
+                    Button {
+                        // TODO: 서버 연결 시 그날 결과를 불러와요 (내 제출이 없으면 RLS 가 막아요)
+                        path.append(.results(.mock(groupName: group.name, type: record.type, topic: record.topic, date: record.date)))
+                    } label: {
+                        Text("모아보기")
+                            .font(.plex(13, .semibold))
+                            .foregroundStyle(.ink)
+                            .padding(.horizontal, 14)
+                            .frame(height: 36)
+                            .background(.surface, in: Capsule())
+                            .contentShape(Rectangle().inset(by: -4))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    // Figma 에 없는 상태라 버튼 자리에 안내 글자만 둬요.
+                    Text("내가 올리지 않은 날이라 볼 수 없어요")
+                        .font(.caption13)
+                        .foregroundStyle(.textTertiary)
                         .frame(height: 36)
-                        .background(.surface, in: Capsule())
-                        .contentShape(Rectangle().inset(by: -4))
                 }
-                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -260,7 +271,9 @@ struct RecordCalendarView: View {
                     type: type,
                     topic: list.isEmpty ? "" : list[index % list.count],
                     doneCount: index % 4 == 3 ? group.members.count - 1 : group.members.count,
-                    memberCount: group.members.count
+                    memberCount: group.members.count,
+                    // 목업: 참여 인원이 하나 모자란 날은 내가 안 올린 날로 둬요.
+                    didSubmit: index % 4 != 3
                 ))
                 index += 1
             }
