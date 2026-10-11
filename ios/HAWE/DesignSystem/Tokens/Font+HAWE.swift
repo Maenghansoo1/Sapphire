@@ -42,3 +42,12 @@ extension Font {
     /// 캡션 12 Regular
     static let caption12 = plex(12)
 }
+
+extension View {
+    /// Figma 줄 높이(배수)를 맞춰요. 예: 30pt · 1.3 → `.plexLineHeight(1.3, size: 30)`
+    func plexLineHeight(_ multiple: CGFloat, size: CGFloat, weight: PlexWeight = .regular) -> some View {
+        let natural = UIFont(name: weight.postScriptName, size: size)?.lineHeight ?? size * 1.3
+        let extra = max(0, size * multiple - natural)
+        return lineSpacing(extra).padding(.vertical, extra / 2)
+    }
+}

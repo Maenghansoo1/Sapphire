@@ -9,6 +9,8 @@ struct HTextField: View {
     private let isSecure: Bool
     private let helper: String?
     private let maxLength: Int?
+    private let keyboard: UIKeyboardType
+    private let contentType: UITextContentType?
 
     init(
         _ label: String? = nil,
@@ -16,7 +18,9 @@ struct HTextField: View {
         text: Binding<String>,
         isSecure: Bool = false,
         helper: String? = nil,
-        maxLength: Int? = nil
+        maxLength: Int? = nil,
+        keyboard: UIKeyboardType = .default,
+        contentType: UITextContentType? = nil
     ) {
         self.label = label
         self.placeholder = placeholder
@@ -24,6 +28,8 @@ struct HTextField: View {
         self.isSecure = isSecure
         self.helper = helper
         self.maxLength = maxLength
+        self.keyboard = keyboard
+        self.contentType = contentType
     }
 
     var body: some View {
@@ -38,6 +44,10 @@ struct HTextField: View {
                 .font(.plex(16))
                 .foregroundStyle(.ink)
                 .tint(.ink)
+                .keyboardType(keyboard)
+                .textContentType(contentType)
+                .textInputAutocapitalization(keyboard == .emailAddress || isSecure ? .never : .sentences)
+                .autocorrectionDisabled(keyboard == .emailAddress || isSecure)
                 .padding(.horizontal, 16)
                 .frame(height: 54)
                 .background(.bg, in: shape)
@@ -79,7 +89,7 @@ struct HTextField: View {
     @Previewable @State var email = ""
     @Previewable @State var nickname = "하늘"
     VStack(spacing: 18) {
-        HTextField("이메일", placeholder: "example@email.com", text: $email)
+        HTextField("이메일", placeholder: "example@email.com", text: $email, keyboard: .emailAddress)
         HTextField("비밀번호", placeholder: "8자 이상, 영문·숫자 포함", text: .constant(""), isSecure: true)
         HTextField("닉네임", placeholder: "닉네임", text: $nickname, helper: "캐릭터와 이름은 나중에 바꿀 수 있어요", maxLength: 10)
     }

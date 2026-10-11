@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// 1단계 결과 확인용: 디자인 토큰·에셋·공통 컴포넌트를 한 화면에서 봐요.
+/// 개발용: 디자인 토큰·에셋·공통 컴포넌트를 한 화면에서 봐요.
+/// 앱에는 나오지 않고 Xcode Canvas(#Preview)에서만 열어요.
 struct ComponentGalleryView: View {
     @State private var relationship: Relationship = .friend
     @State private var email = ""
