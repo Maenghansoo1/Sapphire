@@ -1,0 +1,10 @@
+{
+  "Simulator Target Bundle": "com.sapphire.hawe",
+  "aps": {
+    "alert": { "title": "컴공 동기", "body": "서연님이 내 작품에 댓글을 남겼어요" },
+    "sound": "default"
+  },
+  "type": "comment",
+  "group_id": "mock",
+  "submission_id": "mock"
+}

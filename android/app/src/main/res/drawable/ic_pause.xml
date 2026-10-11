@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- icon-pause.svg (iOS Assets.xcassets 에서 변환) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp"
+    android:height="16dp"
+    android:viewportWidth="16"
+    android:viewportHeight="16">
+    <path android:pathData="M6 2.66669H4.66667C4.29848 2.66669 4 2.96516 4 3.33335V12.6667C4 13.0349 4.29848 13.3334 4.66667 13.3334H6C6.36819 13.3334 6.66667 13.0349 6.66667 12.6667V3.33335C6.66667 2.96516 6.36819 2.66669 6 2.66669Z"
+        android:fillColor="#FFFFFF" />
+    <path android:pathData="M11.3333 2.66669H10C9.63182 2.66669 9.33334 2.96516 9.33334 3.33335V12.6667C9.33334 13.0349 9.63182 13.3334 10 13.3334H11.3333C11.7015 13.3334 12 13.0349 12 12.6667V3.33335C12 2.96516 11.7015 2.66669 11.3333 2.66669Z"
+        android:fillColor="#FFFFFF" />
+</vector>

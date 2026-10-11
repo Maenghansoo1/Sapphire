@@ -6,13 +6,15 @@ struct HListRow: View {
     private let value: String?
     private let height: CGFloat
     private let showsDivider: Bool
+    private let showsChevron: Bool
     private let action: () -> Void
 
-    init(_ label: String, value: String? = nil, height: CGFloat = 52, showsDivider: Bool = true, action: @escaping () -> Void) {
+    init(_ label: String, value: String? = nil, height: CGFloat = 52, showsDivider: Bool = true, showsChevron: Bool = true, action: @escaping () -> Void) {
         self.label = label
         self.value = value
         self.height = height
         self.showsDivider = showsDivider
+        self.showsChevron = showsChevron
         self.action = action
     }
 
@@ -28,7 +30,9 @@ struct HListRow: View {
                         .font(.plex(14))
                         .foregroundStyle(.textSecondary)
                 }
-                HIconView(icon: .chevronRight, size: 16, color: .textTertiary)
+                if showsChevron {
+                    HIconView(icon: .chevronRight, size: 16, color: .textTertiary)
+                }
             }
             .lineLimit(1)
             .frame(height: height)

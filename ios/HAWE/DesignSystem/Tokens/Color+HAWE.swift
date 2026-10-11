@@ -13,8 +13,10 @@ extension ShapeStyle where Self == Color {
     static var ink: Color { Color(hex: 0x111111) }
     static var textSecondary: Color { Color(hex: 0x6E6E73) }
     static var textTertiary: Color { Color(hex: 0x8E8E93) }
-    static var accent: Color { Color(hex: 0x1E5C91) }
-    static var accentPressed: Color { Color(hex: 0x164F7D) }
+    /// Figma 화면 CTA·배지·워드마크·로고 '오늘 칸' 색 (사용자 결정 2026-10-12, 사용자 지정 #67A0C3)
+    static var accent: Color { Color(hex: 0x67A0C3) }
+    /// Figma 에 눌림 색이 없어서 accent 를 한 단계 어둡게 잡았어요.
+    static var accentPressed: Color { Color(hex: 0x558BB0) }
     static var accentSubtle: Color { Color(hex: 0xEAF1F7) }
     static var onAccent: Color { Color(hex: 0xFFFFFF) }
     static var danger: Color { Color(hex: 0xC92A2A) }
@@ -25,6 +27,12 @@ extension ShapeStyle where Self == Color {
     static var controlBorder: Color { Color(hex: 0xC7C7CC) }
     /// Toggle(Off) 트랙
     static var controlOff: Color { Color(hex: 0xD1D1D6) }
+    /// 05 잠금 안내 글자처럼 본문보다 한 단계 연한 글자
+    static var textBody: Color { Color(hex: 0x3A3A3C) }
+    /// 15 캘린더의 아직 오지 않은 날짜
+    static var textDisabled: Color { Color(hex: 0xB0B0B5) }
+    /// 09 음성 파형의 아직 녹음 안 된 막대
+    static var waveformIdle: Color { Color(hex: 0xD9D9DE) }
 
     // 카카오 로그인 버튼 — 카카오 디자인 가이드 고정 색
     static var kakaoContainer: Color { Color(hex: 0xFEE500) }

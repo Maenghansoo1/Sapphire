@@ -4,7 +4,9 @@ import SwiftUI
 /// 간편 로그인 신규 가입자는 A2 를 건너뛰고 A3 로 가요 (CLAUDE.md §4).
 enum AuthRoute: Hashable {
     case signupAccount
-    case signupProfile(viaSocial: Bool)
+    /// 이메일 가입이면 A2 에서 넣은 이메일, 간편 로그인이면 그 방법
+    case signupProfile(provider: LoginProvider, email: String?)
+    case passwordReset(email: String)
 }
 
 struct AuthFlowView: View {
@@ -17,8 +19,10 @@ struct AuthFlowView: View {
                     switch route {
                     case .signupAccount:
                         SignupAccountView(path: $path)
-                    case .signupProfile(let viaSocial):
-                        SignupProfileView(showsStep: !viaSocial)
+                    case .signupProfile(let provider, let email):
+                        SignupProfileView(provider: provider, email: email)
+                    case .passwordReset(let email):
+                        PasswordResetView(initialEmail: email)
                     }
                 }
         }
@@ -26,5 +30,7 @@ struct AuthFlowView: View {
 }
 
 #Preview {
-    AuthFlowView().environment(AppSession())
+    AuthFlowView()
+        .environment(AppSession())
+        .environment(DataStore())
 }

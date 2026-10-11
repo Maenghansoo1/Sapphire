@@ -2,7 +2,11 @@ import SwiftUI
 
 /// 04 홈 · 내 그룹 목록 (Figma 1:461)
 struct HomeView: View {
-    let groups: [GroupSummary]
+    @Binding var path: [MainRoute]
+
+    @Environment(DataStore.self) private var store
+
+    private var groups: [GroupSummary] { store.summaries }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,8 +23,11 @@ struct HomeView: View {
 
                     LazyVStack(spacing: 12) {
                         ForEach(groups) { group in
-                            // TODO: 05 그룹 · 오늘의 미션 연결
-                            GroupCard(group: group)
+                            Button { path.append(.mission(groupID: group.id)) } label: {
+                                GroupCard(group: group)
+                                    .contentShape(RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -30,6 +37,8 @@ struct HomeView: View {
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        // 하루가 지나 새 미션이 열렸으면 만들어 둬요.
+        .onAppear { store.refreshTodayMissions() }
     }
 
     private var header: some View {
@@ -39,9 +48,8 @@ struct HomeView: View {
                 .foregroundStyle(.ink)
             Spacer()
             HStack(spacing: 16) {
-                // TODO: 02 그룹 만들기 / 17 마이페이지 연결
-                headerButton(.plus, size: 24, label: "그룹 추가") {}
-                headerButton(.person, size: 22, label: "마이페이지") {}
+                headerButton(.plus, size: 24, label: "그룹 추가") { path.append(.start) }
+                headerButton(.person, size: 22, label: "마이페이지") { path.append(.myPage(.home)) }
             }
         }
         .frame(height: HLayout.headerHeight)
@@ -130,6 +138,7 @@ struct GroupCard: View {
 
 #Preview {
     NavigationStack {
-        HomeView(groups: GroupSummary.mock)
+        HomeView(path: .constant([]))
     }
+    .environment(DataStore.preview())
 }

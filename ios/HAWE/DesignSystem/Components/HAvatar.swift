@@ -3,7 +3,14 @@ import SwiftUI
 /// 아바타에 들어갈 내용: 캐릭터 또는 내 사진(원형 크롭)
 enum AvatarContent: Hashable {
     case character(ProfileCharacter)
+    /// 서버에 올라간 사진
     case photo(URL)
+    /// 방금 앨범에서 고른 사진 (아직 올리기 전)
+    case image(UIImage)
+
+    var isPhoto: Bool {
+        if case .character = self { false } else { true }
+    }
 }
 
 /// Figma `Avatar` — 원형 surface 배경 + 캐릭터(또는 사진). 크기 24–44.
@@ -12,6 +19,8 @@ struct HAvatar: View {
     let content: AvatarContent
     var size: CGFloat = 36
     var ringed: Bool = false
+    /// Figma: 34~38pt 아바타 안의 캐릭터 30pt → 약 0.85배. 큰 미리보기(80·88)는 0.8배.
+    var characterScale: CGFloat = 0.85
 
     var body: some View {
         ZStack {
@@ -21,8 +30,7 @@ struct HAvatar: View {
                 character.image
                     .resizable()
                     .scaledToFit()
-                    // Figma: 34~38pt 아바타 안의 캐릭터 30pt → 약 0.85배
-                    .frame(width: size * 0.85, height: size * 0.85)
+                    .frame(width: size * characterScale, height: size * characterScale)
             case .photo(let url):
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
@@ -31,6 +39,12 @@ struct HAvatar: View {
                 }
                 .frame(width: size, height: size)
                 .clipShape(Circle())
+            case .image(let image):
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
             }
         }
         .frame(width: size, height: size)

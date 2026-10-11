@@ -1,24 +1,23 @@
 import SwiftUI
 
-/// 01 시작 (Figma 1:314) — 참여한 그룹이 하나도 없을 때
+/// 01 시작 (Figma 1:314) — 참여한 그룹이 하나도 없을 때, 또는 04 홈의 + 로 열었을 때
 struct StartView: View {
+    @Binding var path: [MainRoute]
+    /// 04 홈에서 + 로 열면 왼쪽 위에 뒤로 가기를 둬요.
+    var showsBack = false
+
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
-        HCTAScaffold {
-            VStack(alignment: .leading, spacing: 48) {
-                intro
-                contentTypes
+        VStack(spacing: 0) {
+            if showsBack {
+                HNavBar(leading: .back { dismiss() })
+                    .padding(.horizontal, HLayout.screenPadding)
             }
-            .padding(.top, HLayout.introTopInset)
-        } cta: {
-            VStack(spacing: 12) {
-                // TODO: 02 그룹 만들기 / 03 초대 코드로 참여는 다음 묶음에서 연결해요.
-                HButton("새 그룹 만들기") {}
-                HButton("초대 코드로 참여하기", kind: .secondary) {}
-            }
+            scaffold
         }
         .overlay(alignment: .topTrailing) {
-            // TODO: 17 마이페이지 연결
-            Button {} label: {
+            Button { path.append(.myPage(.home)) } label: {
                 HIconView(icon: .person, size: 22)
                     .frame(width: HLayout.minTouch, height: HLayout.minTouch)
             }
@@ -29,6 +28,22 @@ struct StartView: View {
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var scaffold: some View {
+        HCTAScaffold {
+            VStack(alignment: .leading, spacing: 48) {
+                intro
+                contentTypes
+            }
+            // 헤더가 있으면 그 아래에 바로 붙여요.
+            .padding(.top, showsBack ? 0 : HLayout.introTopInset)
+        } cta: {
+            VStack(spacing: 12) {
+                HButton("새 그룹 만들기") { path.append(.createGroup) }
+                HButton("초대 코드로 참여하기", kind: .secondary) { path.append(.joinGroup(code: nil)) }
+            }
+        }
     }
 
     private var intro: some View {
@@ -64,8 +79,14 @@ struct StartView: View {
     }
 }
 
-#Preview {
+#Preview("그룹 없음") {
     NavigationStack {
-        StartView()
+        StartView(path: .constant([]))
+    }
+}
+
+#Preview("홈에서 + 로 열림") {
+    NavigationStack {
+        StartView(path: .constant([]), showsBack: true)
     }
 }

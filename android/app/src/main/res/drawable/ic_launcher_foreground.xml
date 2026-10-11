@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 아이콘 앞면: 얼굴 있는 로고 심볼을 안전 영역(66dp) 안에 넣어요 (CLAUDE.md §3-8, 흰 배경 버전) -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/logo_symbol"
+    android:inset="24dp" />
