@@ -13,17 +13,17 @@ import java.util.List;
 @Mapper
 public interface GroupMapper {
 
-    @Insert("INSERT INTO `groups` (name, owner_id, mission_publish_time, mission_deadline_time) "
-            + "VALUES (#{name}, #{ownerId}, #{missionPublishTime}, #{missionDeadlineTime})")
+    @Insert("INSERT INTO `groups` (name, owner_id, relation_type, daily_mission_count) "
+            + "VALUES (#{name}, #{ownerId}, #{relationType}, #{dailyMissionCount})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insert(Group group);
 
-    @Select("SELECT id, name, owner_id, mission_publish_time, mission_deadline_time, created_at "
+    @Select("SELECT id, name, owner_id, relation_type, daily_mission_count, created_at "
             + "FROM `groups` WHERE id = #{id}")
     Group findById(@Param("id") Long id);
 
-    @Update("UPDATE `groups` SET name = #{name}, mission_publish_time = #{missionPublishTime}, "
-            + "mission_deadline_time = #{missionDeadlineTime} WHERE id = #{id}")
+    @Update("UPDATE `groups` SET name = #{name}, relation_type = #{relationType}, "
+            + "daily_mission_count = #{dailyMissionCount} WHERE id = #{id}")
     void update(Group group);
 
     @Select("SELECT g.id AS id, g.name AS name, "

@@ -1,15 +1,14 @@
 package com.sapphire.hawe.group.domain;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 public class Group {
 
     private Long id;
     private String name;
     private Long ownerId;
-    private LocalTime missionPublishTime;
-    private LocalTime missionDeadlineTime;
+    private String relationType;
+    private int dailyMissionCount;
     private LocalDateTime createdAt;
 
     public Long getId() {
@@ -36,20 +35,20 @@ public class Group {
         this.ownerId = ownerId;
     }
 
-    public LocalTime getMissionPublishTime() {
-        return missionPublishTime;
+    public String getRelationType() {
+        return relationType;
     }
 
-    public void setMissionPublishTime(LocalTime missionPublishTime) {
-        this.missionPublishTime = missionPublishTime;
+    public void setRelationType(String relationType) {
+        this.relationType = relationType;
     }
 
-    public LocalTime getMissionDeadlineTime() {
-        return missionDeadlineTime;
+    public int getDailyMissionCount() {
+        return dailyMissionCount;
     }
 
-    public void setMissionDeadlineTime(LocalTime missionDeadlineTime) {
-        this.missionDeadlineTime = missionDeadlineTime;
+    public void setDailyMissionCount(int dailyMissionCount) {
+        this.dailyMissionCount = dailyMissionCount;
     }
 
     public LocalDateTime getCreatedAt() {

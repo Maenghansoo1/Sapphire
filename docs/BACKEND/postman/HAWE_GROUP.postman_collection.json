@@ -358,7 +358,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\": \"우리집\", \"missionPublishTime\": \"09:00\", \"missionDeadlineTime\": \"23:00\"}",
+              "raw": "{\"name\": \"우리집\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -373,7 +373,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
-                  "pm.test(\"fields\", () => { const j = pm.response.json(); pm.expect(j.missionPublishTime).to.eql(\"09:00\"); pm.expect(j.missionDeadlineTime).to.eql(\"23:00\"); pm.expect(j.name).to.eql(\"우리집\"); });",
+                  "pm.test(\"fields\", () => { const j = pm.response.json(); pm.expect(j.name).to.eql(\"우리집\"); pm.expect(j.relationType).to.eql(\"CASUAL\"); pm.expect(j.dailyMissionCount).to.eql(1); pm.expect(j.missionSlots).to.eql([{slotNo: 1, publishTime: \"09:00\", deadlineTime: \"23:00\", custom: false}]); });",
                   "pm.collectionVariables.set(\"groupId\", pm.response.json().id);"
                 ]
               }
@@ -649,7 +649,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"name changed, times kept\", () => { const j = pm.response.json(); pm.expect(j.name).to.eql(\"새 이름\"); pm.expect(j.missionPublishTime).to.eql(\"09:00\"); pm.expect(j.missionDeadlineTime).to.eql(\"23:00\"); });"
+                  "pm.test(\"name changed, slots kept\", () => { const j = pm.response.json(); pm.expect(j.name).to.eql(\"새 이름\"); pm.expect(j.missionSlots[0].publishTime).to.eql(\"09:00\"); pm.expect(j.missionSlots[0].deadlineTime).to.eql(\"23:00\"); });"
                 ]
               }
             }
@@ -683,7 +683,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"missionDeadlineTime\": \"22:30\"}",
+              "raw": "{\"dailyMissionCount\": 2, \"missionSlots\": [{\"slotNo\": 2, \"deadlineTime\": \"22:30\"}]}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -698,7 +698,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"deadline changed, name kept\", () => { const j = pm.response.json(); pm.expect(j.missionDeadlineTime).to.eql(\"22:30\"); pm.expect(j.name).to.eql(\"새 이름\"); });"
+                  "pm.test(\"slot deadline changed, name kept\", () => { const j = pm.response.json(); pm.expect(j.dailyMissionCount).to.eql(2); pm.expect(j.missionSlots[1].deadlineTime).to.eql(\"22:30\"); pm.expect(j.missionSlots[1].custom).to.eql(true); pm.expect(j.name).to.eql(\"새 이름\"); });"
                 ]
               }
             }
@@ -1367,7 +1367,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\":\"\",\"missionPublishTime\":\"09:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "raw": "{\"name\":\"\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1414,7 +1414,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"missionPublishTime\": \"09:00\", \"missionDeadlineTime\": \"23:00\"}",
+              "raw": "{\"name\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1461,7 +1461,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"9:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "raw": "{\"name\":\"x\",\"missionSlots\":[{\"slotNo\":1,\"publishTime\":\"9:00\"}]}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1508,7 +1508,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"24:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "raw": "{\"name\":\"x\",\"missionSlots\":[{\"slotNo\":1,\"publishTime\":\"24:00\"}]}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1530,7 +1530,7 @@
           ]
         },
         {
-          "name": "3-5 필드 누락",
+          "name": "3-5 dailyMissionCount 범위 위반 (0)",
           "request": {
             "method": "POST",
             "header": [
@@ -1555,7 +1555,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"09:00\"}",
+              "raw": "{\"name\":\"x\",\"dailyMissionCount\":0}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1699,7 +1699,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"missionPublishTime\":\"25:99\"}",
+              "raw": "{\"missionSlots\":[{\"slotNo\":1,\"publishTime\":\"25:99\"}]}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1799,7 +1799,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\":\"x\",\"missionPublishTime\":\"09:00\",\"missionDeadlineTime\":\"23:00\"}",
+              "raw": "{\"name\":\"x\"}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -1,12 +1,18 @@
 package com.sapphire.hawe.group.dto;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** All fields optional — only the ones present in the request body are applied (partial update). */
+import java.util.List;
+
+/** All fields are optional; provided fields replace the corresponding settings. */
 public record GroupSettingsUpdateRequest(
         @Size(max = 100) String name,
-        @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "HH:mm 형식이어야 합니다") String missionPublishTime,
-        @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "HH:mm 형식이어야 합니다") String missionDeadlineTime
+        @Pattern(regexp = "^(COUPLE|FAMILY|FRIEND|RIVAL|CASUAL)$") String relationType,
+        @Min(1) Integer dailyMissionCount,
+        @Valid List<@NotNull MissionSlotRequest> missionSlots
 ) {
 }

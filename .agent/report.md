@@ -1,25 +1,29 @@
-# 캐릭터 API 수정 보고
+# Group module V3 follow-up report
 
-## 변경 파일과 내용
+## Files changed
 
-- `src/main/java/com/sapphire/hawe/character/dao/CharacterMapper.java`: 사용자 캐릭터 UPDATE의 갱신 행 수를 반환하도록 변경.
-- `src/main/java/com/sapphire/hawe/character/service/CharacterService.java`: 갱신 0행이면 사용자 존재 여부를 확인하고, 존재하지 않을 때 `INVALID_TOKEN`(401)을 반환. 같은 캐릭터를 다시 선택해 갱신 0행이 나오는 경우에는 성공을 유지.
-- `src/main/java/com/sapphire/hawe/global/security/JwtAuthenticationFilter.java`: `GET /api/characters`를 JWT 필터 대상에서 제외. 보호된 `PATCH /api/me/character`의 인증은 유지.
-- `src/test/java/com/sapphire/hawe/character/service/CharacterServiceTests.java`: 사용자 없음, 같은 캐릭터 재선택, 정상 갱신 검증.
-- `src/test/java/com/sapphire/hawe/global/security/JwtAuthenticationFilterTests.java`: 공개 목록의 만료 토큰 무시와 보호된 변경 요청의 401 검증.
-- `.agent/report.md`: 이 작업의 보고서로 덮어씀.
+- `src/main/java/com/sapphire/hawe/global/config/MissionProperties.java` and `src/main/resources/application.properties`: added shared, bound default slot times and the maximum daily mission count.
+- `src/main/java/com/sapphire/hawe/group/domain/Group.java`, `GroupMissionSlot.java`, `src/main/java/com/sapphire/hawe/group/dao/GroupMapper.java`, and `GroupMissionSlotMapper.java`: mapped V3 group fields and added slot insert, lookup, replace, and trim operations.
+- `src/main/java/com/sapphire/hawe/group/dto/GroupCreateRequest.java`, `GroupSettingsUpdateRequest.java`, `GroupResponse.java`, `MissionSlotRequest.java`, and `MissionSlotResponse.java`: replaced old group time fields with relation type, daily mission count, and per-slot request and response fields.
+- `src/main/java/com/sapphire/hawe/group/service/GroupService.java`: applies create defaults, validates relation type/count/slot numbers/times, atomically stores slot settings, expands all response slots with configured time fallbacks, and preserves owner/member permissions.
+- `src/test/java/com/sapphire/hawe/group/service/GroupServiceTests.java` and `src/test/java/com/sapphire/hawe/group/dao/GroupMapperTests.java`: updated old fixtures; added service cases for defaults, custom slots, replacement, clearing, trimming, partial updates, and invalid settings, plus a mapper round trip case.
+- `docs/BACKEND/postman/HAWE_GROUP.postman_collection.json`: updated request bodies and assertions to the V3 group contract.
+- `.agent/report.md`: this report.
 
-## 검증
+## Validation
 
-- `.\mvnw.cmd test '-Dtest=CharacterServiceTests,JwtAuthenticationFilterTests' -q`: 성공, 신규 테스트 5개 통과.
-- `.\mvnw.cmd package -q`: 성공, 전체 테스트 19개 통과(실패·오류 0), JAR 빌드 완료.
-- `git diff --check`: 공백 오류 없음. 별도 lint 명령은 설정돼 있지 않으며 Maven 빌드에서 Java 컴파일을 검증함.
-- 최종 코드 diff를 확인했고 요청한 두 동작과 테스트 외의 코드 변경은 없음.
+- Java 25: `.\mvnw.cmd test '-Dtest=GroupServiceTests'` passed: 12 tests, no failures or errors.
+- Java 25: `.\mvnw.cmd test` ran 38 tests: 29 passed and nine errored during Spring context startup. `CharacterMapperTests` (3), `GroupMapperTests` (3), `HaweApplicationTests` (1), and `PokeMapperTests` (2) could not start because the local `hawe` database already has V4 applied and Flyway rejects the new, unapplied V3. No test assertion failures were reported.
+- Java 25: `.\mvnw.cmd package -DskipTests` passed, compiling main and test sources and building the JAR.
+- `git diff --check` passed with only Git line ending notices. Python's JSON parser accepted the updated Postman collection. A source search found old group time names only in V1/V3 migration SQL.
+- No lint or separate typecheck task is configured.
 
-## 가정, 위험 및 병합 충돌
+## Remaining risks and assumptions
 
-- 사용자가 DB에서 삭제됐으나 access token이 아직 유효한 경우를 `INVALID_TOKEN`(401)으로 처리했다. 기존 `AuthService.refresh`의 삭제 사용자 처리와 일치한다.
-- 갱신 0행은 JDBC 설정에 따라 동일한 값을 다시 저장한 경우에도 발생할 수 있어 사용자 존재 여부를 추가 조회한다.
-- 공개 캐릭터 목록에서는 잘못된 Bearer 토큰도 무시한다. 이 엔드포인트는 사용자 정보를 사용하지 않고 보안 설정에서 `permitAll`이다.
-- HTTP 서버를 직접 띄운 엔드포인트 호출은 하지 않았고, 필터·서비스 테스트와 전체 빌드로 검증했다.
-- 작업 시작 전부터 문서와 프롬프트 파일에 별도 수정·삭제가 있었다. 해당 파일은 건드리지 않았으며, 이번 변경 파일과의 텍스트 충돌은 보이지 않는다. 이전 작업용 `.agent/plan.md`는 이번 요청에 적용하지 않았다.
+- Database backed mapper tests and live create/update/get API smoke checks remain unverified until `hawe` is recreated with V1/V2 followed by V3/V4. I did not reset the database, alter Flyway history, or force an out-of-order migration.
+- The V3 migration still assumes an empty `missions` table, as documented in the earlier migration report.
+- The previously uncommitted V3 migration and `PokeMapperTests` changes, plus unrelated documentation and prompt changes, were left untouched. `GroupMapperTests` was edited on top of the V3 task's existing changes. The Postman collection is the only documentation file changed here.
+
+## Plan adjustments
+
+- Slot trimming runs only when the daily mission count decreases and `missionSlots` is omitted. A full slot replacement already removes out-of-range rows; increasing or retaining the count does not delete rows.

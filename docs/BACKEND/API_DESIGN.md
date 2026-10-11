@@ -1,6 +1,6 @@
-# HA'WE — API 설계 (ver0.1)
+# HA'WE — API 설계
 
-`docs/DB/DB_DESIGN_ver0.1.md`(DB 설계)를 기준으로 API를 처음부터 다시 설계한 문서. 이 문서는 **설계 전용**이며, 아직 어떤 컨트롤러/서비스 코드도 구현되지 않았다.
+`docs/BACKEND/BACKEND_DB.md`(DB 설계)를 기준으로 API를 처음부터 다시 설계한 문서. 이 문서는 **설계 전용**이며, 아직 어떤 컨트롤러/서비스 코드도 구현되지 않았다.
 
 ## 0. 공통 규칙
 
@@ -293,7 +293,7 @@ Response 204.
 
 ## 9. 참고
 
-- DB 스키마: `docs/DB/DB_DESIGN_ver0.1.md`
-- 서비스 컴포넌트 책임: `docs/BACKEND/BACKEND_DB_ver0.1.md`
-- 기능/화면 매핑: `docs/FEATURE/FEATURE_SPEC_ver0.1.md`
+- DB 스키마: `docs/BACKEND/BACKEND_DB.md`
+- 서비스 컴포넌트 책임: `docs/BACKEND/BACKEND_DB.md`
+- 프로젝트·기능 개요: `docs/FEATURE/PROJECT_OVERVIEW.md`
 - 패키지 구조(기능별 controller/service/dto/domain/dao): `CLAUDE.md`

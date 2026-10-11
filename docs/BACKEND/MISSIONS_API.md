@@ -1,7 +1,7 @@
-# HA'WE — 미션 / 제출 API 설계 (ver0.1)
+# HA'WE — 미션 / 제출 API 설계
 
 `docs/FEATURE/MISSIONS.md`의 미션 템플릿(틀)을 기준으로 미션·제출 API를 설계한 문서. 이 문서는 **설계 전용**이며 아직 구현되지 않았다.
-공통 규칙(Base path, 인증, 에러 형식, 페이지네이션, camelCase, ISO-8601)은 `API_DESIGN_ver0.1.md` §0을 따른다.
+공통 규칙(Base path, 인증, 에러 형식, 페이지네이션, camelCase, ISO-8601)은 `API_DESIGN.md` §0을 따른다.
 
 ## 0. 핵심 개념
 
@@ -13,7 +13,7 @@
 - **제출**: 틀이 요구하는 형식의 답. 미션당 1인 1회. 틀마다 담는 필드(파일/글/숫자/선택)가 다르다.
 - **잠금 규칙**: 내가 제출해야 그날의 그룹 피드와 결과를 볼 수 있다 (423 `FEED_LOCKED`).
 - **지각**: 그 미션의 마감 시각(`deadlineAt`) 이후 제출은 `isLate=true`. 제출 자체는 막지 않는다. 마감 시각은 발행 시점에 미션에 고정 저장된다.
-- **도장**: 별도 저장 없이 제출 기록 유무로 계산한다 (`FEATURE_SPEC` 도장 규칙). 하루에 미션이 여러 개일 때의 기준은 미정 (§11, 임시로 현행 유지: 그날 하나라도 제출하면 참잘했어요).
+- **도장**: 별도 저장 없이 제출 기록 유무로 계산한다 (`PROJECT_OVERVIEW.md` 핵심 규칙). 하루에 미션이 여러 개일 때의 기준은 미정 (§11, 임시로 현행 유지: 그날 하나라도 제출하면 참잘했어요).
 
 ## 0-1. 이번 설계에서 확정한 것들
 
@@ -27,7 +27,7 @@
 | 1차/2차 구분 | 혼자 제출로 끝나는 틀과 집계 틀은 1차, 순서·역할이 필요한 틀은 2차 | 2차는 별도 설계 필요 (§7) |
 | 미션 생성 | HTTP API 없음. 스케줄러가 슬롯별 발행 시각에 서버 내부에서 생성 (§6) | 외부에서 임의로 미션을 만들 수 없게 |
 | AI의 역할 | **미션 생성만** 한다. 서버가 정한 틀 안에서 문장·카테고리·빈칸 값을 만든다. 제출물 평가·판정은 하지 않는다 | 도장은 제출 기록만으로 계산되고 판정 결과를 저장할 필드가 필요 없음 |
-| 성대모사 | 제출자가 음성과 **정답**(누구를 흉내 냈는지)을 함께 내고, 다른 멤버가 정답을 입력해 맞힌다 (사람당 최대 3회, 초안). 미션 문장은 "성대모사를 맞춰보세요" 수준이고 흉내 낼 대상은 제출자가 정한다 | 소리를 AI로 분석하지 않고 사람이 맞히는 방식이라 AI 판정이 필요 없음 |
+| 성대모사·소리 흉내 | 제출자가 음성과 **정답**(과 선택적으로 **별칭**)을 함께 내고, 다른 멤버가 정답을 입력해 맞힌다. 별칭은 정답으로 인정한다. 사람당 최대 3회(초안), 맞혀도 제출자에게 알림을 보내지 않는다. 미션 문장은 "성대모사를 맞춰보세요" 수준이고 흉내 낼 대상은 제출자가 정한다 | 소리를 AI로 분석하지 않고 사람이 맞히는 방식이라 AI 판정이 필요 없음 |
 | 하루 미션 수 | 그룹 설정 `dailyMissionCount` (1~5, 기본 1) | 그룹마다 하루 몇 개 열지 지정 (상한 5는 초안) |
 | 발행·마감 시각 | 슬롯별 시각(`group_mission_slots`)만 사용. 지정이 없으면 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안) | 시각의 출처를 슬롯 한 곳으로 단순화 (그룹의 기본 시각 컬럼 제거) |
 | 서버 기본 시각 | 설정 파일 `hawe.mission.*`에 둔다 (발행 09:00, 마감 23:00 — 초안). 코드 상수가 아님 | 코드 수정 없이 환경별로 조정 가능 (JWT 설정과 같은 방식) |
@@ -43,7 +43,7 @@
 |---|---|---|
 | **S** 단독 제출 | 각자 혼자 제출하면 끝 | 1차 |
 | **T** 대상 지정 | S와 같되 미션이 특정 멤버(`target`)를 지목 | 1차 |
-| **G** 정답 맞히기 | 제출자가 정답을 함께 내고, 다른 멤버가 그 정답을 맞힘 (성대모사, §4-1) | 1차 |
+| **G** 정답 맞히기 | 제출자가 정답(과 별칭)을 함께 내고, 다른 멤버가 그 정답을 맞힘 (성대모사, 소리 흉내, §4-1) | 1차 |
 | **V** 집계 | 제출값을 모아 결과(평균/비율/순위)를 보여줌 | 1차 |
 | **R** 순서·역할 | 앞사람 결과에 이어가거나, 출제자/맞히는 사람 역할이 나뉨 | 2차 (§7) |
 
@@ -57,8 +57,8 @@
 | 사진 | 갤러리 발굴 | `PHOTO_GALLERY` | S | `condition` | `file`(이미지) | 1차 |
 | 사진 | 색깔 사냥 | `PHOTO_COLOR` | S | `color` | `file`(이미지) | 1차 |
 | 음성 | 한 줄 | `VOICE_LINE` | S | `sentence`, `tone` | `file`(음성) | 1차 |
-| 음성 | 소리 흉내 | `VOICE_MIMIC` | S | `subject` | `file`(음성) | 1차 |
-| 음성 | 성대모사 | `VOICE_IMPRESSION` | G | 없음 | `file`(음성), `answer`(정답) | 1차 |
+| 음성 | 소리 흉내 | `VOICE_MIMIC` | G | 없음 | `file`(음성), `answer`(정답), `alias`(별칭, 선택) | 1차 |
+| 음성 | 성대모사 | `VOICE_IMPRESSION` | G | 없음 | `file`(음성), `answer`(정답), `alias`(별칭, 선택) | 1차 |
 | 글 | 삼행시 | `TEXT_ACROSTIC` | S | `word`(정확히 3글자) | `text`(3줄) | 1차 |
 | 글 | 한 단어 일기 | `TEXT_ONE_WORD` | S | 없음 | `text`(단어), `caption`(이유) | 1차 |
 | 글 | 한 줄 후기 | `TEXT_REVIEW` | S | 없음 | `number`(별점 1~5), `text`(한 줄) | 1차 |
@@ -76,7 +76,7 @@
 | 슬라이더 | 제시어 바 | `SLIDER_CLUE_BAR` | R | `left`, `right` | 2차 | 2차 |
 
 - `target`을 쓰는 틀은 발행 시 서버가 그룹 멤버 중 1명을 무작위로 뽑아 `targetUserId`를 저장한다. `TEXT_FILL_BLANK`는 항상, `DRAW_SKETCH`/`DRAW_A_TO_B`는 설정된 확률(`hawe.mission.draw-target-probability`, 초안 0.3)로 지정한다 (§6-1). 응답에서는 서버가 닉네임을 풀어 `params.target`으로 내려준다 (§2 참조).
-- 소리 흉내(`VOICE_MIMIC`)의 "친구들이 맞히기"는 1차에서는 댓글로 처리한다 (별도 기능 없음). 성대모사(`VOICE_IMPRESSION`)는 정답 맞히기(G 유형, §4-1)로 처리한다. 소리 흉내에도 같은 방식을 쓸지는 §11 17번.
+- 소리 흉내(`VOICE_MIMIC`)와 성대모사(`VOICE_IMPRESSION`)는 둘 다 정답 맞히기(G 유형, §4-1)로 처리한다. 미션 문장에는 흉내 낼 대상이 없고("소리 흉내를 맞춰보세요", "성대모사를 맞춰보세요"), 무엇을 흉내 낼지는 제출자가 정한다.
 - `SLIDER_CONSENSUS`의 승자는 `guess`와 실제 평균(`number`들의 평균)의 차이가 가장 작은 멤버다. (MISSIONS.md의 설명을 이렇게 해석했다 — §11 확인 필요)
 
 ---
@@ -150,7 +150,7 @@
 정적 목록이라 페이지네이션 봉투를 쓰지 않아도 되지만 목록 응답 규칙(`content`)은 따른다.
 
 ### 그룹 설정 연동 (하루 미션 수 · 발행 시각)
-그룹 설정 API(`POST /groups`, `PATCH /groups/{groupId}/settings`, `GET /groups/{groupId}`; 기준 문서 `API_DESIGN_ver0.1.md` §2)에 아래 항목이 있다. **그룹에는 발행·마감 시각 필드가 없고, 시각은 모두 슬롯(`missionSlots`)이 가진다.**
+그룹 설정 API(`POST /groups`, `PATCH /groups/{groupId}/settings`, `GET /groups/{groupId}`; 기준 문서 `API_DESIGN.md` §2)에 아래 항목이 있다. **그룹에는 발행·마감 시각 필드가 없고, 시각은 모두 슬롯(`missionSlots`)이 가진다.**
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -196,7 +196,7 @@ hawe.mission.guess-max-attempts=3
 ```
 - `@ConfigurationProperties(prefix = "hawe.mission")` 레코드(`MissionProperties`)로 바인딩한다. 기존 `JwtProperties`와 같은 방식이다.
 - `max-daily-count`는 `dailyMissionCount`의 상한 검증에 쓴다.
-- `draw-target-probability`는 그림 틀(`DRAW_SKETCH`, `DRAW_A_TO_B`)에 대상 멤버를 지정할 확률(0~1), `guess-max-attempts`는 성대모사 정답을 한 제출물에 시도할 수 있는 횟수다.
+- `draw-target-probability`는 그림 틀(`DRAW_SKETCH`, `DRAW_A_TO_B`)에 대상 멤버를 지정할 확률(0~1), `guess-max-attempts`는 정답 맞히기를 한 제출물에 시도할 수 있는 횟수다.
 - 환경변수로 덮어쓸 수 있다 (예: `HAWE_MISSION_DEFAULT_PUBLISH_TIME`). 개발 환경에서는 확인이 쉽도록 가까운 시각으로 바꿔 쓸 수 있다.
 - 값을 바꾸고 **재시작**하면 시각을 지정하지 않은 모든 그룹에 적용된다. 이미 열린 미션은 `published_at`/`deadline_at`에 고정되어 있어 바뀌지 않는다. 실행 중에는 바꿀 수 없다.
 - 형식이 잘못된 값(예: `9시`)이면 애플리케이션이 시작되지 않는다 (바인딩 실패).
@@ -220,7 +220,8 @@ hawe.mission.guess-max-attempts=3
 | `number` | int | 별점(1~5) 또는 슬라이더 위치(0~100) |
 | `guess` | int | `SLIDER_CONSENSUS`의 예측값(0~100) |
 | `choice` | text | `A` 또는 `B` (`TEXT_BALANCE`) |
-| `answer` | text | 성대모사(`VOICE_IMPRESSION`)의 정답 (공백 불가, 최대 50자). 다른 멤버에게는 맞히거나 미션 마감 후에만 공개 |
+| `answer` | text | 성대모사·소리 흉내의 정답 (공백 불가, 최대 50자). 다른 멤버에게는 맞히거나 미션 마감 후에만 공개 |
+| `alias` | text | 같은 정답으로 인정할 다른 표현 (선택, 최대 50자). 여러 개면 같은 이름으로 반복해서 보낸다 (최대 5개) |
 | `caption` | text | 보조 설명 (최대 200자, 틀에 따라 선택/필수) |
 
 ### 3-2. 틀별 필수 필드
@@ -228,8 +229,8 @@ hawe.mission.guess-max-attempts=3
 | `template` | 필수 | 선택 | 검증 |
 |---|---|---|---|
 | `PHOTO_*`, `DRAW_*` | `file`(이미지) | `caption` | 이미지 MIME |
-| `VOICE_LINE`, `VOICE_MIMIC` | `file`(음성) | `caption` | 음성 MIME, 길이 ≤ 20초 |
-| `VOICE_IMPRESSION` | `file`(음성), `answer`(정답) | `caption` | 음성 MIME, 길이 ≤ 20초, 정답 공백 불가 |
+| `VOICE_LINE` | `file`(음성) | `caption` | 음성 MIME, 길이 ≤ 20초 |
+| `VOICE_MIMIC`, `VOICE_IMPRESSION` | `file`(음성), `answer`(정답) | `caption`, `alias`(별칭, 최대 5개) | 음성 MIME, 길이 ≤ 20초, 정답 공백 불가, 별칭 개수·길이 제한 |
 | `TEXT_ACROSTIC` | `text` | - | 정확히 3줄, 각 줄이 `params.word`의 해당 글자로 시작 |
 | `TEXT_ONE_WORD` | `text`(단어, ≤ 20자) | `caption`(이유, ≤ 100자) | 공백 불가 |
 | `TEXT_REVIEW` | `number`(1~5), `text`(≤ 100자) | - | - |
@@ -258,7 +259,7 @@ hawe.mission.guess-max-attempts=3
 { "id": 102, "missionId": 11, "template": "SLIDER_POSITION",
   "number": 70, "submittedAt": "2026-09-29T10:00:00", "isLate": false }
 ```
-응답에는 해당 틀에서 쓰는 필드만 포함한다 (쓰지 않는 필드는 생략). `VOICE_IMPRESSION`의 생성 응답에는 제출자 본인이므로 `answer`가 포함된다.
+응답에는 해당 틀에서 쓰는 필드만 포함한다 (쓰지 않는 필드는 생략). 정답 맞히기 틀(`VOICE_MIMIC`, `VOICE_IMPRESSION`)의 생성 응답에는 제출자 본인이므로 `answer`와 `aliases`가 포함된다.
 
 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `ALREADY_SUBMITTED` (409), `INVALID_SUBMISSION` (400), `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413)
 
@@ -298,8 +299,8 @@ hawe.mission.guess-max-attempts=3
 - 게시물이 속한 그룹의 멤버이면서 **해당 미션에 내가 제출했을 때만** 볼 수 있다 (잠금 규칙 동일).
 - 에러: `SUBMISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423)
 
-### 4-1. 정답 맞히기 (G 유형, 성대모사)
-성대모사 미션에서 제출자는 음성과 함께 **정답**(누구를 흉내 냈는지)을 적는다. 다른 멤버는 음성을 듣고 정답을 입력해서 맞는지 확인한다.
+### 4-1. 정답 맞히기 (G 유형, 성대모사·소리 흉내)
+제출자는 음성과 함께 **정답**(무엇/누구를 흉내 냈는지)과, 선택적으로 같은 정답으로 인정할 **별칭**을 적는다. 다른 멤버는 음성을 듣고 정답을 입력해서 맞는지 확인한다.
 
 | Method | Path | 설명 |
 |---|---|---|
@@ -312,11 +313,11 @@ hawe.mission.guess-max-attempts=3
 // Response 200 — 틀린 경우
 { "correct": false, "attemptsLeft": 2 }
 
-// Response 200 — 맞힌 경우 (정답 공개)
+// Response 200 — 맞힌 경우 (대표 정답 공개)
 { "correct": true, "attemptsLeft": 1, "answer": "유재석" }
 ```
 
-피드(`GET /missions/{id}/submissions`)와 상세(`GET /submissions/{id}`)의 `VOICE_IMPRESSION` 항목에는 아래 필드가 추가된다.
+피드(`GET /missions/{id}/submissions`)와 상세(`GET /submissions/{id}`)의 정답 맞히기 항목에는 아래 필드가 추가된다.
 ```json
 { "id": 105, "userId": 2, "nickname": "잎사귀", "template": "VOICE_IMPRESSION",
   "mediaUrl": "...", "mediaType": "AUDIO",
@@ -324,11 +325,15 @@ hawe.mission.guess-max-attempts=3
   "myGuess": { "solved": false, "attemptsLeft": 3 },
   "reactionCount": 0, "commentCount": 1, "submittedAt": "...", "isLate": false }
 ```
-- `answer`: 공개 조건을 충족할 때만 값이 있고, 아니면 `null`. 서버는 공개 조건이 아닐 때 정답을 응답에 절대 포함하지 않는다.
+- `answer`: 공개 조건을 충족할 때만 값이 있고, 아니면 `null`. **별칭(`aliases`)은 다른 멤버에게 절대 내려주지 않는다.** 서버는 공개 조건이 아닐 때 정답과 별칭을 응답에 포함하지 않는다.
 - `myGuess`: 현재 사용자의 시도 상태. 본인 제출물이면 `null`.
 - **정답 공개 조건(초안):** 제출자 본인은 항상, 다른 멤버는 정답을 맞혔거나 미션 마감 시각(`deadlineAt`) 이후.
-- **정답 비교(초안):** 앞뒤 공백과 내부 공백을 제거하고 영문 대소문자를 무시한 뒤 완전 일치하면 정답이다.
+- **정답 비교(초안):**
+  1. 시도 값과 정답·별칭을 정규화한다 (앞뒤·내부 공백 제거, 영문 대소문자 무시).
+  2. 정규화한 정답 또는 별칭 중 하나와 **완전 일치**하면 정답이다.
+  3. 맞히면 응답의 `answer`는 제출자가 적은 대표 정답이다 (별칭이 아님).
 - **시도 횟수(초안):** 한 사람이 한 제출물에 최대 3회 (`hawe.mission.guess-max-attempts`). 맞히면 더 시도할 수 없다.
+- **알림 없음:** 누군가 정답을 맞혀도 제출자에게 알림을 보내지 않는다. 제출자에게 맞힌 사람 목록도 제공하지 않는다 (초안).
 - 본인 제출물에는 시도할 수 없다. 해당 미션에 내가 제출하지 않았으면 잠금 규칙에 따라 막힌다.
 - 시도는 제출이 아니므로 도장과 제출 횟수에 영향이 없다.
 - 에러: `SUBMISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423), `GUESS_NOT_SUPPORTED` (400), `CANNOT_GUESS_OWN_SUBMISSION` (409), `ALREADY_SOLVED` (409), `GUESS_LIMIT_EXCEEDED` (409), `VALIDATION_ERROR` (400, 빈 값)
@@ -443,11 +448,11 @@ N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모�
 
 ## 8. 정책 충돌 / 주의
 
-- **`TEXT_FILL_BLANK` (랜덤 사람 지정 빈칸 채우기)**: MISSIONS.md의 예시 문장은 특정 멤버를 비하하는 내용이다. 이 문서에는 옮기지 않았다. 이 틀은 구조상 **여러 명이 한 명에 대해 쓰는** 형태라 `mission-create-prompt.md`의 규칙과 충돌한다 (웬수: "여러 명이 한 명을 공격하게 되는 미션" 금지, 친구: "특정 친구 한 명을 지목해서 놀리는 미션" 금지, 공통: 혐오·비하 금지, 외모·몸 금지). 사용하려면 (a) 긍정적 문장만 허용, (b) 그룹 관계별 허용 여부, (c) 신고/삭제 수단 중 무엇을 둘지 먼저 정해야 한다.
+- **`TEXT_FILL_BLANK` (랜덤 사람 지정 빈칸 채우기)**: MISSIONS.md의 예시 문장은 특정 멤버를 비하하는 내용이다. 이 문서에는 옮기지 않았다. 이 틀은 구조상 **여러 명이 한 명에 대해 쓰는** 형태라 미션 안전 규칙(`PROJECT_OVERVIEW.md` §7)과 충돌한다 (웬수: "여러 명이 한 명을 공격하게 되는 미션" 금지, 친구: "특정 친구 한 명을 지목해서 놀리는 미션" 금지, 공통: 혐오·비하 금지, 외모·몸 금지). 사용하려면 (a) 긍정적 문장만 허용, (b) 그룹 관계별 허용 여부, (c) 신고/삭제 수단 중 무엇을 둘지 먼저 정해야 한다.
 - **`DRAW_SKETCH`, `DRAW_A_TO_B`의 대상 지정**: 설정된 확률로 대상이 지정된다. "[대상]을 동물로 그리기"가 외모 비하가 되지 않도록 프롬프트가 성격·분위기·좋아할 것 같은 것 등 칭찬하거나 가벼운 방향으로 제한한다. 관계별 선호를 두지 않기로 했으므로 가족, 그저그런사이에도 같은 확률이 적용된다.
-- **`VOICE_IMPRESSION`**: 누구를 흉내 낼지는 제출자가 직접 정한다 (미션 문장은 "성대모사를 맞춰보세요" 수준). AI가 제출을 평가하지 않으므로 실존 인물이나 그룹 멤버를 흉내 내는 내용은 서비스가 걸러주지 못한다. 신고·삭제 수단은 아직 없다.
+- **`VOICE_MIMIC`, `VOICE_IMPRESSION`**: 무엇을 흉내 낼지는 제출자가 정하며, 이에 대한 별도 제한이나 신고 수단은 두지 않는다 (의도된 결정).
 - **`PHOTO_GALLERY`**: 갤러리 사진에는 얼굴·위치·개인정보가 있을 수 있다. 조건(`condition`)을 만들 때 해당 주제를 피하도록 프롬프트 규칙을 유지한다.
-- **프롬프트 동기화(완료)**: `mission-create-prompt.md`를 서버가 정한 틀 안에서 `content`/`category`/`params`만 만드는 구조로 고쳤고, 제출 판정 프롬프트(`mission-judge-prompt.md`)는 삭제했다. 틀이 추가·변경되면 프롬프트의 "틀과 빈칸"과 §1 코드표를 함께 갱신한다 (기록: `src/main/resources/prompts/수정 기록용(후에삭제).md`).
+- **프롬프트 계약**: 프롬프트 파일은 이 저장소에서 제거되었고 팀원이 따로 관리한다. 프롬프트가 지켜야 할 약속은 다음과 같다. (1) 제출 평가는 하지 않고 미션 생성만 한다. (2) 틀은 서버가 정해서 입력으로 주며 AI는 고르거나 바꾸지 않는다. (3) 입력: 날짜·요일, 그룹 관계(문장의 톤과 금지 주제용, 틀 선택에는 쓰지 않음), 선택된 틀과 빈칸 정의, 대상 멤버 유무, 최근 미션(같은 날 먼저 열린 슬롯 포함), 카테고리 목록. (4) 출력은 `content`, `category`, `params` 세 가지이고 `params`의 빈칸 이름은 §1 코드표를 따른다. (5) 대상 멤버가 있으면 이름 대신 `[대상]`을 쓴다. (6) 성대모사·소리 흉내는 빈칸 없이 "~를 맞춰보세요" 문장을 쓴다. (7) 프롬프트에 중괄호 `{ }`를 쓰지 않는다 (Spring AI가 변수로 해석함). 틀이 추가·변경되면 §1 코드표를 고치고 팀원에게 알린다.
 
 ---
 
@@ -458,19 +463,19 @@ N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모�
 | `groups` | `relation_type VARCHAR(20) NOT NULL DEFAULT 'CASUAL'` 추가 (그룹 관계, 코드 유효성은 서비스에서 검증). `daily_mission_count TINYINT UNSIGNED NOT NULL DEFAULT 1` 추가. `mission_publish_time`, `mission_deadline_time` **삭제** (현재 데이터가 없어 이전 없이 삭제) |
 | `group_mission_slots` (신규) | 슬롯별 발행·마감 시각 지정. 컬럼: `group_id`, `slot_no`, `publish_time NULL`, `deadline_time NULL`. 행이 없거나 값이 NULL이면 설정 파일의 기본 시각을 사용. `(group_id, slot_no)` UNIQUE |
 | `missions` | `template VARCHAR(40) NOT NULL`, `params JSON NOT NULL`, `slot_no TINYINT UNSIGNED NOT NULL DEFAULT 1`, `published_at DATETIME NOT NULL`, `deadline_at DATETIME NOT NULL` 추가. UNIQUE `(group_id, mission_date, slot_no)` 추가 (중복 발행 방지) |
-| `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `text_value`, `number_value`, `guess_value`, `choice_value`, `answer_text` 추가 (모두 NULL 허용). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
+| `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `number_value`, `choice_value`, `answer_data`(JSON: 글 본문 `text`, 다수결 예측값 `guess` 등 집계하지 않는 답), `answer_text`(정답), `answer_aliases`(별칭 JSON 배열) 추가 (모두 NULL 허용). 요청 필드(`text`, `guess`)는 그대로이고 저장만 다르다: `number`→`number_value`, `choice`→`choice_value`, `text`→`answer_data.text`, `guess`→`answer_data.guess` (`BACKEND_DB.md` "제출 답 저장 방식"). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
 | `submission_guesses` (신규) | 성대모사 정답 시도 기록. 컬럼: `id`, `submission_id`(FK), `user_id`(FK), `guess_text VARCHAR(100) NOT NULL`, `is_correct BOOLEAN NOT NULL`, `created_at DATETIME`. `(submission_id, user_id)` 인덱스(UNIQUE 아님, 여러 번 시도 가능) |
 
 - 기존 `group_members` UNIQUE 제약처럼 **동시 요청에서의 중복은 DB 제약으로 막고** 서비스에서 `DuplicateKeyException`을 `ALREADY_SUBMITTED`로 변환한다.
 - `submissions.caption`의 `TEXT` 길이는 서비스에서 제한한다 (200자).
-- 컬럼별 상세 정의는 `BACKEND_DB_ver0.1.md`의 "미션/제출/그룹 스케줄 스키마 변경 상세"를 기준으로 한다.
+- 컬럼별 상세 정의는 `BACKEND_DB.md`의 "미션/제출/그룹 스케줄 스키마 변경 상세"를 기준으로 한다.
 
 ### 다른 문서에 미치는 영향 (이 문서에서는 수정하지 않음)
-- `API_DESIGN_ver0.1.md` §7 (Calendar)의 `submission.imageUrl` → `mediaUrl` 계열로 맞춰야 함. 하루에 미션이 여러 개일 수 있으므로 `GET /me/calendar/{date}`의 그룹별 `mission`/`submission`도 목록 구조로 바꿔야 함.
+- `API_DESIGN.md` §7 (Calendar)의 `submission.imageUrl` → `mediaUrl` 계열로 맞춰야 함. 하루에 미션이 여러 개일 수 있으므로 `GET /me/calendar/{date}`의 그룹별 `mission`/`submission`도 목록 구조로 바꿔야 함.
 - 이미 구현된 그룹 API(`GroupController`, `GroupService`, `GroupMapper`, `Group` 도메인, DTO)는 `dailyMissionCount`, `missionSlots`를 모르고, 삭제되는 `missionPublishTime`/`missionDeadlineTime`을 아직 사용한다. 그룹 생성·수정·조회의 요청/응답과 SQL을 별도 구현 작업으로 바꿔야 한다.
 - `GroupMemberMapper.findMembersByGroupId`의 `submissionCountThisMonth`는 현재 제출 행 수를 센다. 하루 미션이 여러 개가 되면 "제출한 날 수"와 의미가 달라지므로 기준을 정해야 한다 (§11).
-- `API_DESIGN_ver0.1.md` §4 (Comment/Reaction)는 `submissions` 기준이라 그대로 유효.
-- `BACKEND_DB_ver0.1.md`의 엔드포인트 목록(§ 미션/제출)과 `DB_DESIGN_ver0.1.md`의 `submissions` 컬럼 설명을 이 문서에 맞게 갱신해야 함.
+- `API_DESIGN.md` §4 (Comment/Reaction)는 `submissions` 기준이라 그대로 유효.
+- `BACKEND_DB.md`의 엔드포인트 목록(미션/제출)과 `submissions` 컬럼 설명은 이 문서에 맞춰 갱신했다 (`DB_DESIGN`은 삭제됨).
 
 ## 10. 에러 코드 (`MissionErrorCode`, 새 enum — `mission/service/`)
 
@@ -499,7 +504,7 @@ N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모�
 5. `SLIDER_CONSENSUS`의 승리 판정 해석 확인 (§1-2).
 6. 대상 지정 틀에서 대상 본인이 제출할 수 있는가, 대상이 도중에 탈퇴하면 어떻게 표시하는가.
 7. 파일 한도·허용 형식의 확정값, 음성 길이 검증 방식 (서버에서 오디오 길이를 읽을 수 있는지).
-8. **도장 기준 (하루에 미션이 여러 개일 때).** 선택지: (a) 하나라도 제출하면 참잘했어요(현행 규칙 유지, 임시 기준), (b) 그날 열린 미션을 모두 제출해야 참잘했어요, (c) 미션별 도장. (b)나 (c)를 택하면 `FEATURE_SPEC`, 달력 API, `stampedToday` 계산이 모두 바뀐다.
+8. **도장 기준 (하루에 미션이 여러 개일 때).** 선택지: (a) 하나라도 제출하면 참잘했어요(현행 규칙 유지, 임시 기준), (b) 그날 열린 미션을 모두 제출해야 참잘했어요, (c) 미션별 도장. (b)나 (c)를 택하면 `PROJECT_OVERVIEW.md`의 도장 규칙, 달력 API, `stampedToday` 계산이 모두 바뀐다.
 9. 멤버 목록의 `submissionCountThisMonth`를 "제출 수"로 둘지 "제출한 날 수"로 바꿀지.
 10. 하루 미션 수 상한(현재 초안 5)과 슬롯 간 최소 간격 제한 여부. 모든 슬롯이 같은 시각이면 같은 시각에 N개가 한꺼번에 열린다 (허용하는 것으로 가정).
 11. 슬롯의 마감이 발행보다 이르거나 자정을 넘기는 경우 허용 여부 (그룹 설정의 기존 미정 사항과 동일).
@@ -508,6 +513,6 @@ N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모�
 14. (결정됨) 서버 기본 시각은 설정 파일 `hawe.mission.*`에 둔다 (§2). 값(초안 발행 09:00 / 마감 23:00)과 `max-daily-count`(초안 5)는 확정이 필요하다.
 15. (결정됨) 틀 선택 규칙은 §6-1: 하루 여러 개는 같은 날 매체 중복 금지, 하루 1개는 어제와 같은 매체 제외, 후보 부족 시 예외 허용, 그룹 관계별 선호는 두지 않음. 남은 일: 매체 목록·시드 계산 방식 구현 시 확정.
 16. (결정됨) 그림 틀(`DRAW_SKETCH`, `DRAW_A_TO_B`)은 설정된 확률로 대상 멤버를 지정한다 (§6-1 규칙 5, 초안 0.3). 확률 값은 확정이 필요하고, 안전 검토는 §8에서 이어진다.
-17. 소리 흉내(`VOICE_MIMIC`)에도 성대모사와 같은 정답 맞히기를 쓸지 (현재는 댓글로 처리).
-18. 정답 맞히기 세부 확정: 비교 방식(공백·대소문자 무시 완전 일치가 충분한지, 오타·별칭 허용), 시도 횟수(3회), 공개 시점(맞힘/마감 후).
-19. 누가 정답을 맞혔을 때 제출자에게 알림을 보낼지, 제출자가 맞힌 사람을 볼 수 있는지.
+17. (결정됨) 소리 흉내(`VOICE_MIMIC`)도 성대모사와 같은 정답 맞히기(G 유형)를 쓴다 (§4-1).
+18. (결정됨) 별칭은 정답으로 인정하고 오타는 허용하지 않는다 (정규화 후 완전 일치만, §4-1). 남은 일: 별칭 최대 개수(5) 확정.
+19. (결정됨) 정답을 맞혀도 제출자에게 알림을 보내지 않는다.

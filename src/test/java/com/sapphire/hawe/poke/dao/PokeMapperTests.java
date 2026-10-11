@@ -64,19 +64,18 @@ class PokeMapperTests {
     }
 
     private Long insertGroup(Long ownerId) {
-        jdbc.update("INSERT INTO `groups` (name, owner_id, mission_publish_time, mission_deadline_time) "
-                + "VALUES ('Test group', ?, '09:00', '23:00')", ownerId);
+        jdbc.update("INSERT INTO `groups` (name, owner_id) VALUES ('Test group', ?)", ownerId);
         return jdbc.queryForObject("SELECT MAX(id) FROM `groups` WHERE owner_id = ?", Long.class, ownerId);
     }
 
     private Long insertMission(Long groupId, String missionDate) {
-        jdbc.update("INSERT INTO missions (group_id, content, category, mission_date) "
-                + "VALUES (?, 'Test mission', 'TEST', " + missionDate + ")", groupId);
+        jdbc.update("INSERT INTO missions (group_id, content, category, mission_date, template, params, published_at, deadline_at) "
+                + "VALUES (?, 'Test mission', 'TEST', " + missionDate + ", 'PHOTO_NOW', '{}', NOW(), NOW() + INTERVAL 1 HOUR)", groupId);
         return jdbc.queryForObject("SELECT MAX(id) FROM missions WHERE group_id = ?", Long.class, groupId);
     }
 
     private void submit(Long missionId, Long userId) {
-        jdbc.update("INSERT INTO submissions (mission_id, user_id, image_url) VALUES (?, ?, 'test.png')",
+        jdbc.update("INSERT INTO submissions (mission_id, user_id, media_url) VALUES (?, ?, 'test.png')",
                 missionId, userId);
     }
 }
