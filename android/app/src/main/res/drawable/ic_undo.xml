@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- icon-undo.svg (iOS Assets.xcassets 에서 변환) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="22"
+    android:viewportHeight="22">
+    <path android:pathData="M8.24996 12.8334L3.66663 8.25002L8.24996 3.66669"
+        android:strokeColor="#111111"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M3.66663 8.25H13.75C14.9655 8.25 16.1313 8.73289 16.9909 9.59243C17.8504 10.452 18.3333 11.6178 18.3333 12.8333C18.3333 14.0489 17.8504 15.2147 16.9909 16.0742C16.1313 16.9338 14.9655 17.4167 13.75 17.4167H11"
+        android:strokeColor="#111111"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

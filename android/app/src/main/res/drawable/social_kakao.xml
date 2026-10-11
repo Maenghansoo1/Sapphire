@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- social-kakao.svg (iOS Assets.xcassets 에서 변환) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="18dp"
+    android:viewportWidth="18"
+    android:viewportHeight="18">
+    <path android:pathData="M9 2.25C4.875 2.25 1.5 4.875 1.5 8.1C1.5 10.2 2.925 12 5.025 13.05L4.275 15.75C4.2 15.975 4.5 16.2 4.725 16.05L7.875 13.95C8.25 14.025 8.625 14.025 9 14.025C13.125 14.025 16.5 11.4 16.5 8.1C16.5 4.8 13.125 2.25 9 2.25Z"
+        android:fillColor="#191919" />
+</vector>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- character-ipsagwi.svg (iOS Assets.xcassets 에서 변환) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="80dp"
+    android:height="80dp"
+    android:viewportWidth="80"
+    android:viewportHeight="80">
+    <path android:pathData="M43.3646 30.557C48.1658 29.2706 50.5516 22.6057 48.6933 15.6706C46.8351 8.73557 41.4365 4.15649 36.6354 5.44296C31.8342 6.72944 29.4484 13.3943 31.3067 20.3294C33.1649 27.2644 38.5635 31.8435 43.3646 30.557Z"
+        android:fillColor="#8FA06A" />
+    <path android:pathData="M40 74C56.5685 74 70 60.5685 70 44C70 27.4315 56.5685 14 40 14C23.4315 14 10 27.4315 10 44C10 60.5685 23.4315 74 40 74Z"
+        android:fillColor="#C7D0AE" />
+    <path android:pathData="M31 43C32.6569 43 34 41.6569 34 40C34 38.3431 32.6569 37 31 37C29.3431 37 28 38.3431 28 40C28 41.6569 29.3431 43 31 43Z"
+        android:fillColor="#3E4A2C" />
+    <path android:pathData="M49 43C50.6569 43 52 41.6569 52 40C52 38.3431 50.6569 37 49 37C47.3431 37 46 38.3431 46 40C46 41.6569 47.3431 43 49 43Z"
+        android:fillColor="#3E4A2C" />
+    <path android:pathData="M31 54C37 58 43 58 49 54"
+        android:strokeColor="#3E4A2C"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round" />
+</vector>
