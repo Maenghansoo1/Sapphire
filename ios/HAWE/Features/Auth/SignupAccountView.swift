@@ -6,6 +6,7 @@ struct SignupAccountView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var model = SignupAccountModel()
+    @State private var openedLink: WebLink?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +31,7 @@ struct SignupAccountView: View {
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .safariSheet($openedLink)
     }
 
     private var terms: some View {
@@ -37,9 +39,9 @@ struct SignupAccountView: View {
             HCheckbox(isOn: $model.agreeAll) {
                 termLabel("전체 동의", font: .plex(15, .bold))
             }
-            termRow("[필수] 서비스 이용약관 동의", isOn: $model.agreeService, showsDetail: true)
-            termRow("[필수] 개인정보 처리방침 동의", isOn: $model.agreePrivacy, showsDetail: true)
-            termRow("[선택] 새 소식·이벤트 알림 받기", isOn: $model.agreeMarketing, showsDetail: false)
+            termRow("[필수] 서비스 이용약관 동의", isOn: $model.agreeService, detail: AppLinks.termsOfService)
+            termRow("[필수] 개인정보 처리방침 동의", isOn: $model.agreePrivacy, detail: AppLinks.privacyPolicy)
+            termRow("[선택] 새 소식·이벤트 알림 받기", isOn: $model.agreeMarketing, detail: nil)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
@@ -49,14 +51,13 @@ struct SignupAccountView: View {
         )
     }
 
-    private func termRow(_ title: String, isOn: Binding<Bool>, showsDetail: Bool) -> some View {
+    private func termRow(_ title: String, isOn: Binding<Bool>, detail: URL?) -> some View {
         HStack(spacing: 10) {
             HCheckbox(isOn: isOn) {
                 termLabel(title, font: .plex(14))
             }
-            if showsDetail {
-                // TODO: 약관·개인정보 처리방침 웹 주소를 받으면 Safari View 로 열어요 (CLAUDE.md §4)
-                Button("보기") {}
+            if let detail {
+                Button("보기") { openedLink = WebLink(url: detail) }
                     .font(.caption13)
                     .underline()
                     .foregroundStyle(.textSecondary)

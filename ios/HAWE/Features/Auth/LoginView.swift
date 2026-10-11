@@ -54,8 +54,7 @@ struct LoginView: View {
             Text("|")
                 .font(.plex(14))
                 .foregroundStyle(.controlOff)
-            // TODO: 비밀번호 찾기 화면은 Figma 에 없어요 — 방식 확인 필요
-            Button("비밀번호 찾기") {}
+            Button("비밀번호 찾기") { path.append(.passwordReset(email: email)) }
                 .font(.plex(14))
                 .foregroundStyle(.textSecondary)
         }

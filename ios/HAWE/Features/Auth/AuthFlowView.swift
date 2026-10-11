@@ -5,6 +5,7 @@ import SwiftUI
 enum AuthRoute: Hashable {
     case signupAccount
     case signupProfile(viaSocial: Bool)
+    case passwordReset(email: String)
 }
 
 struct AuthFlowView: View {
@@ -19,6 +20,8 @@ struct AuthFlowView: View {
                         SignupAccountView(path: $path)
                     case .signupProfile(let viaSocial):
                         SignupProfileView(showsStep: !viaSocial)
+                    case .passwordReset(let email):
+                        PasswordResetView(initialEmail: email)
                     }
                 }
         }
