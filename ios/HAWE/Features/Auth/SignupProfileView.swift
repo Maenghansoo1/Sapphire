@@ -8,6 +8,7 @@ struct SignupProfileView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
+    @Environment(DataStore.self) private var store
 
     @State private var avatar: AvatarContent = .character(.default)
     @State private var nickname = ""
@@ -39,8 +40,14 @@ struct SignupProfileView: View {
                 }
                 .padding(.top, 8)
             } cta: {
-                // TODO: 서버 연결 시 프로필 저장. 지금은 그룹이 없는 신규 사용자로 01 시작에 들어가요.
-                HButton("시작하기") { session.signIn(hasGroups: false) }
+                // TODO: 서버 연결 시 프로필 저장. 새 계정이라 그룹이 없어서 01 시작으로 가요.
+                HButton("시작하기") {
+                    let profile = Profile(avatar: avatar, nickname: nickname.trimmingCharacters(in: .whitespaces))
+                    session.account.profile = profile
+                    store.reset()
+                    store.setMyProfile(profile)
+                    session.signIn()
+                }
                     .disabled(!canStart)
             }
         }
@@ -80,4 +87,5 @@ struct SignupProfileView: View {
         SignupProfileView()
     }
     .environment(AppSession())
+    .environment(DataStore())
 }

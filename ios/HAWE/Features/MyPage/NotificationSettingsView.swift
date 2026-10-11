@@ -93,5 +93,5 @@ struct NotificationSettingsView: View {
     NavigationStack {
         NotificationSettingsView()
     }
-    .environment(AppSession(state: .signedIn(hasGroups: true)))
+    .environment(AppSession(state: .signedIn))
 }

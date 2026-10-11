@@ -215,7 +215,7 @@ struct ChangePasswordView: View {
     NavigationStack {
         UserInfoView(path: .constant([]))
     }
-    .environment(AppSession(state: .signedIn(hasGroups: true)))
+    .environment(AppSession(state: .signedIn))
 }
 
 #Preview("비밀번호 변경") {

@@ -5,7 +5,7 @@ import SwiftUI
 struct MissionPerformView: View {
     let type: MissionType
     let topic: String
-    var onSubmit: () -> Void = {}
+    var onSubmit: (SubmissionContent) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
 
@@ -22,8 +22,8 @@ struct MissionPerformView: View {
     }
 
     /// TODO: 서버 연결 시 Storage 업로드(submissions/{group}/{mission}/{user}.png|jpg|m4a) 후 제출 저장
-    private func submit() {
-        onSubmit()
+    private func submit(_ content: SubmissionContent) {
+        onSubmit(content)
         dismiss()
     }
 }

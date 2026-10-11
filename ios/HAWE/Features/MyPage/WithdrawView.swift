@@ -5,6 +5,7 @@ import SwiftUI
 struct WithdrawView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
+    @Environment(DataStore.self) private var store
     @State private var agreed = false
 
     private let notices = [
@@ -63,7 +64,10 @@ struct WithdrawView: View {
 
             HStack(spacing: 8) {
                 HButton("계속 쓸게요", kind: .gray, height: 54) { dismiss() }
-                HButton("탈퇴하기", kind: .danger, height: 54) { session.withdraw() }
+                HButton("탈퇴하기", kind: .danger, height: 54) {
+                    store.reset()
+                    session.withdraw()
+                }
                     .disabled(!agreed)
             }
             .padding(.top, 10)
@@ -80,5 +84,6 @@ struct WithdrawView: View {
     NavigationStack {
         WithdrawView()
     }
-    .environment(AppSession(state: .signedIn(hasGroups: true)))
+    .environment(AppSession(state: .signedIn))
+    .environment(DataStore())
 }

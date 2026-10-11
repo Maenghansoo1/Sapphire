@@ -5,7 +5,7 @@ import SwiftUI
 /// PencilKit. 펜/지우개, 굵기 3단계, 7색, 되돌리기/다시 실행. 올리기 → PNG
 struct DrawMissionView: View {
     let topic: String
-    var onSubmit: () -> Void = {}
+    var onSubmit: (SubmissionContent) -> Void = { _ in }
 
     @State private var canvas = DrawingCanvasModel()
 
@@ -35,8 +35,9 @@ struct DrawMissionView: View {
 
             Spacer(minLength: 0)
 
-            // TODO: 서버 연결 시 canvas.pngData() 를 Storage 에 올려요.
-            HButton("올리기", action: onSubmit)
+            HButton("올리기") {
+                if let png = canvas.pngData() { onSubmit(.image(png, fileExtension: "png")) }
+            }
                 .disabled(canvas.isEmpty)
         }
         .padding(.horizontal, HLayout.screenPaddingCompact)

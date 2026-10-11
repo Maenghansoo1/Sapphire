@@ -3,18 +3,31 @@ import SwiftUI
 /// 16 그룹 정보 · 설정 (Figma 1:1454)
 /// 초대 코드 복사·링크 공유, 멤버 목록(내 줄에 '내 프로필 편집'), 주제 도착 시간(방장만 변경), 그룹 알림, 그룹 나가기
 struct GroupInfoView: View {
+    let groupID: UUID
     var onLeft: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
-    @State private var group: GroupDetail
+    @Environment(DataStore.self) private var store
     @State private var isEditingProfile = false
     @State private var showsTimePicker = false
     @State private var showsLeaveAlert = false
     @State private var toast: String?
 
-    init(group: GroupDetail, onLeft: @escaping () -> Void = {}) {
-        self._group = State(initialValue: group)
-        self.onLeft = onLeft
+    /// 나간 직후처럼 그룹이 사라졌을 때는 빈 값으로 그려요.
+    private var group: GroupDetail {
+        store.group(groupID) ?? GroupDetail(
+            id: groupID, name: "", relationship: .friend, createdAt: .now, missionCount: 0,
+            inviteCode: "", topicTime: DateComponents(hour: 9, minute: 0), notify: false, members: []
+        )
+    }
+
+    /// 16-1 에서 저장하면 DataStore 에 그룹 내 프로필로 반영돼요.
+    private var myMember: Binding<GroupMember>? {
+        guard let me = group.me else { return nil }
+        return Binding(
+            get: { store.group(groupID)?.me ?? me },
+            set: { store.setMyGroupProfile($0.groupProfile, for: groupID) }
+        )
     }
 
     var body: some View {
@@ -37,12 +50,15 @@ struct GroupInfoView: View {
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $isEditingProfile) {
-            if let index = group.members.firstIndex(where: \.isMe) {
-                GroupProfileView(groupName: group.name, member: $group.members[index])
+            if let myMember {
+                GroupProfileView(groupName: group.name, member: myMember)
             }
         }
         .sheet(isPresented: $showsTimePicker) {
-            TopicTimeSheet(time: $group.topicTime)
+            TopicTimeSheet(time: Binding(
+                get: { group.topicTime },
+                set: { store.setTopicTime($0, for: groupID) }
+            ))
         }
         .alert("그룹에서 나갈까요?", isPresented: $showsLeaveAlert) {
             Button("취소", role: .cancel) {}
@@ -182,8 +198,9 @@ struct GroupInfoView: View {
 
             // Figma 에 그룹 알림 설정 화면이 없어서, 누르면 켜짐 ↔ 꺼짐이 바로 바뀌어요.
             HListRow("알림", value: group.notify ? "켜짐" : "꺼짐") {
-                group.notify.toggle()
-                show(toast: group.notify ? "이 그룹 알림을 켰어요" : "이 그룹 알림을 껐어요")
+                let on = !group.notify
+                store.setNotify(on, for: groupID)
+                show(toast: on ? "이 그룹 알림을 켰어요" : "이 그룹 알림을 껐어요")
             }
 
             Button { showsLeaveAlert = true } label: {
@@ -294,14 +311,19 @@ struct HToast: View {
     }
 }
 
-#Preview("방장") {
+#Preview("체험 그룹") {
+    let store = DataStore.preview()
     NavigationStack {
-        GroupInfoView(group: .mock)
+        GroupInfoView(groupID: store.groups[0].id)
     }
+    .environment(store)
 }
 
 #Preview("방금 만든 그룹") {
+    let store = DataStore()
+    let id = store.createGroup(name: "우리 둘", relationship: .lover, startDate: .now)
     NavigationStack {
-        GroupInfoView(group: .newlyCreated(name: "우리 둘", relationship: .lover))
+        GroupInfoView(groupID: id)
     }
+    .environment(store)
 }

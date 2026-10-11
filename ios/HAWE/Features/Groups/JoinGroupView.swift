@@ -5,7 +5,9 @@ import SwiftUI
 /// 초대 링크(Universal Link)로 열면 `initialCode` 로 코드가 자동 입력돼요.
 struct JoinGroupView: View {
     var initialCode = ""
-    var onJoined: () -> Void = {}
+    var onJoined: (_ code: String) -> Void = { _ in }
+
+    @Environment(DataStore.self) private var store
 
     @Environment(\.dismiss) private var dismiss
     @State private var model = JoinGroupModel()
@@ -38,7 +40,7 @@ struct JoinGroupView: View {
                 .animation(.default, value: model.preview)
             } cta: {
                 // TODO: 서버 연결 시 그룹 참여 요청
-                HButton("참여하기") { onJoined() }
+                HButton("참여하기") { onJoined(model.code) }
                     .disabled(model.preview == nil)
             }
         }
@@ -103,7 +105,7 @@ struct JoinGroupView: View {
                 model.code = sanitized
                 return
             }
-            model.lookUp()
+            model.lookUp(in: store)
             if sanitized.count == JoinGroupModel.codeLength {
                 isCodeFocused = false
             }
@@ -149,7 +151,7 @@ struct GroupInvitePreview: Hashable {
     var isFull: Bool { members.count >= relationship.maxMembers }
 }
 
-/// 03 입력 상태와 코드 조회 (지금은 목업)
+/// 03 입력 상태와 코드 조회 (DataStore — 체험 코드는 DemoSeed 참고)
 @Observable
 final class JoinGroupModel {
     static let codeLength = 6
@@ -163,25 +165,15 @@ final class JoinGroupModel {
         String(text.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(codeLength))
     }
 
-    /// TODO: 서버 연결 시 실제 조회. 목업 규칙:
-    /// `000000` → 잘못된 코드, `FULL00` → 정원 초과, 나머지 6자리 → '컴공 동기' 미리보기
-    func lookUp() {
+    @MainActor
+    func lookUp(in store: DataStore) {
         preview = nil
         errorMessage = nil
         guard code.count == Self.codeLength else { return }
 
-        switch code {
-        case "000000":
-            errorMessage = "초대 코드를 찾을 수 없어요. 다시 확인해 주세요."
-        case "FULL00":
-            errorMessage = "이 그룹은 정원이 다 찼어요."
-        default:
-            let found = GroupInvitePreview.mock
-            if found.isFull {
-                errorMessage = "이 그룹은 정원이 다 찼어요."
-            } else {
-                preview = found
-            }
+        switch store.lookUpInvite(code: code) {
+        case .success(let found): preview = found
+        case .failure(let error): errorMessage = error.message
         }
     }
 }
@@ -199,10 +191,12 @@ extension GroupInvitePreview {
     NavigationStack {
         JoinGroupView()
     }
+    .environment(DataStore())
 }
 
 #Preview("링크로 열림") {
     NavigationStack {
-        JoinGroupView(initialCode: "k7q2p8")
+        JoinGroupView(initialCode: "k7q2px")
     }
+    .environment(DataStore())
 }

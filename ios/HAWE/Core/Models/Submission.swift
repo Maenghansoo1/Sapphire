@@ -27,6 +27,8 @@ struct Submission: Identifiable, Hashable {
     /// 좋아요 누른 다른 멤버 이름 (최근 순)
     var likerNames: [String] = []
     var comments: [SubmissionComment] = []
+    /// 올린 멤버 (group_members) — 참여 현황·'아직' 표시에 써요.
+    var authorID: UUID? = nil
 }
 
 /// 하루치 미션 결과 (10~13)

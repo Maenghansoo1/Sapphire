@@ -3,7 +3,7 @@ import SwiftUI
 /// 08 미션 수행 · 글 (Figma 1:658) — 최대 300자, 글자 수 표시
 struct WriteMissionView: View {
     let topic: String
-    var onSubmit: () -> Void = {}
+    var onSubmit: (SubmissionContent) -> Void = { _ in }
 
     static let maxLength = 300
     /// Figma 줄 높이 1.7 (17pt → 28.9pt)
@@ -34,8 +34,7 @@ struct WriteMissionView: View {
                 }
                 .padding(.top, 16)
             } cta: {
-                // TODO: 서버 연결 시 submissions.text 저장
-                HButton("올리기", action: onSubmit)
+                HButton("올리기") { onSubmit(.text(trimmed)) }
                     .disabled(trimmed.isEmpty)
             }
         }

@@ -34,7 +34,7 @@ struct ActivityStats: Hashable {
     var byType: [MissionType: Int]
 }
 
-/// 내 계정 — 기본 프로필, 로그인 연결, 활동 요약
+/// 내 계정 — 기본 프로필, 로그인 연결 (활동 요약은 DataStore.stats 에서 계산)
 struct MyAccount: Hashable {
     var profile: Profile
     var email: String?
@@ -42,7 +42,6 @@ struct MyAccount: Hashable {
     /// 처음 가입한 방법
     var signUpProvider: LoginProvider
     var linkedProviders: Set<LoginProvider>
-    var stats: ActivityStats
 
     /// 비밀번호 변경은 이메일 가입자만 (CLAUDE.md §4 17-2)
     var canChangePassword: Bool { linkedProviders.contains(.email) }
@@ -55,12 +54,6 @@ extension MyAccount {
         email: "sky@email.com",
         joinedAt: Calendar.current.date(from: DateComponents(year: 2026, month: 6, day: 2)) ?? .now,
         signUpProvider: .kakao,
-        linkedProviders: [.kakao],
-        stats: ActivityStats(
-            completedMissions: 142,
-            streakDays: 12,
-            groupCount: 3,
-            byType: [.draw: 38, .photo: 41, .write: 35, .voice: 28]
-        )
+        linkedProviders: [.kakao]
     )
 }

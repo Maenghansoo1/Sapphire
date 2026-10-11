@@ -2,8 +2,11 @@ import SwiftUI
 
 /// 04 홈 · 내 그룹 목록 (Figma 1:461)
 struct HomeView: View {
-    let groups: [GroupSummary]
     @Binding var path: [MainRoute]
+
+    @Environment(DataStore.self) private var store
+
+    private var groups: [GroupSummary] { store.summaries }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +23,7 @@ struct HomeView: View {
 
                     LazyVStack(spacing: 12) {
                         ForEach(groups) { group in
-                            Button { path.append(.mission(.mock(for: group))) } label: {
+                            Button { path.append(.mission(groupID: group.id)) } label: {
                                 GroupCard(group: group)
                                     .contentShape(RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
                             }
@@ -34,6 +37,8 @@ struct HomeView: View {
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        // 하루가 지나 새 미션이 열렸으면 만들어 둬요.
+        .onAppear { store.refreshTodayMissions() }
     }
 
     private var header: some View {
@@ -133,6 +138,7 @@ struct GroupCard: View {
 
 #Preview {
     NavigationStack {
-        HomeView(groups: GroupSummary.mock, path: .constant([]))
+        HomeView(path: .constant([]))
     }
+    .environment(DataStore.preview())
 }

@@ -41,7 +41,7 @@ struct LoginView: View {
             HTextField(placeholder: "이메일", text: $email, keyboard: .emailAddress, contentType: .username)
             HTextField(placeholder: "비밀번호", text: $password, isSecure: true, contentType: .password)
             // TODO: 서버 연결 시 실제 로그인. 지금은 그룹이 있는 사용자로 들어가요.
-            HButton("로그인") { session.signIn(hasGroups: true) }
+            HButton("로그인") { session.signIn() }
             links
         }
     }

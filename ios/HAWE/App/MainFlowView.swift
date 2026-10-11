@@ -1,31 +1,30 @@
 import SwiftUI
 
-/// 로그인 뒤 화면 흐름: 01 시작 또는 04 홈에서 02 그룹 만들기 / 03 초대 코드로 참여
+/// 로그인 뒤 화면 흐름. 그룹이 하나도 없으면 01 시작, 있으면 04 홈이 첫 화면이에요.
 /// 04 홈의 + 는 01 시작을 (뒤로 가기와 함께) 띄워요.
+/// 화면 사이에는 그룹·미션 id 만 넘기고, 내용은 DataStore 에서 읽어요.
 enum MainRoute: Hashable {
     case start
     case createGroup
     case joinGroup(code: String?)
-    case groupInfo(GroupDetail)
-    case mission(TodayMission)
-    case results(MissionResult)
-    case calendar(GroupDetail)
+    case groupInfo(groupID: UUID)
+    case mission(groupID: UUID)
+    case results(groupID: UUID, missionID: UUID)
+    case calendar(groupID: UUID)
     case myPage(MyPageRoute)
 }
 
 struct MainFlowView: View {
-    let hasGroups: Bool
-
-    @Environment(AppSession.self) private var session
+    @Environment(DataStore.self) private var store
     @State private var path: [MainRoute] = []
 
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if hasGroups {
-                    HomeView(groups: GroupSummary.mock, path: $path)
-                } else {
+                if store.groups.isEmpty {
                     StartView(path: $path)
+                } else {
+                    HomeView(path: $path)
                 }
             }
             .navigationDestination(for: MainRoute.self) { route in
@@ -33,19 +32,27 @@ struct MainFlowView: View {
                 case .start:
                     StartView(path: $path, showsBack: true)
                 case .createGroup:
-                    CreateGroupView { name, relationship in
-                        showCreatedGroup(.newlyCreated(name: name, relationship: relationship))
+                    CreateGroupView { name, relationship, startDate in
+                        let id = store.createGroup(name: name, relationship: relationship, startDate: startDate)
+                        // 그룹을 만든 뒤에는 16 그룹 정보(초대 코드 공유)로 가요. 뒤로 가면 홈이에요. (CLAUDE.md §4)
+                        path = [.groupInfo(groupID: id)]
                     }
                 case .joinGroup(let code):
-                    JoinGroupView(initialCode: code ?? "", onJoined: finish)
-                case .groupInfo(let group):
-                    GroupInfoView(group: group, onLeft: finish)
-                case .mission(let mission):
-                    MissionView(mission: mission, path: $path)
-                case .results(let result):
-                    ResultsView(result: result)
-                case .calendar(let group):
-                    RecordCalendarView(group: group, path: $path)
+                    JoinGroupView(initialCode: code ?? "") { joinedCode in
+                        store.join(code: joinedCode)
+                        path.removeAll()
+                    }
+                case .groupInfo(let groupID):
+                    GroupInfoView(groupID: groupID) {
+                        path.removeAll()
+                        store.leave(groupID)
+                    }
+                case .mission(let groupID):
+                    MissionView(groupID: groupID, path: $path)
+                case .results(let groupID, let missionID):
+                    ResultsView(groupID: groupID, missionID: missionID)
+                case .calendar(let groupID):
+                    RecordCalendarView(groupID: groupID, path: $path)
                 case .myPage(let route):
                     MyPageDestination(route: route, path: $path)
                 }
@@ -61,34 +68,30 @@ struct MainFlowView: View {
     }
 
     /// 알림을 눌렀을 때 갈 화면
-    /// TODO: 서버 연결 시 groupID·submissionID 로 실제 그룹·작품을 불러와요. 지금은 목업 첫 그룹으로 가요.
+    /// TODO: 서버 연결 시 groupID·submissionID 로 정확한 그룹·작품을 열어요. 지금은 첫 그룹으로 가요.
     private func open(_ destination: PushDestination) {
-        let mission = TodayMission.mock(for: GroupSummary.mock[0])
+        guard let group = store.groups.first else { return }
         switch destination.kind {
         case .topic, .poke, .friendDone:
-            path = [.mission(mission)]
+            path = [.mission(groupID: group.id)]
         case .comment:
-            path = [.mission(mission), .results(.mock(for: mission))]
+            if let mission = group.missions.last, mission.submissions.contains(where: \.isMine) {
+                path = [.mission(groupID: group.id), .results(groupID: group.id, missionID: mission.id)]
+            } else {
+                path = [.mission(groupID: group.id)]
+            }
         }
-    }
-
-    /// 그룹을 만든 뒤에는 16 그룹 정보(초대 코드 공유)로 가요. 거기서 뒤로 가면 홈이에요. (CLAUDE.md §4)
-    private func showCreatedGroup(_ group: GroupDetail) {
-        session.signIn(hasGroups: true)
-        path = [.groupInfo(group)]
-    }
-
-    /// 그룹에 참여하거나 나가면 홈으로 돌아가요.
-    private func finish() {
-        path.removeAll()
-        session.signIn(hasGroups: true)
     }
 }
 
 #Preview("그룹 없음") {
-    MainFlowView(hasGroups: false).environment(AppSession(state: .signedIn(hasGroups: false)))
+    MainFlowView()
+        .environment(AppSession(state: .signedIn))
+        .environment(DataStore())
 }
 
-#Preview("그룹 있음") {
-    MainFlowView(hasGroups: true).environment(AppSession(state: .signedIn(hasGroups: true)))
+#Preview("체험 그룹 참여") {
+    MainFlowView()
+        .environment(AppSession(state: .signedIn))
+        .environment(DataStore.preview())
 }

@@ -31,6 +31,8 @@ struct GroupDetail: Identifiable, Hashable {
     /// 이 그룹 알림 (group_members.notify)
     var notify: Bool
     var members: [GroupMember]
+    /// 연인 그룹의 '우리의 1일'
+    var startDate: Date? = nil
 
     var me: GroupMember? { members.first(where: \.isMe) }
     var amIOwner: Bool { me?.isOwner ?? false }

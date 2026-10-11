@@ -6,8 +6,8 @@ import Observation
 final class AppSession {
     enum State: Equatable {
         case signedOut
-        /// 그룹이 있으면 04 홈, 없으면 01 시작 (CLAUDE.md §4 A1)
-        case signedIn(hasGroups: Bool)
+        /// 그룹이 있으면 04 홈, 없으면 01 시작 — DataStore 의 그룹 수로 정해요 (CLAUDE.md §4 A1)
+        case signedIn
     }
 
     var state: State
@@ -19,8 +19,8 @@ final class AppSession {
         self.account = account
     }
 
-    func signIn(hasGroups: Bool) {
-        state = .signedIn(hasGroups: hasGroups)
+    func signIn() {
+        state = .signedIn
     }
 
     /// TODO: 서버 연결 시 토큰 삭제, 기기 푸시 토큰 해제

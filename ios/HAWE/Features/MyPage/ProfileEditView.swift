@@ -6,6 +6,7 @@ import SwiftUI
 struct ProfileEditView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
+    @Environment(DataStore.self) private var store
 
     @State private var avatar: AvatarContent = .character(.default)
     @State private var nickname = ""
@@ -46,7 +47,9 @@ struct ProfileEditView: View {
             } cta: {
                 // TODO: 서버 연결 시 profiles 저장 (사진이면 avatars/{user_id}.jpg 업로드)
                 HButton("저장") {
-                    session.account.profile = Profile(avatar: avatar, nickname: nickname.trimmingCharacters(in: .whitespaces))
+                    let profile = Profile(avatar: avatar, nickname: nickname.trimmingCharacters(in: .whitespaces))
+                    session.account.profile = profile
+                    store.setMyProfile(profile)
                     dismiss()
                 }
                 .disabled(!canSave)
@@ -67,5 +70,6 @@ struct ProfileEditView: View {
     NavigationStack {
         ProfileEditView()
     }
-    .environment(AppSession(state: .signedIn(hasGroups: true)))
+    .environment(AppSession(state: .signedIn))
+    .environment(DataStore())
 }

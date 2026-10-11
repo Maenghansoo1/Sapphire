@@ -5,7 +5,7 @@ import SwiftUI
 /// 녹음(최대 30초)·정지·다시·미리 듣기, 파형 표시. m4a(AAC)
 struct VoiceMissionView: View {
     let topic: String
-    var onSubmit: () -> Void = {}
+    var onSubmit: (SubmissionContent) -> Void = { _ in }
 
     @Environment(\.openURL) private var openURL
     @State private var recorder = VoiceRecorder()
@@ -34,10 +34,14 @@ struct VoiceMissionView: View {
             controls
                 .padding(.bottom, 32)
 
-            // TODO: 서버 연결 시 recorder.fileURL(m4a) 을 Storage 에 올려요.
             HButton("올리기") {
                 recorder.stopPlayback()
-                onSubmit()
+                onSubmit(.voice(
+                    fileURL: recorder.fileURL,
+                    duration: recorder.elapsed,
+                    // 녹음 안 된 막대(-1)는 빼고, 결과 화면 파형으로 써요.
+                    waveform: recorder.levels.filter { $0 >= 0 }
+                ))
             }
             .disabled(!recorder.hasRecording || recorder.isRecording)
         }

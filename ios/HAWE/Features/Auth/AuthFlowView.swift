@@ -29,5 +29,7 @@ struct AuthFlowView: View {
 }
 
 #Preview {
-    AuthFlowView().environment(AppSession())
+    AuthFlowView()
+        .environment(AppSession())
+        .environment(DataStore())
 }

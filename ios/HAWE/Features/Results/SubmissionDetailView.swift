@@ -269,15 +269,10 @@ struct SubmissionDetailView: View {
     }
 }
 
-#Preview("사진") {
-    let feed = ResultFeed(result: .mock(type: .photo, topic: "지금 창밖으로 보이는 풍경", date: .now))
-    NavigationStack {
-        SubmissionDetailView(feed: feed, submissionID: feed.result.submissions[0].id)
-    }
-}
-
-#Preview("음성") {
-    let feed = ResultFeed(result: .mock(type: .voice, topic: "오늘 하루를 10초로 말해줘", date: .now))
+#Preview {
+    let store = DataStore.preview()
+    let group = store.groups[0]
+    let feed = ResultFeed(store: store, groupID: group.id, missionID: group.missions.last!.id)
     NavigationStack {
         SubmissionDetailView(feed: feed, submissionID: feed.result.submissions[0].id)
     }

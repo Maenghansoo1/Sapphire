@@ -43,6 +43,18 @@ struct TodayMission: Identifiable, Hashable {
 }
 
 extension TodayMission {
+    /// 그룹이 없을 때 그릴 빈 값
+    static func empty(groupID: UUID) -> TodayMission {
+        TodayMission(
+            id: UUID(),
+            group: GroupDetail(
+                id: groupID, name: "", relationship: .friend, createdAt: .now, missionCount: 0,
+                inviteCode: "", topicTime: DateComponents(hour: 9, minute: 0), notify: false, members: []
+            ),
+            type: .draw, topic: "", number: 0, opensAt: .now, closesAt: .now, members: []
+        )
+    }
+
     static let seoul = TimeZone(identifier: "Asia/Seoul") ?? .current
 
     /// 주제 도착 시간 기준으로 지금 열려 있는 미션의 시작·끝 (CLAUDE.md §5-1)

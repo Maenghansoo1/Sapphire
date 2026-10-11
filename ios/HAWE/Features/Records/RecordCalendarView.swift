@@ -9,19 +9,21 @@ struct DayRecord: Hashable {
     var memberCount: Int
     /// 내가 그날 올렸는지 — 안 올린 날은 결과를 볼 수 없어요 (CLAUDE.md §5-2, 사용자 결정 2026-10-12)
     var didSubmit: Bool
+    /// '모아보기'로 열 미션
+    var missionID: UUID? = nil
 }
 
 /// 15 기록 캘린더 (Figma 1:1311)
 /// 그룹별 월간 캘린더. 기록 있는 날에 유형 이름(그림/사진/글/음성), 오늘 테두리,
 /// 날짜를 고르면 아래 카드 → '모아보기'로 그날 결과 공개 화면 (내가 올린 날만)
 struct RecordCalendarView: View {
-    let group: GroupDetail
+    let groupID: UUID
     @Binding var path: [MainRoute]
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(DataStore.self) private var store
     @State private var month: Date
     @State private var selected: Date?
-    @State private var records: [Date: DayRecord]
 
     private static let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
@@ -31,16 +33,17 @@ struct RecordCalendarView: View {
         return calendar
     }()
 
-    init(group: GroupDetail, path: Binding<[MainRoute]>, records: [DayRecord]? = nil) {
-        self.group = group
+    init(groupID: UUID, path: Binding<[MainRoute]>) {
+        self.groupID = groupID
         self._path = path
-        let calendar = Self.calendar
-        let list = records ?? Self.mockRecords(for: group, calendar: calendar)
-        let byDay = Dictionary(list.map { (calendar.startOfDay(for: $0.date), $0) }, uniquingKeysWith: { a, _ in a })
-        self._records = State(initialValue: byDay)
-        self._month = State(initialValue: calendar.dateInterval(of: .month, for: .now)?.start ?? .now)
-        // 처음에는 가장 최근 기록이 있는 날을 골라 둬요.
-        self._selected = State(initialValue: byDay.keys.max())
+        self._month = State(initialValue: Self.calendar.dateInterval(of: .month, for: .now)?.start ?? .now)
+    }
+
+    private var group: GroupDetail? { store.group(groupID) }
+
+    /// 날짜(그날 0시) → 기록
+    private var records: [Date: DayRecord] {
+        Dictionary(store.records(groupID).map { (calendar.startOfDay(for: $0.date), $0) }, uniquingKeysWith: { a, _ in a })
     }
 
     private var calendar: Calendar { Self.calendar }
@@ -65,12 +68,14 @@ struct RecordCalendarView: View {
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        // 처음에는 가장 최근 기록이 있는 날을 골라 둬요.
+        .onAppear { if selected == nil { selected = records.keys.max() } }
     }
 
     // MARK: - Month
 
     private var firstMonth: Date {
-        calendar.dateInterval(of: .month, for: group.createdAt)?.start ?? month
+        calendar.dateInterval(of: .month, for: group?.createdAt ?? .now)?.start ?? month
     }
 
     private var lastMonth: Date {
@@ -207,8 +212,9 @@ struct RecordCalendarView: View {
                 Spacer()
                 if record.didSubmit {
                     Button {
-                        // TODO: 서버 연결 시 그날 결과를 불러와요 (내 제출이 없으면 RLS 가 막아요)
-                        path.append(.results(.mock(groupName: group.name, type: record.type, topic: record.topic, date: record.date)))
+                        if let missionID = record.missionID {
+                            path.append(.results(groupID: groupID, missionID: missionID))
+                        }
                     } label: {
                         Text("모아보기")
                             .font(.plex(13, .semibold))
@@ -235,46 +241,12 @@ struct RecordCalendarView: View {
                 .strokeBorder(.line, lineWidth: 1)
         )
     }
-
-    // MARK: - 목업
-
-    /// 그룹을 만든 날부터 어제까지. Figma 10월 화면처럼 10일마다 한 번은 기록이 없어요.
-    static func mockRecords(for group: GroupDetail, calendar: Calendar) -> [DayRecord] {
-        let pattern: [MissionType?] = [.draw, .photo, .write, .voice, .draw, nil, .photo, .voice, .write, .draw]
-        let topics: [MissionType: [String]] = [
-            .draw: ["요즘 제일 웃겼던 순간", "오늘 기분을 날씨로 그려줘", "내 방 책상 위"],
-            .photo: ["지금 창밖으로 보이는 풍경", "오늘 먹은 것 중 최고", "지금 신고 있는 신발"],
-            .write: ["오늘 들은 가장 따뜻한 말", "너에게 해주고 싶은 말 한 줄"],
-            .voice: ["오늘 하루를 10초로 말해줘", "요즘 흥얼거리는 노래 한 소절"],
-        ]
-        var records: [DayRecord] = []
-        var day = calendar.startOfDay(for: group.createdAt)
-        let today = calendar.startOfDay(for: .now)
-        var index = 0
-        while day < today {
-            let dayOfMonth = calendar.component(.day, from: day)
-            if let type = pattern[(dayOfMonth - 1) % pattern.count] {
-                let list = topics[type] ?? []
-                records.append(DayRecord(
-                    date: day,
-                    type: type,
-                    topic: list.isEmpty ? "" : list[index % list.count],
-                    doneCount: index % 4 == 3 ? group.members.count - 1 : group.members.count,
-                    memberCount: group.members.count,
-                    // 목업: 참여 인원이 하나 모자란 날은 내가 안 올린 날로 둬요.
-                    didSubmit: index % 4 != 3
-                ))
-                index += 1
-            }
-            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
-            day = next
-        }
-        return records
-    }
 }
 
 #Preview {
+    let store = DataStore.preview()
     NavigationStack {
-        RecordCalendarView(group: .mock, path: .constant([]))
+        RecordCalendarView(groupID: store.groups[0].id, path: .constant([]))
     }
+    .environment(store)
 }

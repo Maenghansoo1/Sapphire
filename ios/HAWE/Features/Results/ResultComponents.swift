@@ -9,7 +9,9 @@ struct PhotoArtwork: View {
         let shape = RoundedRectangle(cornerRadius: HRadius.card, style: .continuous)
         ZStack {
             shape.fill(.surfaceStrong)
-            if let url = submission.mediaURL {
+            if let local = submission.localImage {
+                Image(uiImage: local).resizable().scaledToFill()
+            } else if let url = submission.mediaURL, !url.isFileURL {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
@@ -39,7 +41,10 @@ struct DrawingArtwork: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         ZStack {
             shape.fill(.bg)
-            if let url = submission.mediaURL {
+            if let local = submission.localImage {
+                Image(uiImage: local).resizable().scaledToFit()
+                    .frame(width: drawingSize, height: drawingSize)
+            } else if let url = submission.mediaURL, !url.isFileURL {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFit()
                 } placeholder: {
@@ -129,6 +134,14 @@ struct PendingMembers: View {
                 .frame(height: 48)
             }
         }
+    }
+}
+
+extension Submission {
+    /// 이 기기에 저장한 그림·사진 (서버 연결 전 임시 저장소)
+    var localImage: UIImage? {
+        guard let url = mediaURL, url.isFileURL else { return nil }
+        return UIImage(contentsOfFile: url.path)
     }
 }
 

@@ -3,24 +3,25 @@ import SwiftUI
 /// 05 그룹 · 오늘의 미션 (Figma 1:542)
 /// 오늘 유형·주제, 다음 미션까지 카운트다운, 유형별 CTA, 멤버별 완료 여부, 안 한 멤버 콕 찌르기(하루 1회)
 struct MissionView: View {
+    let groupID: UUID
     @Binding var path: [MainRoute]
 
     @Environment(\.dismiss) private var dismiss
-    @State private var mission: TodayMission
+    @Environment(DataStore.self) private var store
     @State private var isPerforming = false
     @State private var toast: String?
 
-    init(mission: TodayMission, path: Binding<[MainRoute]>) {
-        self._mission = State(initialValue: mission)
-        self._path = path
+    /// 그룹을 나간 직후처럼 미션이 없으면 빈 값으로 그려요.
+    private var mission: TodayMission {
+        store.todayMission(groupID) ?? .empty(groupID: groupID)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HNavBar(mission.group.name, leading: .back { dismiss() }) {
                 HStack(spacing: 16) {
-                    headerButton(.calendar, label: "기록 캘린더") { path.append(.calendar(mission.group)) }
-                    headerButton(.more, label: "그룹 정보") { path.append(.groupInfo(mission.group)) }
+                    headerButton(.calendar, label: "기록 캘린더") { path.append(.calendar(groupID: groupID)) }
+                    headerButton(.more, label: "그룹 정보") { path.append(.groupInfo(groupID: groupID)) }
                 }
             }
 
@@ -41,7 +42,10 @@ struct MissionView: View {
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $isPerforming) {
-            MissionPerformView(type: mission.type, topic: mission.topic, onSubmit: submitted)
+            MissionPerformView(type: mission.type, topic: mission.topic) { content in
+                store.submit(content, groupID: groupID)
+                show(toast: "오늘의 미션을 올렸어요")
+            }
         }
         .overlay(alignment: .bottom) {
             if let toast {
@@ -99,7 +103,7 @@ struct MissionView: View {
             }
 
             if mission.didSubmit {
-                HButton("친구들 작품 보기") { path.append(.results(.mock(for: mission))) }
+                HButton("친구들 작품 보기") { path.append(.results(groupID: groupID, missionID: mission.id)) }
             } else {
                 HButton(mission.type.actionTitle) { isPerforming = true }
             }
@@ -130,7 +134,7 @@ struct MissionView: View {
     /// 줄 높이 56 · 아바타 38 · 아래 구분선
     private var memberList: some View {
         VStack(spacing: 0) {
-            ForEach($mission.members) { $member in
+            ForEach(mission.members) { member in
                 HStack(spacing: 12) {
                     HAvatar(content: member.profile.avatar, size: 38)
                     Text(member.isMe ? "\(member.profile.nickname) (나)" : member.profile.nickname)
@@ -138,7 +142,7 @@ struct MissionView: View {
                         .foregroundStyle(.ink)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    status(for: $member)
+                    status(for: member)
                 }
                 .frame(height: 56)
                 .overlay(alignment: .bottom) {
@@ -149,24 +153,23 @@ struct MissionView: View {
     }
 
     @ViewBuilder
-    private func status(for member: Binding<MissionMember>) -> some View {
-        if member.wrappedValue.isDone {
+    private func status(for member: MissionMember) -> some View {
+        if member.isDone {
             HStack(spacing: 4) {
                 HIconView(icon: .check, size: 16)
                 Text("완료")
                     .font(.plex(13, .semibold))
                     .foregroundStyle(.ink)
             }
-        } else if member.wrappedValue.isMe {
+        } else if member.isMe {
             Text("아직 안 했어요")
                 .font(.caption13)
                 .foregroundStyle(.textSecondary)
         } else {
-            let poked = member.wrappedValue.pokedToday
+            let poked = member.pokedToday
             Button {
-                // TODO: 서버 연결 시 pokes 저장 + 푸시 (하루 1회는 서버에서도 막아요)
-                member.wrappedValue.pokedToday = true
-                show(toast: "\(member.wrappedValue.profile.nickname)님을 콕 찔렀어요")
+                store.poke(member.id, groupID: groupID)
+                show(toast: "\(member.profile.nickname)님을 콕 찔렀어요")
             } label: {
                 Text(poked ? "찔렀어요" : "콕 찌르기")
                     .font(.plex(13, .semibold))
@@ -196,13 +199,6 @@ struct MissionView: View {
 
     // MARK: - Helpers
 
-    private func submitted() {
-        if let index = mission.members.firstIndex(where: \.isMe) {
-            mission.members[index].isDone = true
-        }
-        show(toast: "오늘의 미션을 올렸어요")
-    }
-
     private func show(toast text: String) {
         toast = text
         Task {
@@ -225,13 +221,17 @@ struct MissionView: View {
 }
 
 #Preview("내 미션 남음") {
+    let store = DataStore.preview(submitted: false)
     NavigationStack {
-        MissionView(mission: .mock(for: GroupSummary.mock[0]), path: .constant([]))
+        MissionView(groupID: store.groups[0].id, path: .constant([]))
     }
+    .environment(store)
 }
 
 #Preview("올린 뒤") {
+    let store = DataStore.preview()
     NavigationStack {
-        MissionView(mission: .mock(for: GroupSummary.mock[1]), path: .constant([]))
+        MissionView(groupID: store.groups[0].id, path: .constant([]))
     }
+    .environment(store)
 }

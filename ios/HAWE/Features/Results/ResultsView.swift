@@ -4,13 +4,32 @@ import SwiftUI
 /// 작품을 누르면 14 작품 상세 · 댓글로 가요. 이 화면에는 댓글 입력이 없어요.
 /// 내가 제출해야 볼 수 있어요 — 서버(RLS)에서 막아야 해요 (CLAUDE.md §5-2).
 struct ResultsView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var feed: ResultFeed
-    @State private var openedID: Submission.ID?
+    let groupID: UUID
+    let missionID: UUID
 
-    init(result: MissionResult) {
-        self._feed = State(initialValue: ResultFeed(result: result))
+    @Environment(DataStore.self) private var store
+    @State private var feed: ResultFeed?
+
+    var body: some View {
+        Group {
+            if let feed {
+                ResultsContent(feed: feed)
+            } else {
+                Color.bg
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            if feed == nil { feed = ResultFeed(store: store, groupID: groupID, missionID: missionID) }
+        }
     }
+}
+
+private struct ResultsContent: View {
+    let feed: ResultFeed
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var openedID: Submission.ID?
 
     private var result: MissionResult { feed.result }
 
@@ -254,18 +273,11 @@ struct ResultsView: View {
     }
 }
 
-#Preview("사진") {
-    NavigationStack { ResultsView(result: .mock(type: .photo, topic: "지금 창밖으로 보이는 풍경", date: .now)) }
-}
-
-#Preview("그림") {
-    NavigationStack { ResultsView(result: .mock(type: .draw, topic: "요즘 제일 웃겼던 순간", date: .now)) }
-}
-
-#Preview("글") {
-    NavigationStack { ResultsView(result: .mock(type: .write, topic: "오늘 들은 가장 따뜻한 말", date: .now)) }
-}
-
-#Preview("음성") {
-    NavigationStack { ResultsView(result: .mock(type: .voice, topic: "오늘 하루를 10초로 말해줘", date: .now)) }
+#Preview {
+    let store = DataStore.preview()
+    let group = store.groups[0]
+    NavigationStack {
+        ResultsView(groupID: group.id, missionID: group.missions.last!.id)
+    }
+    .environment(store)
 }

@@ -2,41 +2,43 @@ import AVFoundation
 import Foundation
 import Observation
 
-/// 결과 공개(10~13)와 작품 상세(14)가 함께 쓰는 상태 — 좋아요·댓글이 두 화면에 같이 반영돼요.
+/// 결과 공개(10~13)와 작품 상세(14)가 함께 쓰는 상태 — 좋아요·댓글은 DataStore 에 저장돼서 두 화면에 같이 반영돼요.
 @MainActor
 @Observable
 final class ResultFeed {
-    var result: MissionResult
+    let store: DataStore
+    let groupID: UUID
+    let missionID: UUID
     let player = VoicePlayer()
 
-    init(result: MissionResult) {
-        self.result = result
+    init(store: DataStore, groupID: UUID, missionID: UUID) {
+        self.store = store
+        self.groupID = groupID
+        self.missionID = missionID
+    }
+
+    /// 내가 올리지 않은 미션이면 비어 있어요 (§5-2)
+    var result: MissionResult {
+        store.result(groupID: groupID, missionID: missionID) ?? MissionResult(
+            id: missionID, groupName: "", type: .draw, topic: "", date: .now, memberCount: 0, submissions: [], pending: []
+        )
     }
 
     func submission(_ id: Submission.ID) -> Submission? {
         result.submissions.first { $0.id == id }
     }
 
-    /// TODO: 서버 연결 시 likes 저장/삭제
     func toggleLike(_ id: Submission.ID) {
-        guard let index = result.submissions.firstIndex(where: { $0.id == id }) else { return }
-        result.submissions[index].likedByMe.toggle()
-        result.submissions[index].likeCount += result.submissions[index].likedByMe ? 1 : -1
+        store.toggleLike(id, missionID: missionID, groupID: groupID)
     }
 
-    /// TODO: 서버 연결 시 comments 저장
     func addComment(_ body: String, to id: Submission.ID) {
-        guard let index = result.submissions.firstIndex(where: { $0.id == id }) else { return }
-        let me = GroupDetail.mock.me?.displayed ?? .mockMine
-        result.submissions[index].comments.append(
-            SubmissionComment(id: UUID(), author: me, isMine: true, body: body, createdAt: .now)
-        )
+        store.addComment(body, to: id, missionID: missionID, groupID: groupID)
     }
 
-    /// 내 댓글만 지울 수 있어요. TODO: 서버 연결 시 comments 삭제 (RLS 로 본인 것만)
+    /// 내 댓글만 지울 수 있어요.
     func deleteComment(_ commentID: SubmissionComment.ID, from id: Submission.ID) {
-        guard let index = result.submissions.firstIndex(where: { $0.id == id }) else { return }
-        result.submissions[index].comments.removeAll { $0.id == commentID && $0.isMine }
+        store.deleteComment(commentID, from: id, missionID: missionID, groupID: groupID)
     }
 }
 
