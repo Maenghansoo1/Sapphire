@@ -14,6 +14,7 @@
 
 프론트엔드는 iOS·Android 네이티브 앱만 써요. (이전 Cordova 하이브리드 앱은 폐기했어요.)
 두 앱 모두 아직 서버에 연결하지 않고 앱 안 임시 저장소(`DataStore`)로 동작해요.
+화면·정책 결정 사항과 체험용 초대 코드는 `docs/FRONTEND/APP_DECISIONS.md` 를 보세요.
 
 ## iOS 실행
 
