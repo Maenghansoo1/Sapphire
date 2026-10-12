@@ -37,10 +37,11 @@ import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HType
 import java.io.File
+import kotlinx.coroutines.launch
 
 @Composable
 fun VoiceMissionScreen(topic: String, onClose: () -> Unit,
-    onSubmit: (File, Double, List<Float>) -> Unit) {
+    onSubmit: suspend (File, Double, List<Float>) -> Boolean) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val controller = remember { VoiceRecorderController(context) }
@@ -48,6 +49,7 @@ fun VoiceMissionScreen(topic: String, onClose: () -> Unit,
     var showsPermissionAlert by remember { mutableStateOf(false) }
     var requestingPermission by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         requestingPermission = false
         if (granted) controller.start() else showsPermissionAlert = true
@@ -105,11 +107,14 @@ fun VoiceMissionScreen(topic: String, onClose: () -> Unit,
                 HIconView(if (controller.isPlaying) HIcon.PAUSE else HIcon.PLAY, size = 20.dp)
             }
         }
-        HButton("올리기", enabled = ui.canSubmit && !submitted) {
+        HButton(if (submitted) "올리는 중..." else "올리기", enabled = ui.canSubmit && !submitted) {
             if (submitted) return@HButton
             submitted = true
             controller.stopPlayback()
-            onSubmit(controller.file, controller.elapsed, controller.levels.filter { it >= 0f })
+            scope.launch {
+                try { if (!onSubmit(controller.file, controller.elapsed, controller.levels.filter { it >= 0f })) submitted = false }
+                catch (error: Exception) { submitted = false }
+            }
         }
         Spacer(Modifier.height(bottom))
     }

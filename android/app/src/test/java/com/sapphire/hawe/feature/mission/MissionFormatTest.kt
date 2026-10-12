@@ -8,7 +8,6 @@ import org.junit.Test
 import java.time.Instant
 import java.util.Locale
 import java.util.TimeZone
-import java.util.UUID
 
 class MissionFormatTest {
     private val now = Instant.parse("2026-10-12T00:00:00Z")
@@ -46,5 +45,15 @@ class MissionFormatTest {
         assertEquals("내 미션을 올리면 친구들의 글이 열려요.", lockNoticeText(MissionType.WRITE))
         assertEquals("내 미션을 올리면 친구들의 음성이 열려요.", lockNoticeText(MissionType.VOICE))
         assertEquals("민준님을 콕 찔렀어요", pokeToastText("민준"))
+    }
+
+    @Test fun deadlineShowsNormalLateAndClosedStates() {
+        val deadline = Instant.parse("2026-10-12T14:00:00Z")
+        val closes = Instant.parse("2026-10-13T00:00:00Z")
+        assertEquals("마감 오후 11:00", deadlineText(deadline, closes, now))
+        assertEquals("마감이 지났어요 · 지금 올리면 지각이에요", deadlineText(deadline, closes, deadline))
+        assertNull(deadlineText(deadline, closes, closes))
+        val nextDay = Instant.parse("2026-10-13T14:00:00Z")
+        assertEquals("마감 내일 오후 11:00", deadlineText(nextDay, nextDay.plusSeconds(3600), now))
     }
 }

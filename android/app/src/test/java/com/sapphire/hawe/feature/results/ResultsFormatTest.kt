@@ -7,7 +7,6 @@ import java.io.File
 import java.time.Instant
 import java.util.Locale
 import java.util.TimeZone
-import java.util.UUID
 
 class ResultsFormatTest {
     private val now = Instant.parse("2026-10-12T00:00:00Z")
@@ -51,10 +50,10 @@ class ResultsFormatTest {
         assertEquals("5명 모두 완료", progressText(5, 5))
         assertEquals("1명 모두 완료", progressText(1, 1))
         assertEquals("0 / 4명 완료", progressText(0, 4))
-        assertEquals("사진을 눌러 댓글을 남겨보세요", hintText(MissionType.PHOTO))
-        assertEquals("그림을 눌러 댓글을 남겨보세요", hintText(MissionType.DRAW))
-        assertEquals("글을 눌러 댓글을 남겨보세요", hintText(MissionType.WRITE))
-        assertEquals("눌러서 듣고 댓글을 남겨보세요", hintText(MissionType.VOICE))
+        assertEquals("사진을 눌러서 자세히 보기", hintText(MissionType.PHOTO))
+        assertEquals("그림을 눌러서 자세히 보기", hintText(MissionType.DRAW))
+        assertEquals("글을 눌러서 자세히 보기", hintText(MissionType.WRITE))
+        assertEquals("눌러서 듣고 자세히 보기", hintText(MissionType.VOICE))
         assertNull(likersText(emptyList(), 0))
         assertEquals("지우님이 좋아해요", likersText(listOf("지우"), 1))
         assertEquals("지우, 서연님이 좋아해요", likersText(listOf("지우", "서연"), 2))
@@ -72,7 +71,7 @@ class ResultsFormatTest {
         assertEquals(0.5f, voiceProgress(5.0, 10.0))
         assertEquals(1f, voiceProgress(12.0, 10.0))
         assertEquals(1f, voiceProgress(1.0, 0.0))
-        val submission = Submission(UUID.randomUUID(), Profile.mockMine, true, MissionType.PHOTO, now)
+        val submission = Submission(1L, Profile.mockMine, true, MissionType.PHOTO, now)
         assertNull(localImageFile(submission))
         val file = File.createTempFile("hawe-result-", ".png")
         try {

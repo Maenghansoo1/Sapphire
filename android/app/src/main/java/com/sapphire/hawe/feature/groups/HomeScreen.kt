@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -30,7 +29,6 @@ import java.time.Instant
 @Composable
 fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (Long) -> Unit,
     onMyPage: () -> Unit) {
-    LaunchedEffect(Unit) { store.refreshTodayMissions() }
     val groups = store.summaries
     val bottom = ctaBottomPadding()
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
@@ -76,11 +74,16 @@ fun GroupCard(group: GroupSummary, modifier: Modifier = Modifier) {
         MemberRow(group.members, group.relationship)
         Column(Modifier.fillMaxWidth().background(HColors.surface, RoundedCornerShape(HRadius.input)).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("오늘의 미션 · ${group.missionType.displayName}",
-                style = HType.plex(12, FontWeight.SemiBold), color = HColors.textSecondary)
-            Text(group.topic, style = HType.plex(15, FontWeight.SemiBold), color = HColors.ink)
+            if (group.missionType == null) {
+                Text("아직 오늘의 미션이 열리지 않았어요", style = HType.plex(15, FontWeight.SemiBold),
+                    color = HColors.ink)
+            } else {
+                Text("오늘의 미션 · ${group.missionType.displayName}",
+                    style = HType.plex(12, FontWeight.SemiBold), color = HColors.textSecondary)
+                Text(group.topic.orEmpty(), style = HType.plex(15, FontWeight.SemiBold), color = HColors.ink)
+            }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        if (group.missionType != null) Row(verticalAlignment = Alignment.CenterVertically) {
             Text("${group.submittedCount} / ${group.members.size}명 완료", style = HType.caption13,
                 color = HColors.textSecondary)
             Spacer(Modifier.weight(1f))

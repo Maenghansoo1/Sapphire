@@ -447,9 +447,9 @@ DELETE /api/me — 회원 탈퇴, 204
 
 ---
 
-## 6. Submissions · Feed (미구현, 설계 기준) — 상태: 결정 완료, 일부 미결 (반영 전)
+## 6. Submissions · Feed — 상태: 반영됨 (1차: 반응·댓글 필드는 빈 값, 서명 URL 제외)
 
-코드는 없다. `MISSIONS_API.md` §3·§4 설계를 기준으로, 앱과 다른 점만 결정했다.
+백엔드에 제출·피드·상세와 로컬 파일 저장·공개 서빙을 구현했다. `MISSIONS_API.md` §3·§4의 1차 계약을 따른다.
 
 ### 6-1. 결정
 
@@ -477,13 +477,13 @@ POST /api/missions/{missionId}/submissions   (multipart)
 // 피드 항목 (GET /api/missions/{missionId}/submissions) — 음성 예
 { "id": 100,
   "author": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
-  "template": "VOICE_LINE", "mediaUrl": "...", "mediaType": "AUDIO",
+  "template": "VOICE_LINE", "mediaUrl": "/files/submissions/uuid.m4a", "mediaType": "AUDIO",
   "duration": 9.4, "waveform": [0.25, 0.42, 0.67],
-  "reactions": [ { "stickerType": "heart", "count": 2, "reactedByMe": true, "userIds": [1, 3] } ],
-  "commentCount": 2,
+  "reactions": [], "commentCount": 0,
   "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
 ```
 - 설계의 `userId`·`nickname` 최상위 필드는 `author` 객체로 바꾼다. 상세(`GET /api/submissions/{id}`)도 같다.
+- 1차는 `reactions: []`, `commentCount: 0` 고정이다. 반응·댓글 데이터는 7단계에서 채운다.
 - 오류 코드에 `MISSION_CLOSED`(409) 추가. 나머지는 설계와 같다.
 
 ### 6-3. 수정 대상
@@ -497,7 +497,7 @@ POST /api/missions/{missionId}/submissions   (multipart)
 
 ### 6-4. 미결
 
-- 업로드 파일 저장소(로컬/S3)와 URL 공개 방식(서명 URL 여부) — 설계상 "개발=로컬, 운영=S3".
+- 1차는 로컬 디스크 저장과 `/files/**` 공개 URL로 결정. S3·CDN·서명 URL은 2차에서 검토한다. 그룹 삭제 후 파일 정리도 후속 단계다.
 - 사진·그림 파일 크기를 앱에서 줄여 보낼지(현재 원본 품질 그대로).
 
 ---

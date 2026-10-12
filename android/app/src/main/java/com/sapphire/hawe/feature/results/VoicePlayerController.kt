@@ -3,7 +3,6 @@ package com.sapphire.hawe.feature.results
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -12,10 +11,9 @@ import androidx.compose.runtime.setValue
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.Submission
 import java.io.File
-import java.util.UUID
 
 class VoicePlayerController {
-    var playingID by mutableStateOf<UUID?>(null)
+    var playingID by mutableStateOf<Long?>(null)
         private set
     var elapsed by mutableDoubleStateOf(0.0)
         private set
@@ -24,21 +22,19 @@ class VoicePlayerController {
 
     private val handler = Handler(Looper.getMainLooper())
     private var player: MediaPlayer? = null
+    private var preparing: MediaPlayer? = null
     private var current: Submission? = null
     private val queue = ArrayDeque<Submission>()
-    private var startedAtMs = 0L
     private var released = false
     private var generation = 0
     private val ticker = object : Runnable {
         override fun run() {
-            val item = current ?: return
-            val active = player
-            val duration = if (active != null) active.duration.coerceAtLeast(100) / 1000.0 else (item.duration ?: 1.0).coerceAtLeast(0.1)
-            elapsed = if (active != null) runCatching { active.currentPosition / 1000.0 }.getOrDefault(0.0)
-                else (SystemClock.elapsedRealtime() - startedAtMs) / 1000.0
+            current ?: return
+            val active = player ?: return
+            val duration = active.duration.coerceAtLeast(100) / 1000.0
+            elapsed = runCatching { active.currentPosition / 1000.0 }.getOrDefault(0.0)
             progress = voiceProgress(elapsed, duration)
-            val finished = if (active != null) runCatching { !active.isPlaying }.getOrDefault(true)
-                else elapsed >= duration
+            val finished = runCatching { !active.isPlaying }.getOrDefault(true)
             if (finished || progress >= 1f) advance() else handler.postDelayed(this, 100)
         }
     }
@@ -63,20 +59,35 @@ class VoicePlayerController {
         if (released) return
         current = submission
         playingID = submission.id
-        startedAtMs = SystemClock.elapsedRealtime()
+        val currentGeneration = generation
         val local = submission.mediaURL?.takeIf { it.scheme == "file" }?.let { runCatching { File(it) }.getOrNull() }
-        if (local?.isFile == true) {
-            val created = MediaPlayer()
-            try {
-                created.setDataSource(local.absolutePath)
+        val url = submission.mediaURL?.takeIf { it.scheme == "http" || it.scheme == "https" }
+        if (local?.isFile != true && url == null) { advance(); return }
+        val created = MediaPlayer()
+        try {
+            created.setDataSource(local?.absolutePath ?: url.toString())
+            created.setOnCompletionListener { if (!released && generation == currentGeneration) advance() }
+            created.setOnErrorListener { _, _, _ ->
+                if (!released && generation == currentGeneration) advance()
+                true
+            }
+            if (url != null) {
+                preparing = created
+                created.setOnPreparedListener {
+                    if (released || generation != currentGeneration) return@setOnPreparedListener
+                    preparing = null
+                    player = created
+                    created.start()
+                    handler.post(ticker)
+                }
+                created.prepareAsync()
+            } else {
                 created.prepare()
-                val currentGeneration = generation
-                created.setOnCompletionListener { if (!released && generation == currentGeneration) advance() }
-                created.start()
                 player = created
-            } catch (_: Exception) { runCatching { created.release() } }
-        }
-        handler.post(ticker)
+                created.start()
+                handler.post(ticker)
+            }
+        } catch (_: Exception) { runCatching { created.release() }; advance() }
     }
 
     private fun advance() {
@@ -90,8 +101,12 @@ class VoicePlayerController {
         generation++
         val active = player
         player = null
+        val pending = preparing
+        preparing = null
         runCatching { active?.stop() }
         runCatching { active?.release() }
+        runCatching { pending?.reset() }
+        runCatching { pending?.release() }
         current = null
         playingID = null
         elapsed = 0.0

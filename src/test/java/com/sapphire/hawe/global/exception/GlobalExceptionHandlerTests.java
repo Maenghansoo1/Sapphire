@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -36,6 +37,10 @@ class GlobalExceptionHandlerTests {
                 .andExpect(jsonPath("$.code").value("FILE_TOO_LARGE"));
         mvc.perform(get("/probe/unexpected")).andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
+        mvc.perform(get("/probe/custom")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("specific reason"));
+        mvc.perform(get("/probe/multipart")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @RestController
@@ -51,5 +56,11 @@ class GlobalExceptionHandlerTests {
 
         @GetMapping("/probe/unexpected")
         void unexpected() { throw new IllegalStateException("test"); }
+
+        @GetMapping("/probe/custom")
+        void custom() { throw new BusinessException(CommonErrorCode.VALIDATION_ERROR, "specific reason"); }
+
+        @GetMapping("/probe/multipart")
+        void multipart() { throw new MultipartException("invalid multipart"); }
     }
 }

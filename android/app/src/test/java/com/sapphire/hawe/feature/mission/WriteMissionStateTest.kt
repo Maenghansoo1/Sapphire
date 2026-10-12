@@ -19,4 +19,20 @@ class WriteMissionStateTest {
         assertEquals("12 / 300", WriteMissionState("a".repeat(12)).counterText)
         assertEquals("첫 줄\n둘째 줄", WriteMissionState("  첫 줄\n둘째 줄  ").trimmed)
     }
+
+    @Test fun fillBlankUsesOneHundredGraphemeLimit() {
+        val state = WriteMissionState(spec = WriteMissionSpec(maxLength = 100)).withText("가".repeat(101))
+        assertEquals(100, state.count)
+        assertEquals("100 / 100", state.counterText)
+        assertTrue(state.canSubmit)
+    }
+
+    @Test fun acrosticRequiresThreeMatchingNonblankLines() {
+        val spec = WriteMissionSpec(acrosticWord = "고양이")
+        assertTrue(WriteMissionState("고마워\n양손 모아\n이제 시작", spec).canSubmit)
+        assertEquals("3줄로 써 주세요", WriteMissionState("고마워\n양손", spec).acrosticError())
+        assertEquals("‘양’로 시작해 주세요", WriteMissionState("고마워\n다른 줄\n이제", spec).acrosticError())
+        assertFalse(WriteMissionState("고마워\n\n이제", spec).canSubmit)
+        assertFalse(WriteMissionState("고마워\n양손\n이제\n네번째", spec).canSubmit)
+    }
 }

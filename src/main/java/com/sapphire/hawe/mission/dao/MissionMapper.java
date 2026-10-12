@@ -32,6 +32,9 @@ public interface MissionMapper {
             + "AND s.user_id = #{userId}) AS submitted_by_me FROM missions m WHERE m.id = #{missionId}</script>")
     MissionRow findById(@Param("missionId") Long missionId, @Param("userId") Long userId);
 
+    @Select("<script>SELECT COUNT(*) > 0 FROM missions m WHERE m.id = #{missionId} AND " + CURRENT + "</script>")
+    boolean isCurrent(@Param("missionId") Long missionId);
+
     @Insert("INSERT INTO missions (group_id, content, category, mission_date, template, params, "
             + "slot_no, published_at, deadline_at) VALUES (#{groupId}, #{content}, #{category}, "
             + "#{missionDate}, #{template}, #{params}, #{slotNo}, #{publishedAt}, #{deadlineAt})")

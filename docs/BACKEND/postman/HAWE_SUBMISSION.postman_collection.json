@@ -1,0 +1,123 @@
+{
+  "info": {
+    "name": "HA'WE - SUBMISSION API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "가입 → 그룹 생성 → 현재 미션 → 제출 → 피드 → 상세. 새 run 값을 지정하거나 기존 변수를 비웁니다. 5/5a/5b 중 현재 미션 틀에 맞는 요청 하나만 실행합니다. TEXT_ACROSTIC은 params.word에 맞는 3줄을 입력합니다."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "run", "value": "" },
+    { "key": "token", "value": "" },
+    { "key": "groupId", "value": "" },
+    { "key": "missionId", "value": "" },
+    { "key": "submissionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. 회원가입",
+      "event": [
+        { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+          "if (!pm.collectionVariables.get('run')) pm.collectionVariables.set('run', Date.now().toString(36));"
+        ] } }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"email\":\"submission_{{run}}@test.com\",\"password\":\"password1\",\"nickname\":\"테스터\",\"agreeTerms\":true,\"agreePrivacy\":true}" },
+        "url": "{{baseUrl}}/api/auth/register"
+      }
+    },
+    {
+      "name": "2. 로그인",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200) pm.collectionVariables.set('token', pm.response.json().accessToken);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"email\":\"submission_{{run}}@test.com\",\"password\":\"password1\"}" },
+        "url": "{{baseUrl}}/api/auth/login"
+      }
+    },
+    {
+      "name": "3. 그룹 생성",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('groupId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"name\":\"제출 검증 그룹\",\"dailyMissionCount\":1,\"missionSlots\":[{\"slotNo\":1,\"publishTime\":\"00:00\"}]}" },
+        "url": "{{baseUrl}}/api/groups"
+      }
+    },
+    {
+      "name": "4. 현재 미션",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200 && pm.response.json().missions.length) pm.collectionVariables.set('missionId', pm.response.json().missions[0].missionId);"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/missions/today"
+      }
+    },
+    {
+      "name": "5. 파일 제출 (사진/그림 미션일 때)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "file", "type": "file", "src": "" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "5a. 글 제출 (글 미션일 때, 파일 제출 대신 실행)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "text", "type": "text", "value": "오늘의 답" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "5b. 음성 제출 (음성 미션일 때, 파일 제출 대신 실행)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "file", "type": "file", "src": "" },
+          { "key": "duration", "type": "text", "value": "9.4" },
+          { "key": "waveform", "type": "text", "value": "[0.25,0.42,0.67]" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "6. 피드",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions?page=0&size=20" }
+    },
+    {
+      "name": "7. 제출 상세",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/submissions/{{submissionId}}" }
+    }
+  ]
+}

@@ -134,7 +134,7 @@
 - `dailyMissionCount`: 그룹 설정의 하루 미션 수(MVP는 1).
 - `nextPublishAt`: 슬롯별 다음 발행 예정 시각 중 가장 이른 값. 현재 미션이 있으면 해당 미션의 `closesAt`을 사용한다.
 - `number`: 해당 그룹의 누적 미션 번호. `members`: 참여 순서의 멤버별 해당 미션 제출 여부.
-- 마감 이후에도 다음 미션 발행 전까지 현재 미션으로 보인다. 지각 제출과 종료 판정은 6단계 구현 예정이다.
+- 마감 이후에도 다음 미션 발행 전까지 현재 미션으로 보인다. 6단계 1차에서 지각 제출과 종료 판정을 구현했다.
 - 에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403). (이전의 `MISSION_NOT_PUBLISHED_YET`는 폐지 — 빈 배열로 표현)
 
 ### GET /missions/{missionId}
@@ -202,7 +202,7 @@ hawe.mission.max-daily-count=1
 
 ## 3. 제출
 
-이 절의 제출 API는 6단계 구현 예정이다. 같은 슬롯의 다음 미션이 발행되면 이전 미션 제출은 409 `MISSION_CLOSED`로 거부한다.
+6단계 1차 구현됨. 같은 슬롯의 다음 미션이 발행되면 이전 미션 제출은 409 `MISSION_CLOSED`로 거부한다. 사진·그림·음성·글의 MVP 8종 틀만 받는다.
 
 | Method | Path | 설명 |
 |---|---|---|
@@ -216,6 +216,8 @@ hawe.mission.max-daily-count=1
 |---|---|---|
 | `file` | file | 이미지 또는 음성 |
 | `text` | text | 글 본문 |
+| `duration` | decimal | `VOICE_LINE` 음성 길이(초), 0 초과 30 이하 |
+| `waveform` | JSON array string | `VOICE_LINE` 파형 값 0~1, 최대 64개 |
 | `number` | int | 별점(1~5) 또는 슬라이더 위치(0~100) |
 | `guess` | int | `SLIDER_CONSENSUS`의 예측값(0~100) |
 | `choice` | text | `A` 또는 `B` (`TEXT_BALANCE`) |
@@ -227,9 +229,9 @@ hawe.mission.max-daily-count=1
 
 | `template` | 필수 | 선택 | 검증 |
 |---|---|---|---|
-| `PHOTO_*`, `DRAW_*` | `file`(이미지) | `caption` | 이미지 MIME |
-| `VOICE_LINE` | `file`(음성) | `caption` | 음성 MIME, 길이 ≤ 20초 |
-| `VOICE_MIMIC`, `VOICE_IMPRESSION` | `file`(음성), `answer`(정답) | `caption`, `alias`(별칭, 최대 5개) | 음성 MIME, 길이 ≤ 20초, 정답 공백 불가, 별칭 개수·길이 제한 |
+| `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_SKETCH`, `DRAW_A_TO_B` | `file`(이미지) | `caption` | 파일 헤더로 이미지 판정, ≤ 10MB |
+| `VOICE_LINE` | `file`(음성), `duration`, `waveform` | `caption` | 파일 헤더로 음성 판정, ≤ 5MB, 길이 ≤ 30초 |
+| `VOICE_MIMIC`, `VOICE_IMPRESSION` (후속) | `file`(음성), `answer`(정답) | `caption`, `alias`(별칭, 최대 5개) | 음성 파일, 길이 ≤ 30초, 정답 공백 불가, 별칭 개수·길이 제한 |
 | `TEXT_ACROSTIC` | `text` | - | 정확히 3줄, 각 줄이 `params.word`의 해당 글자로 시작 |
 | `TEXT_ONE_WORD` | `text`(단어, ≤ 20자) | `caption`(이유, ≤ 100자) | 공백 불가 |
 | `TEXT_REVIEW` | `number`(1~5), `text`(≤ 100자) | - | - |
@@ -239,26 +241,23 @@ hawe.mission.max-daily-count=1
 | `SLIDER_CONSENSUS` | `number`, `guess` | - | 둘 다 0~100 정수 |
 
 - 시간 제한이 있는 틀(`DRAW_SKETCH`의 `seconds`)은 **클라이언트가 시간을 강제**한다. 서버는 그림 제작 시간을 신뢰할 수 있는 방식으로 알 수 없으므로 검증하지 않는다.
-- 파일 제한(초안): 이미지 ≤ 10MB (`jpg`/`png`/`webp`), 음성 ≤ 5MB (`m4a`/`mp3`/`aac`/`webm`). Spring 기본 업로드 한도가 1MB이므로 구현 시 `spring.servlet.multipart.*` 설정이 필요하다.
+- 파일 제한: 이미지 ≤ 10MB (`jpg`/`png`/`webp`), 음성 ≤ 5MB (`m4a`/`mp3`/`aac`/`webm`). 서버가 파일 헤더로 종류와 확장자를 판정하며 원본 파일명·Content-Type은 신뢰하지 않는다. 로컬 저장 키로 저장한 파일은 인증 없이 `/files/<key>`로 공개된다.
+
+**1차 구현 규칙:** 사진·그림 5종은 `file` 필수·`caption` 선택이다. `VOICE_LINE`은 `file`, `duration`, `waveform` 필수·`caption` 선택이며 길이는 30초 이하이다. `TEXT_FILL_BLANK`는 공백 제거 후 1~100 grapheme, `TEXT_ACROSTIC`은 정확히 3줄이며 `params.word`가 3글자일 때 각 줄은 해당 글자로 시작해야 한다. 글 틀에서 `caption`은 받지 않는다. 위 표의 나머지 틀은 1차에서 `INVALID_SUBMISSION`으로 거부한다.
 
 ### 3-3. 응답
 
+1차의 생성·피드 항목·상세 응답은 동일한 `SubmissionResponse` 모양이다. 사용하지 않는 필드는 생략한다. `mediaUrl`은 `/files/submissions/<UUID>.<확장자>` 형식의 루트 상대 경로이며, 저장 DB 값은 `submissions/...` 키다. `submittedAt`은 `+09:00` 오프셋이다.
+
 ```json
-// Response 201 — 사진/그림/음성
-{ "id": 100, "missionId": 10, "template": "PHOTO_NOW",
-  "mediaUrl": "...", "mediaType": "IMAGE", "caption": "...",
-  "submittedAt": "2026-09-28T21:00:00", "isLate": false }
-
-// Response 201 — 글
-{ "id": 101, "missionId": 10, "template": "TEXT_ACROSTIC",
-  "text": "퇴사하고 싶다\n근무시간 끝났는데\n길이 막힌다", "caption": null,
-  "submittedAt": "2026-09-28T23:10:00", "isLate": true }
-
-// Response 201 — 슬라이더
-{ "id": 102, "missionId": 11, "template": "SLIDER_POSITION",
-  "number": 70, "submittedAt": "2026-09-29T10:00:00", "isLate": false }
+{ "id": 100, "missionId": 10,
+  "author": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
+  "template": "VOICE_LINE", "mediaUrl": "/files/submissions/uuid.m4a", "mediaType": "AUDIO",
+  "duration": 9.4, "waveform": [0.25, 0.42], "reactions": [], "commentCount": 0,
+  "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
 ```
-응답에는 해당 틀에서 쓰는 필드만 포함한다 (쓰지 않는 필드는 생략). 정답 맞히기 틀(`VOICE_MIMIC`, `VOICE_IMPRESSION`)의 생성 응답에는 제출자 본인이므로 `answer`와 `aliases`가 포함된다.
+
+글 제출은 `text`가 포함되고 `mediaUrl`·`mediaType`은 생략된다. 사진·그림은 `mediaUrl`과 `mediaType: "IMAGE"`, 음성은 이에 더해 `duration`과 `waveform`이 포함된다. 미구현 틀의 제출 응답은 후속 단계에서 정의한다.
 
 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `ALREADY_SUBMITTED` (409), `INVALID_SUBMISSION` (400), `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413)
 
@@ -272,29 +271,24 @@ hawe.mission.max-daily-count=1
 | GET | `/submissions/{id}` | 게시물 상세 |
 
 ### GET /missions/{missionId}/submissions
+- 1차 구현: `page` 기본 0(음수는 0), `size` 기본 20(1~100으로 보정), 정렬 `submitted_at ASC, id ASC`. 항목은 §3-3의 공통 응답이다. `reactions: []`, `commentCount: 0`은 후속 단계에서 채운다.
 - 내가 아직 미제출: **423** `FEED_LOCKED`
-- 제출 완료: 페이지네이션 봉투. 항목은 제출 응답의 필드 + 작성자 + 집계.
+- 제출 완료: 페이지네이션 봉투. 항목은 §3-3의 공통 제출 응답.
 ```json
 { "content": [
-  { "id": 100, "userId": 1, "nickname": "몽실이", "template": "PHOTO_NOW",
-    "mediaUrl": "...", "mediaType": "IMAGE", "caption": "...",
-    "reactionCount": 3, "commentCount": 2, "submittedAt": "...", "isLate": false },
-  { "id": 101, "userId": 2, "nickname": "잎사귀", "template": "TEXT_ACROSTIC",
-    "text": "...", "reactionCount": 0, "commentCount": 1, "submittedAt": "...", "isLate": true }
-], "page": 0, "size": 20, "totalPages": 1, "totalElements": 4 }
+  { "id": 100, "missionId": 10,
+    "author": { "userId": 1, "nickname": "몽실이", "characterKey": "mongsil", "profileImageUrl": null },
+    "template": "PHOTO_NOW", "mediaUrl": "/files/submissions/uuid.jpg", "mediaType": "IMAGE",
+    "reactions": [], "commentCount": 0, "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
+], "page": 0, "size": 20, "totalPages": 1, "totalElements": 1 }
 ```
 - 정렬: 제출 시각 오름차순 (같은 시각이면 `id` 오름차순).
 - 집계 틀(V)도 피드에서는 개별 제출을 그대로 보여준다. 집계는 §5의 결과 API에서 본다.
 - 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423)
 
 ### GET /submissions/{id}
-```json
-{ "id": 100, "missionId": 10, "userId": 1, "nickname": "몽실이", "template": "PHOTO_NOW",
-  "mediaUrl": "...", "mediaType": "IMAGE", "caption": "...",
-  "submittedAt": "...", "isLate": false,
-  "reactions": [ { "stickerType": "heart", "count": 3 } ],
-  "commentCount": 5 }
-```
+- 1차 구현: §3-3의 공통 응답. 지난 미션도 같은 잠금 규칙을 적용한다.
+응답은 §3-3의 공통 `SubmissionResponse`와 같다.
 - 게시물이 속한 그룹의 멤버이면서 **해당 미션에 내가 제출했을 때만** 볼 수 있다 (잠금 규칙 동일).
 - 에러: `SUBMISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423)
 
@@ -476,7 +470,7 @@ N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모�
 | 코드 | HTTP | 설명 |
 |---|---|---|
 | `MISSION_NOT_FOUND` | 404 | 미션 없음 |
-| `MISSION_CLOSED` | 409 | 다음 미션 발행으로 이전 미션 종료 (6단계 제출 API에서 구현 예정) |
+| `MISSION_CLOSED` | 409 | 다음 미션 발행으로 이전 미션 종료 (6단계 제출 API에서 구현됨) |
 | `NOT_GROUP_MEMBER` | 403 | 그룹 멤버가 아님 (`GroupErrorCode` 재사용 또는 동일 코드) |
 | `ALREADY_SUBMITTED` | 409 | 이미 제출함 |
 | `FEED_LOCKED` | 423 | 내가 제출하기 전에는 피드·결과·상세를 볼 수 없음 |
@@ -484,6 +478,7 @@ N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모�
 | `INVALID_SUBMISSION` | 400 | 틀이 요구하지 않는 필드가 있거나 필수 필드/형식 위반 (메시지에 사유) |
 | `UNSUPPORTED_FILE_TYPE` | 415 | 허용하지 않는 파일 형식 |
 | `FILE_TOO_LARGE` | 413 | 파일 크기 초과 |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | multipart가 아닌 제출 요청 등 지원하지 않는 요청 형식 |
 | `RESULT_NOT_SUPPORTED` | 400 | 집계가 없는 틀에 결과 조회 |
 | `GUESS_NOT_SUPPORTED` | 400 | 정답이 없는 틀(성대모사가 아닌 제출물)에 정답을 시도함 |
 | `CANNOT_GUESS_OWN_SUBMISSION` | 409 | 본인 제출물에 정답을 시도함 |

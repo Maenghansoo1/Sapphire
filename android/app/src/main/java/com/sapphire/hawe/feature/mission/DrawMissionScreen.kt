@@ -29,20 +29,35 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.MissionSpec
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
 import com.sapphire.hawe.designsystem.components.HButton
 import com.sapphire.hawe.designsystem.components.HChip
+import com.sapphire.hawe.designsystem.components.HToastHost
+import com.sapphire.hawe.designsystem.components.rememberHToastState
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
+import com.sapphire.hawe.designsystem.tokens.HType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 
 @Composable
-fun DrawMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (ByteArray) -> Unit) {
+fun DrawMissionScreen(topic: String, spec: MissionSpec, onClose: () -> Unit, onSubmit: suspend (ByteArray) -> Boolean) {
     val model = remember { DrawingModel() }
+    val timer = remember(spec.seconds) { spec.seconds?.let { SketchTimer(it) } }
+    val toast = rememberHToastState()
+    var remaining by remember(timer) { mutableIntStateOf(timer?.totalSeconds ?: 0) }
+    LaunchedEffect(timer) {
+        while (timer != null) {
+            remaining = timer.remainingSeconds()
+            if (timer.expired) { toast.show("시간이 끝났어요"); break }
+            delay(200)
+        }
+    }
     var version by remember { mutableIntStateOf(0) }
     val drawVersion = version
     val hasDraft = drawVersion.let { !model.isEmpty }
@@ -56,15 +71,20 @@ fun DrawMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (ByteArray) 
     val density = LocalDensity.current.density
     val scope = rememberCoroutineScope()
     val bottom = ctaBottomPadding(32.dp)
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = 20.dp)) {
         MissionHeader(hasDraft, onClose, trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (timer != null) Text("0:${remaining.toString().padStart(2, '0')}",
+                    style = HType.caption13, color = HColors.textSecondary)
                 DrawHistoryButton(HIcon.UNDO, "되돌리기", canUndo) { model.undo(); version++ }
                 DrawHistoryButton(HIcon.REDO, "다시 실행", canRedo) { model.redo(); version++ }
             }
         })
         Spacer(Modifier.height(16.dp))
         MissionTitle(MissionType.DRAW, topic)
+        if (spec.drawFrom != null && spec.drawTo != null) Text("‘${spec.drawFrom}’를 ‘${spec.drawTo}’로",
+            style = HType.caption13, color = HColors.textSecondary)
         Spacer(Modifier.height(16.dp))
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val canvasHeight = minOf(maxHeight, 400.dp)
@@ -73,15 +93,19 @@ fun DrawMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (ByteArray) 
                 .border(1.dp, HColors.line, RoundedCornerShape(HRadius.card))) {
                 Canvas(Modifier.fillMaxSize().graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
                     .onSizeChanged { canvasSize = it }
-                    .pointerInput(model, density) {
+                    .pointerInput(model, density, timer) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            if (timer?.expired == true) return@awaitEachGesture
+                            timer?.start()
                             model.begin(StrokePoint(down.position.x / density, down.position.y / density))
                             version++
                             down.consume()
                             drag(down.id) { change ->
-                                model.append(StrokePoint(change.position.x / density, change.position.y / density))
-                                version++
+                                if (timer?.expired != true) {
+                                    model.append(StrokePoint(change.position.x / density, change.position.y / density))
+                                    version++
+                                }
                                 change.consume()
                             }
                             model.end()
@@ -125,18 +149,20 @@ fun DrawMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (ByteArray) 
             }
         }
         Spacer(Modifier.height(16.dp))
-        HButton("올리기", enabled = hasDraft && !submitted && canvasSize.width > 0) {
+        HButton(if (submitted) "올리는 중..." else "올리기", enabled = hasDraft && !submitted && canvasSize.width > 0) {
             if (submitted) return@HButton
             submitted = true
             val strokes = model.strokes
             val width = canvasSize.width / density
             val height = canvasSize.height / density
             scope.launch {
-                try { onSubmit(withContext(Dispatchers.Default) { renderDrawingPng(strokes, width, height) }) }
+                try { if (!onSubmit(withContext(Dispatchers.Default) { renderDrawingPng(strokes, width, height) })) submitted = false }
                 catch (error: Exception) { submitted = false }
             }
         }
         Spacer(Modifier.height(bottom))
+    }
+    HToastHost(toast)
     }
 }
 

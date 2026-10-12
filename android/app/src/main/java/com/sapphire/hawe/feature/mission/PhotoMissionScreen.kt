@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun PhotoMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (ByteArray) -> Unit) {
+fun PhotoMissionScreen(topic: String, onClose: () -> Unit, onSubmit: suspend (ByteArray) -> Boolean) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var permission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -131,12 +131,12 @@ fun PhotoMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (ByteArray)
             HButton("다시 찍기", Modifier.weight(1f), HButtonKind.SECONDARY) {
                 photo = null
             }
-            HButton("올리기", Modifier.weight(1f), enabled = !submitted) {
+            HButton(if (submitted) "올리는 중..." else "올리기", Modifier.weight(1f), enabled = !submitted) {
                 val current = photo ?: return@HButton
                 if (!submitted) {
                     submitted = true
                     scope.launch {
-                        try { onSubmit(withContext(Dispatchers.Default) { photoJpegBytes(current) }) }
+                        try { if (!onSubmit(withContext(Dispatchers.Default) { photoJpegBytes(current) })) submitted = false }
                         catch (error: Exception) { submitted = false }
                     }
                 }

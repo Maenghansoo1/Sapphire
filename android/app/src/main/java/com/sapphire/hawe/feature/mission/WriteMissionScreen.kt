@@ -24,7 +24,9 @@ import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.MissionSpec
 import java.text.BreakIterator
+import kotlinx.coroutines.launch
 
 private const val MAX_LENGTH = 300
 
@@ -44,19 +46,37 @@ fun limitGraphemes(text: String, limit: Int = MAX_LENGTH): String {
     return text.substring(0, end)
 }
 
-data class WriteMissionState(val text: String = "") {
-    fun withText(input: String) = copy(text = limitGraphemes(input))
+data class WriteMissionSpec(val maxLength: Int = MAX_LENGTH, val acrosticWord: String? = null)
+
+data class WriteMissionState(val text: String = "", val spec: WriteMissionSpec = WriteMissionSpec()) {
+    fun withText(input: String) = copy(text = limitGraphemes(input, spec.maxLength))
     val count: Int get() = graphemeCount(text)
     val trimmed: String get() = text.trim()
-    val canSubmit: Boolean get() = trimmed.isNotEmpty()
-    val counterText: String get() = "$count / $MAX_LENGTH"
+    val canSubmit: Boolean get() = trimmed.isNotEmpty() && count <= spec.maxLength && acrosticError() == null
+    val counterText: String get() = "$count / ${spec.maxLength}"
+
+    fun acrosticError(): String? {
+        val word = spec.acrosticWord ?: return null
+        val lines = text.lines().dropLastWhile { it.isBlank() }
+        if (lines.size != 3) return "3줄로 써 주세요"
+        for (index in 0..2) {
+            val line = lines[index].trim()
+            if (line.isEmpty() || limitGraphemes(line, 1) != word.getOrNull(index)?.toString())
+                return "‘${word.getOrNull(index) ?: ""}’로 시작해 주세요"
+        }
+        return null
+    }
 }
 
 @Composable
-fun WriteMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (String) -> Unit) {
+fun WriteMissionScreen(topic: String, template: String, missionSpec: MissionSpec,
+    onClose: () -> Unit, onSubmit: suspend (String) -> Boolean) {
     var value by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
-    val state = WriteMissionState(value.text)
+    val spec = WriteMissionSpec(if (template == "TEXT_FILL_BLANK") 100 else MAX_LENGTH,
+        missionSpec.word.takeIf { template == "TEXT_ACROSTIC" })
+    val state = WriteMissionState(value.text, spec)
     var submitted by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val interaction = remember { MutableInteractionSource() }
@@ -71,6 +91,8 @@ fun WriteMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (String) ->
             HCtaScaffold(horizontalPadding = 20.dp, bottomInset = 32.dp, content = {
                 Spacer(Modifier.height(16.dp))
                 MissionTitle(MissionType.WRITE, topic)
+                if (spec.acrosticWord != null) Text("각 줄을 ${spec.acrosticWord.map { "‘$it’" }.joinToString(" ")}로 시작해요",
+                    style = HType.caption13, color = HColors.textSecondary)
                 Spacer(Modifier.height(16.dp))
                 Box(Modifier.fillMaxWidth().height(360.dp)
                     .border(1.dp, HColors.line, RoundedCornerShape(HRadius.card))
@@ -79,7 +101,7 @@ fun WriteMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (String) ->
                         keyboard?.show()
                     }.padding(20.dp)) {
                     BasicTextField(value = value, onValueChange = { next ->
-                        val limited = limitGraphemes(next.text)
+                        val limited = limitGraphemes(next.text, spec.maxLength)
                         value = if (limited == next.text) next else TextFieldValue(limited, TextRange(limited.length))
                     }, modifier = Modifier.fillMaxSize().focusRequester(focusRequester),
                         textStyle = HType.plex(17, lineHeightMultiple = 1.7f).copy(color = HColors.ink),
@@ -91,8 +113,11 @@ fun WriteMissionScreen(topic: String, onClose: () -> Unit, onSubmit: (String) ->
                         })
                 }
             }, cta = {
-                HButton("올리기", enabled = state.canSubmit && !submitted) {
-                    if (!submitted) { submitted = true; onSubmit(state.trimmed) }
+                HButton(if (submitted) "올리는 중..." else "올리기", enabled = state.canSubmit && !submitted) {
+                    if (!submitted) { submitted = true; scope.launch {
+                        try { if (!onSubmit(state.trimmed)) submitted = false }
+                        catch (error: Exception) { submitted = false }
+                    } }
                 }
             })
         }

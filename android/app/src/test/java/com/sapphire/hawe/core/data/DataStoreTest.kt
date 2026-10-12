@@ -1,6 +1,10 @@
 package com.sapphire.hawe.core.data
 
 import com.sapphire.hawe.core.model.*
+import com.sapphire.hawe.core.net.CurrentMissionState
+import com.sapphire.hawe.core.net.ServerMission
+import com.sapphire.hawe.core.net.LoadedGroup
+import com.sapphire.hawe.core.net.MissionSummary
 import com.sapphire.hawe.designsystem.assets.Relationship
 import org.junit.Assert.*
 import org.junit.Test
@@ -11,7 +15,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.util.UUID
 import kotlin.random.Random
 
 class DataStoreTest {
@@ -24,12 +27,12 @@ class DataStoreTest {
         assertTrue(local < 0)
         val first = GroupDetail.mock.copy(id = 11L, name = "first")
         val second = GroupDetail.mock.copy(id = 12L, name = "second")
-        store.applyServerGroups(listOf(first, second))
+        store.applyServerGroups(listOf(LoadedGroup(first, null), LoadedGroup(second, null)))
         assertEquals(listOf(11L, 12L), store.groups.map { it.id })
         assertEquals(GroupsState.LOADED, store.groupsState)
-        store.refreshTodayMissions()
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(101L), now.plusSeconds(86400)))
         val mission = store.groups.first().missions.single()
-        store.applyServerGroups(listOf(second, first.copy(name = "updated")))
+        store.applyServerGroups(listOf(LoadedGroup(second, null), LoadedGroup(first.copy(name = "updated"), null)))
         assertEquals(listOf(12L, 11L), store.groups.map { it.id })
         assertEquals(mission, store.groups.last().missions.single())
         assertEquals("updated", store.group(11L)!!.name)
@@ -52,20 +55,17 @@ class DataStoreTest {
     private fun store(clock: Clock = Clock.fixed(now, ZoneOffset.UTC), seed: Int = 7) =
         DataStore(Files.createTempDirectory("hawe-test").toFile(), clock, Random(seed))
 
-    @Test fun createAndRefreshMission() {
+    @Test fun localGroupsDoNotGenerateMissions() {
         val store = store()
         val id = store.createGroup("우리", Relationship.FRIEND)
         assertEquals(1, store.groups.size)
         assertTrue(store.group(id)!!.amIOwner)
         assertNull(store.group(id)!!.startDate)
-        assertEquals(1, store.group(id)!!.missionCount)
+        assertEquals(0, store.group(id)!!.missionCount)
         assertTrue(store.group(id)!!.inviteCode.matches(Regex("[A-HJ-NP-Z2-9]{6}")))
         assertEquals(InviteLookupError.ALREADY_MEMBER,
             (store.lookUpInvite(store.group(id)!!.inviteCode) as InviteLookupResult.Failure).error)
-        store.refreshTodayMissions()
-        assertEquals(1, store.group(id)!!.missionCount)
-        store.refreshTodayMissions(Instant.parse("2026-10-13T00:00:00Z"))
-        assertEquals(2, store.group(id)!!.missionCount)
+        assertNull(store.todayMission(id))
     }
 
     @Test fun inviteLookupAndJoin() {
@@ -85,47 +85,38 @@ class DataStoreTest {
             (loverStore.lookUpInvite("LOVE22") as InviteLookupResult.Failure).error)
     }
 
-    @Test fun submitResultsAndComments() {
+    @Test fun feedAndSubmittedStateComeFromServer() {
         val store = store()
-        val id = store.createGroup("우리", Relationship.FRIEND)
-        val mission = store.todayMission(id)!!
-        assertNull(store.result(id, mission.id))
-        store.submit(SubmissionContent.Text("안녕"), id)
-        assertTrue(store.todayMission(id)!!.didSubmit)
-        store.submit(SubmissionContent.Text("다시"), id)
-        val result = store.result(id, mission.id)!!
-        assertEquals(1, result.submissions.size)
-        assertEquals("안녕", result.submissions.first().text)
-        val submission = result.submissions.first()
-        store.toggleLike(submission.id, mission.id, id)
-        val liked = store.result(id, mission.id)!!.submissions.first()
-        assertEquals(1, liked.likeCount)
-        assertNotSame(submission, liked)
-        assertEquals(0, submission.likeCount)
-        store.toggleLike(submission.id, mission.id, id)
-        assertEquals(0, store.result(id, mission.id)!!.submissions.first().likeCount)
-        store.addComment("댓글", submission.id, mission.id, id)
-        val comment = store.result(id, mission.id)!!.submissions.first().comments.single()
-        assertTrue(submission.comments.isEmpty())
-        store.deleteComment(comment.id, submission.id, mission.id, id)
-        assertTrue(store.result(id, mission.id)!!.submissions.first().comments.isEmpty())
-
-        val foreign = SubmissionComment(UUID.randomUUID(), store.myProfile, false, "남의 댓글", now)
-        val current = store.groups.single().missions.single()
-        store.replaceMissionsForTest(id, listOf(current.copy(submissions = listOf(
-            current.submissions.single().copy(comments = listOf(foreign))))))
-        store.deleteComment(foreign.id, submission.id, mission.id, id)
-        assertEquals(listOf(foreign), store.result(id, mission.id)!!.submissions.first().comments)
+        val detail = GroupDetail.mock.copy(id = 11L)
+        store.applyServerGroups(listOf(LoadedGroup(detail, MissionSummary(10L, MissionType.WRITE,
+            "서버 주제", 0, false))))
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(10L), now.plusSeconds(86400)))
+        assertFalse(store.todayMission(11L)!!.didSubmit)
+        assertNull(store.result(11L, 10L))
+        val me = detail.me!!
+        val mine = Submission(100L, me.displayed, true, MissionType.WRITE, now,
+            text = "안녕", authorID = me.id)
+        store.applySubmitted(11L, 10L, mine)
+        store.applySubmitted(11L, 10L, mine)
+        assertTrue(store.todayMission(11L)!!.didSubmit)
+        assertTrue(store.todayMission(11L)!!.members.first { it.isMe }.isDone)
+        assertEquals(1, store.summaries.single().submittedCount)
+        assertTrue(store.summaries.single().didSubmit)
+        assertNull(store.result(11L, 10L))
+        store.applyFeed(11L, 10L, listOf(mine))
+        val result = store.result(11L, 10L)!!
+        assertEquals(listOf(mine), result.submissions)
+        assertEquals(detail.members.size - 1, result.pending.size)
+        store.applyFeed(11L, 11L, emptyList())
+        assertEquals(listOf(mine), store.result(11L, 10L)!!.submissions)
     }
 
-    @Test fun imageAndProfileAndReset() {
+    @Test fun profileAndReset() {
         val store = store()
         val firstDay = LocalDate.of(2026, 5, 1)
         val id = store.createGroup("우리", Relationship.LOVER, firstDay)
+        injectMission(store, id, MissionType.PHOTO)
         assertEquals(firstDay, store.group(id)!!.startDate)
-        store.submit(SubmissionContent.Image(byteArrayOf(1, 2, 3), "png"), id)
-        val uri = store.result(id, store.todayMission(id)!!.id)!!.submissions.first().mediaURL!!
-        assertEquals(3, java.io.File(uri).readBytes().size)
         val changed = Profile(store.myProfile.avatar, "새 이름")
         store.setMyProfile(changed)
         assertEquals(changed, store.group(id)!!.me!!.defaultProfile)
@@ -142,13 +133,17 @@ class DataStoreTest {
         val id = store.join("K7Q2PX")!!
         assertTrue(store.records(id).isNotEmpty())
         assertTrue(store.records(id).all { it.date < store.todayMission(id)!!.opensAt })
-        store.submit(SubmissionContent.Text("오늘"), id)
+        val mission = store.todayMission(id)!!
+        val member = store.group(id)!!.me!!
+        store.applySubmitted(id, mission.id, Submission(100L, member.displayed, true,
+            MissionType.WRITE, now, text = "오늘", authorID = member.id))
         assertTrue(store.records(id).any { it.missionID == store.todayMission(id)!!.id && it.didSubmit })
     }
 
     @Test fun settingsAndPokeReplaceSnapshots() {
         val store = store()
         val id = store.createGroup("우리", Relationship.FRIEND)
+        injectMission(store, id, MissionType.DRAW)
         val before = store.group(id)!!
         store.setNotify(false, id)
         assertTrue(before.notify)
@@ -161,48 +156,59 @@ class DataStoreTest {
         assertEquals(Profile.mockMine, before.me!!.displayed)
         val memberID = store.group(id)!!.me!!.id
         store.poke(memberID, id)
-        assertTrue(store.todayMission(id)!!.members.single().pokedToday)
+        assertEquals(setOf(memberID), store.groups.single().missions.single().poked)
         store.poke(memberID, id)
         assertEquals(setOf(memberID), store.groups.single().missions.single().poked)
-    }
-
-    @Test fun missionRulesAcrossRandomSeeds() {
-        repeat(20) { seed ->
-            val start = now.minusSeconds(30L * 86400)
-            val clock = AdjustableClock(start)
-            val store = store(clock, seed)
-            val id = store.createGroup("우리", Relationship.FRIEND)
-            repeat(30) { day ->
-                clock.current = start.plusSeconds((day + 1L) * 86400)
-                store.refreshTodayMissions()
-            }
-            val missions = store.groups.single().missions
-            assertEquals(31, missions.size)
-            missions.windowed(3).forEach { window ->
-                assertFalse("seed=$seed", window.all { it.type == window.first().type })
-            }
-            missions.forEachIndexed { index, mission ->
-                val previousTopics = missions.take(index)
-                    .filter { java.time.Duration.between(it.opensAt, mission.opensAt).toDays() < 30 }
-                    .map { it.topic }.toSet()
-                val available = TopicPool.topics(mission.type).filterNot { it in previousTopics }
-                if (available.isNotEmpty()) assertTrue("seed=$seed index=$index", mission.topic in available)
-            }
-            assertEquals(31, store.group(id)!!.missionCount)
-        }
     }
 
     @Test fun streakUsesSeoulDays() {
         val clock = AdjustableClock(now.minusSeconds(3L * 86400))
         val store = store(clock)
-        val id = store.createGroup("우리", Relationship.FRIEND)
         repeat(3) { index ->
-            store.submit(SubmissionContent.Text("day $index"), id)
+            val id = store.createGroup("우리$index", Relationship.FRIEND)
+            injectMission(store, id, MissionType.WRITE, clock.current)
+            val mission = store.todayMission(id)!!
+            store.replaceMissionsForTest(id, listOf(store.groups.last().missions.single().copy(
+                serverSubmittedByMe = true)))
             clock.current = clock.current.plusSeconds(86400)
-            store.refreshTodayMissions()
         }
         assertEquals(3, store.stats.completedMissions)
         assertEquals(3, store.stats.streakDays)
-        assertFalse(store.todayMission(id)!!.didSubmit)
+    }
+
+    @Test fun currentMissionPreservesMatchingServerFeedAndResetsOnNewMission() {
+        val store = store()
+        val detail = GroupDetail.mock.copy(id = 11L)
+        store.applyServerGroups(listOf(LoadedGroup(detail, MissionSummary(10L, MissionType.WRITE,
+            "서버 주제", 0, false))))
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(10L), now.plusSeconds(86400)))
+        assertEquals(MissionState.LOADED, store.groups.single().missionState)
+        assertEquals("서버 주제", store.summaries.single().topic)
+        val member = detail.me!!
+        store.applySubmitted(11L, 10L, Submission(100L, member.displayed, true,
+            MissionType.WRITE, now, text = "답", authorID = member.id))
+        store.applyFeed(11L, 10L, store.groups.single().missions.single().submissions)
+        assertTrue(store.todayMission(11L)!!.didSubmit)
+        assertEquals(1, store.summaries.single().submittedCount)
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(10L), now.plusSeconds(86400)))
+        assertTrue(store.todayMission(11L)!!.didSubmit)
+        assertTrue(store.groups.single().missions.single().feedLoaded)
+        assertEquals(1, store.result(11L, 10L)!!.submissions.size)
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(11L), now.plusSeconds(86400)))
+        assertFalse(store.todayMission(11L)!!.didSubmit)
+        assertFalse(store.groups.single().missions.single().feedLoaded)
+        assertTrue(store.groups.single().missions.single().submissions.isEmpty())
+        store.applyCurrentMission(11L, CurrentMissionState(null, now.plusSeconds(86400)))
+        assertNull(store.todayMission(11L))
+        assertEquals(now.plusSeconds(86400), store.groups.single().nextPublishAt)
+    }
+
+    private fun serverMission(id: Long) = ServerMission(id, 1, "서버 주제", MissionType.WRITE,
+        "TEXT_ACROSTIC", MissionSpec(word = "고양이"), now, now.plusSeconds(3600),
+        now.plusSeconds(86400), false, mapOf(1L to false))
+
+    private fun injectMission(store: DataStore, id: Long, type: MissionType, at: Instant = now) {
+        store.replaceMissionsForTest(id, listOf(StoredMission(-100L, type, "주제", 1, at,
+            at.plusSeconds(86400))))
     }
 }

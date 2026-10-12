@@ -1,198 +1,204 @@
-# Plan — 계약 반영 1차 / 4단계(백엔드): 미션 생성(임시 생성기) · 현재 미션 · 마감/종료 규칙
+# 계약 반영 1차 / 6A단계: Android 제출 · 결과(피드) 서버 연결
 
-> 범위: **백엔드만** (`src/`, `docs/BACKEND/**`, 일부 `docs/FEATURE/PROJECT_OVERVIEW.md`). Android 연결(4A)은 이 단계 이후 별도 계획. `android/`, `ios/`, `frontend/` 는 건드리지 않는다. AI 연동은 하지 않는다(고정 문장 임시 생성기).
+> 범위: **Android 앱만** (`android/`, `docs/FRONTEND/ANDROID.md`). 백엔드 6단계(제출·피드·파일 저장소)는 구현·리뷰 완료 상태이며 이 계획은 그 계약을 소비한다. 백엔드(`src/`), iOS(`ios/`), `frontend/` 는 건드리지 않는다. 4A(미션 서버 연결)가 작업 트리에 **미커밋일 수 있다** — 4A 의 `MissionRepository`/`DataStore.applyCurrentMission`/`StoredMission.serverMembers` 등이 이미 있다는 전제로 그 위에 쌓는다(되돌리거나 다시 쓰지 말 것).
 
 ## Goal
 
-`docs/BACKEND/CONTRACT_DECISIONS.md` §3 의 1차 범위를 서버에 구현한다. 지금 서버에는 **미션을 만드는 코드가 전혀 없다**(조회만 있음).
-
-1. **미션 자동 생성**: 그룹·슬롯별 발행 시각에 미션이 열린다 (분 단위 스케줄러). 중복 없이(멱등), 서버 재시작/다운 후에도 오늘 것은 따라잡는다.
-2. **MVP 틀 8종** 안에서 서버가 틀을 정한다 (결정적 규칙). 내용은 `MissionGenerator` 인터페이스 뒤의 **고정 문장 임시 생성기**(`PlaceholderMissionGenerator`)가 만든다. 나중에 AI 구현체로 교체.
-3. **첫 미션 즉시 발행**: 그룹을 만들 때 오늘 발행 시각이 이미 지났으면 바로 연다 (커밋 이후, 실패해도 그룹 생성은 유지).
-4. **시간 규칙**: `deadlineAt`(발행 후 처음 오는 마감 시각), `closesAt`(다음 발행 예정 시각), "오늘"이 아니라 **"현재 미션"**(슬롯별 가장 최근 발행) 기준.
-5. **응답 확장**: 미션에 `number`, `closesAt`, `members[{userId, submitted}]`; `content` 의 `[대상]` 을 닉네임으로 치환; 그룹 목록에 `todayMission` 요약.
-6. `CURDATE()` 로 "오늘"을 판단하던 쿼리를 현재 미션 기준으로 교체 (미션 조회, 그룹 목록 `submittedToday`, 멤버 `stampedToday`, 콕의 "이미 제출함").
-7. `hawe.mission.max-daily-count=1` (MVP 하루 1개를 설정값으로 강제).
-
-**이번에 하지 않는 것**: AI 호출, 하루 여러 개 UI, `MISSION_CLOSED` 적용(제출 구현인 6단계에서), 알림 발송(9단계), `pokedByMe`(5단계), 스키마 변경(없음 — DB 초기화 불필요).
+가입 → 그룹 → 오늘 미션 → **제출 → 결과 확인**이 실제 서버로 동작한다.
+- 사진/그림/음성/글을 서버(`POST /api/missions/{id}/submissions`, multipart)로 올린다. 올리기 중 로딩, 실패 시 입력 보존 + 재시도, 오류 코드별 안내.
+- 결과 화면(`Results`)과 상세(`SubmissionDetail`)가 서버 피드(`GET /api/missions/{id}/submissions`) 데이터로 그려진다. 사진/그림은 서버 URL 이미지, 음성은 서버 URL 재생, 글은 서버 텍스트. 지각 제출은 "지각" 표시.
+- 앱 안 임시 제출 로직(로컬 파일 저장, 제출 오버레이, 로컬 좋아요/댓글)을 제거한다. 서버에 아직 없는 **스티커(좋아요)·댓글 UI 는 숨긴다**(7단계에서 추가). 목업과 서버 데이터를 섞지 않는다.
 
 ## Findings
 
-(전부 코드/문서로 확인함. 패키지 루트 `src/main/java/com/sapphire/hawe/`)
+백엔드 계약(확정, 구현 완료 — `docs/BACKEND/MISSIONS_API.md` §3·§4 참고):
 
-**작업 트리**: 1·2·3단계 백엔드와 Android 2A/3A 변경이 **미커밋으로 섞여 있을 수 있다.** 되돌리거나 덮어쓰지 말고 그 위에서 작업한다. 특히 3단계가 만든 `GroupService`, `GroupMapper`, `GroupSummaryResponse`, `GroupMapperTests` 등을 이 단계가 다시 수정한다(기존 변경 보존).
+- `POST /api/missions/{missionId}/submissions` → 201 `SubmissionResponse`. `multipart/form-data`, **허용 필드만**(그 외 이름은 400 `INVALID_SUBMISSION`):
+  - 사진 `PHOTO_*`/그림 `DRAW_*`: `file`(JPEG/PNG/WebP, ≤10MB), 선택 `caption`(앱은 안 보냄)
+  - `VOICE_LINE`: `file`(m4a 등, ≤5MB), `duration`(초, **0 < d ≤ 30**, 소수 허용), `waveform`(JSON 배열 문자열, 각 0~1, **최대 64개**) — 셋 모두 필수
+  - `TEXT_FILL_BLANK`/`TEXT_ACROSTIC`: `text` 만(≤100 grapheme / 정확히 3줄·줄마다 `params.word` 글자로 시작). `file`·`caption` 보내면 400.
+- 서버는 파일 종류를 **파일 내용(magic bytes)** 으로 판정한다. 파일명/Content-Type 은 신뢰하지 않지만 올바른 값을 보내는 게 좋다(`image/jpeg`, `image/png`, `audio/mp4`).
+- 응답 `SubmissionResponse`(생성·피드 항목·상세 동일 모양, 쓰지 않는 필드는 **키 자체가 없음**):
+  ```json
+  { "id": 100, "missionId": 10,
+    "author": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
+    "template": "VOICE_LINE",
+    "mediaUrl": "/files/submissions/3f2a....m4a", "mediaType": "AUDIO",
+    "duration": 9.4, "waveform": [0.25, 0.42], "caption": null, "text": null,
+    "reactions": [], "commentCount": 0,
+    "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
+  ```
+  `mediaUrl` 은 **루트 상대 경로**(`/files/...`)다. 앱이 `API_BASE_URL` 을 앞에 붙여 절대 URL 로 만든다. 파일은 **인증 없이** GET 가능(Authorization 헤더 불필요).
+- `GET /api/missions/{id}/submissions?page=0&size=20` → `{content:[SubmissionResponse], page, size, totalPages, totalElements}`. 정렬 `submittedAt` 오름차순. `size` 1..100 보정. 내가 아직 제출 안 했으면 **423 `FEED_LOCKED`**. 비멤버 403, 없는 미션 404.
+- 오류 코드(JSON `{code,message}`): `MISSION_CLOSED`(409, 다음 미션이 열려 닫힘), `ALREADY_SUBMITTED`(409), `FEED_LOCKED`(423), `INVALID_SUBMISSION`(400, `message` 에 사유), `UNSUPPORTED_FILE_TYPE`(415), `FILE_TOO_LARGE`(413), `NOT_GROUP_MEMBER`(403), `MISSION_NOT_FOUND`(404), `SUBMISSION_NOT_FOUND`(404).
+- 지각(`isLate`)이어도 마감~다음 미션 발행 전까지는 제출 가능(201).
 
-**현재 미션 코드** (`mission/`)
-- `controller/MissionController`: `GET /api/groups/{groupId}/missions/today`, `GET /api/missions/{missionId}`, `GET /api/mission-templates`.
-- `service/MissionService`: `getTodayMissions`(→ `missionMapper.findTodayByGroupId` + `LocalDate`/`nextPublishAt(date, count, rows, slots)` 로 "오늘 아직 발행 안 된 슬롯의 가장 이른 시각"), `getMission`, `listTemplates`, `toResponse`(미션 행 → `MissionResponse`; `params` JSON 파싱 후 `targetUserId` → `params.target{userId,nickname}`), `requireMember`. 생성자: `MissionMapper, GroupMapper, GroupMemberMapper, GroupMissionSlotMapper, UserMapper, MissionProperties, ObjectMapper`(`tools.jackson.databind.ObjectMapper`, Jackson 3).
-- `dao/MissionMapper`: `findTodayByGroupId`(**`m.mission_date = CURDATE()`**), `findById`. `MissionRow{id, groupId, content, category, template, params(JSON 문자열), slotNo, publishedAt, deadlineAt(LocalDateTime), submittedByMe}`. **insert 없음.**
-- `domain/MissionTemplate` enum 15종 (`media()`: PHOTO/VOICE/TEXT/DRAW/SLIDER, `paramsSchema()`, `payloadSchema()`, `displayName()`, `phase()`). 파라미터 스키마: `PHOTO_NOW{subject}`, `PHOTO_GALLERY{condition}`, `PHOTO_COLOR{color}`, `VOICE_LINE{sentence,tone}`, `TEXT_ACROSTIC{word(3)}`, `TEXT_FILL_BLANK{sentence(한 개의 ___), targetUserId(서버 부여)}`, `DRAW_SKETCH{subject(선택), targetUserId(선택), seconds}`, `DRAW_A_TO_B{a(선택), targetUserId(선택), b}`.
-- DTO: `MissionResponse(Long missionId, Long groupId, int slotNo, String content, String category, String template, String media, Map params, OffsetDateTime publishedAt, OffsetDateTime deadlineAt, boolean submittedByMe)`, `TodayMissionsResponse(LocalDate date, int dailyMissionCount, OffsetDateTime nextPublishAt, List<MissionResponse> missions)` (1단계에서 `OffsetDateTime` 으로 변경됨; 변환은 `SeoulTime.toOffset(LocalDateTime)`).
-- 오류 코드: `MissionErrorCode.MISSION_NOT_FOUND` 하나.
-- `global/config/MissionProperties(LocalTime defaultPublishTime, LocalTime defaultDeadlineTime, int maxDailyCount)` (`hawe.mission.*`), 테스트 4곳이 `new MissionProperties(LocalTime.of(9,0), LocalTime.of(23,0), 5)` 로 직접 생성(`GroupServiceTests`, `MissionServiceTests`, `MissionTemplateTests`, 3단계의 `GroupContractServiceTests` 등) → **필드를 추가하지 않는다.**
-- 스케줄러 없음(`@EnableScheduling` 없음). `application.properties`: `hawe.mission.default-publish-time=09:00`, `default-deadline-time=23:00`, `max-daily-count=5`.
+현재 Android 코드(조사 결과):
 
-**스키마(변경 없음)**: `missions(id, group_id, content, category, mission_date, template, params JSON, slot_no, published_at, deadline_at)` + `UNIQUE (group_id, mission_date, slot_no)`, `group_mission_slots(group_id, slot_no, publish_time, deadline_time)` (NULL 이면 기본값), `groups(... daily_mission_count, created_at, ...)`, `submissions(mission_id, user_id, ...)`.
-
-**`CURDATE()` 쿼리** (현재 미션 기준으로 바꿔야 함): `MissionMapper.findTodayByGroupId`, `GroupMapper.findSummariesByUserId` 의 `submitted_today`, `GroupMemberMapper.findMembersByGroupId` 의 `stamped_today`, `PokeMapper.existsTodaySubmission`. (`submission_count_this_month` 의 `CURDATE()` 월 기준은 이번 단계에서 **유지**.)
-
-**규칙 출처**: `CONTRACT_DECISIONS.md` §3(결정·시간 규칙 §3-2·계약 §3-3), `docs/BACKEND/MISSIONS_API.md` §6(생성), §6-1(틀 선택 규칙).
+- `core/net/ApiClient.kt`: JSON 전용. `execute(method, path, bodyJson: String?, auth)` 가 **고정으로 `Content-Type: application/json` 헤더를 설정**하고(`send`), 401 `TOKEN_EXPIRED` 시 single-flight 재발급 후 같은 `bodyJson` 으로 재시도. `val baseUrl` 은 private. 타임아웃 connect 10s/read 20s/write 20s(업로드에는 짧음). multipart 지원 없음.
+- `core/data/DataStore.kt`: `SubmissionContent`(Image(bytes, ext)/Text/Voice(File, duration, waveform)). `submit()` 이 **로컬 UUID 제출을 만들고 파일을 캐시에 저장**(`saveMedia`, `mediaDir`). `StoredMission.submissions`(로컬 제출 보관), `serverMembers`/`serverSubmittedByMe`(4A, 서버값). `todayMission()` 의 `isDone`·`summaries` 의 `submittedCount/didSubmit` 이 "서버값 + 로컬 제출 오버레이"(4A 임시 설계, 코드에 `6A 에서 서버 제출로 교체` 주석). `result()` 는 `mission.submissions.any { isMine }` 일 때만 결과 반환. `toggleLike/addComment/deleteComment/poke` 로컬 구현.
+- `core/model/Submission.kt`: `Submission(id: UUID, author, isMine, type, createdAt, mediaURL: URI?, text, duration, waveform: List<Float>, likeCount, likedByMe, likerNames, comments, authorID)`, `MissionResult(id: Long, groupName, type, topic, date, memberCount, submissions, pending)`.
+- 화면: `ResultsScreen`(사진 피드/그림 그리드/글 카드/음성 목록, 좋아요·댓글 수 표시, `store.result()` 가 null 이면 빈 화면), `SubmissionDetailScreen`(좋아요, 댓글 목록, `CommentInput`, 삭제 다이얼로그), `ResultComponents.kt`(`PhotoArtwork`/`DrawingArtwork` 은 Coil `AsyncImage`, `LikeButton`), `VoicePlayerController`(`MediaPlayer`, **로컬 `file:` 만 재생**, `prepare()` 동기, `playingID: UUID?`).
+- `feature/mission/*Screen`: `WriteMissionScreen`(`onSubmit(String)`, `submitted` 플래그를 true 로 만들고 **복구하지 않음**), `PhotoMissionScreen`/`DrawMissionScreen`(`scope.launch { try { onSubmit(bytes) } catch { submitted=false } }`, 동기 `onSubmit`), `VoiceMissionScreen`(`onSubmit(File, Double, List<Float>)`, 호출 직전 `submitted=true`, 복구 없음; 호출 값 `controller.elapsed`·`levels.filter { it >= 0f }`). `MissionPerformScreen` 이 유형별 화면을 고른다.
+- `app/MainNavigation.kt`: `MissionPerform` 라우트에서 `store.submit(content, id)` → `previousBackStackEntry.savedStateHandle["submitted"]=true` → `popBackStack()`. `Results(groupId, missionId: Long)`, `SubmissionDetail(groupId, missionId: Long, submissionId: String)` 라우트(진입 시 `store.result(...)==null` 이면 pop). 푸시용 `PushGroupSnapshot(id, lastMissionId, lastMissionSubmittedByMe)` 가 `last.submissions.any { isMine }` 로 만들어짐. Home 은 진입할 때마다 `groups.loadAll()` 로 목록(+`todayMission` 요약 `submittedCount/submittedByMe`)을 다시 불러온다.
+- `core/push/PushModel.kt`, `feature/records/*`, `core/model/DayRecord.kt`: 로컬 미션 기록 기반(캘린더는 4A 에서 "준비 중" 처리되어 진입 불가).
+- 이미지 로딩: `libs.coil.compose`(coil3) **만** 있고 네트워크 페처(`coil-network-okhttp`)가 **없다** → http URL 이미지가 로드되지 않는다. 의존성 추가 필요. 디버그 빌드는 `src/debug` 의 `network_security_config`(cleartext 허용) 덕분에 `http://10.0.2.2:8080` 가능; 릴리스 `usesCleartextTraffic=false`.
+- `VoiceRecorderController`: 파일 `mission-voice.m4a`(MPEG_4/AAC) — 서버 판정과 호환. 최대 30초에서 자동 정지하지만 `elapsed` 가 30.0 을 **약간 넘을 수 있다**(→ 서버 400). 파형 `VOICE_BAR_COUNT = 32`(≤64 OK).
+- 테스트: `DataStoreTest`(제출·좋아요·댓글·오버레이 테스트 다수 → 재작성 필요), `PushModelTest`, `ResultsFormatTest`, `RecordCalendarLogicTest`, `MissionPerformCommonTest` 등. 서버 계층 테스트는 MockWebServer(`MissionRepositoryTest`, `InMemoryTokenStore` 참고).
 
 ## Root Cause / Key Implementation Points
 
-1. **시간 규칙은 순수 함수 `MissionTiming` 으로** (`mission/domain/MissionTiming.java`, static 메서드, Seoul `LocalDateTime` 입력):
-   - `scheduledPublishAt(LocalDate date, LocalTime publishTime)`.
-   - `deadlineAfter(LocalDateTime publishedAt, LocalTime deadlineTime)`: `publishedAt` **이후 처음 오는** `deadlineTime`(같은 순간이면 다음 날). 예: 발행 09:00/마감 23:00 → 당일 23:00; 발행 23:30/마감 23:00 → 다음 날 23:00; 발행 14:00 → 당일 23:00.
-   - `nextPublishAfter(LocalDateTime after, LocalTime publishTime)`: `after` 이후 처음 오는 발행 시각(같은 순간이면 다음 날). `closesAt` 과 "다음 미션까지" 에 사용.
-2. **발행은 멱등한 하나의 함수** `MissionPublisher.publishIfDue(Long groupId, LocalDateTime now)` (`@Transactional(propagation = REQUIRES_NEW)` 로 그룹별 독립 트랜잭션; `mission/service/`). 각 슬롯 `1..group.dailyMissionCount` 에 대해, `date = now.toLocalDate()`, `p` = 슬롯 발행 시각(없으면 기본), `d` = 슬롯 마감 시각(없으면 기본):
-   - `now < date@p` → 아직 아님(건너뜀).
-   - 이미 `(group, date, slot)` 미션이 있음 → 건너뜀.
-   - 아니면 발행: `publishedAt = max(date@p, group.createdAt)` (`createdAt` 이후에만 열림 — 그룹 생성 후 늦게 만들어진 경우 즉시 발행, 다운 후 따라잡기는 예정 시각), `mission_date = date`, `deadlineAt = deadlineAfter(publishedAt, d)`, 틀 선택(3번), 내용 생성(4번), 대상 멤버 선택(5번), `INSERT`. `DuplicateKeyException` 은 "이미 발행됨"으로 무시.
-   - **과거 날짜는 소급하지 않는다**(오늘 것만).
-3. **틀 선택은 결정적 순수 함수** `MissionTemplateSelector` (`mission/domain/` 또는 `service/`, 입력: `groupId, date, slotNo, dailyMissionCount, yesterdayMedia: Set<String>`) — `MISSIONS_API.md` §6-1 그대로, 풀은 MVP 8종뿐: `PHOTO_NOW, PHOTO_GALLERY, PHOTO_COLOR, VOICE_LINE, DRAW_SKETCH, DRAW_A_TO_B, TEXT_ACROSTIC, TEXT_FILL_BLANK` (매체 4개: PHOTO, VOICE, TEXT, DRAW).
-   - `mediaOrder = shuffle(4매체, seed = seed(groupId, date))`.
-   - `dailyMissionCount >= 2` → 슬롯 `k` 의 매체 = `mediaOrder[(k-1) % 4]`. `== 1` → `mediaOrder` 에서 `yesterdayMedia` 에 없는 첫 번째, 모두 겹치면 `mediaOrder[0]`.
-   - 틀 = 그 매체의 풀 틀 중 `seed(groupId, date, slotNo)` 로 하나. `seed(...)` 는 JVM 간 안정적이어야 하므로 `Long` 산술(`groupId`, `date.toEpochDay()`, `slotNo` 를 소수 곱/XOR 로 섞음)로 만들고 `java.util.Random(seed)` 로 사용(`Objects.hash` 금지).
-   - `yesterdayMedia` = 같은 그룹의 `mission_date = date - 1` 미션들의 `MissionTemplate.valueOf(template).media()` (알 수 없는 값은 무시). 새 mapper 메서드 `findTemplatesByGroupIdAndDate`.
-4. **내용 생성 인터페이스**:
-   ```java
-   public interface MissionGenerator {
-       GeneratedMission generate(MissionTemplate template, long seed, String previousContent);
-   }
-   public record GeneratedMission(String content, String category, Map<String, Object> params) {}
-   ```
-   `PlaceholderMissionGenerator`(`@Component`, 유일한 구현): 틀마다 문장 변형 **3개 이상**을 코드 상수로 갖고 `seed` 로 하나를 고르되 `previousContent`(그룹의 직전 미션 content)와 같으면 다음 변형을 쓴다. 규칙:
-   - `PHOTO_NOW`: `params{subject}`, 예 "지금 창밖으로 보이는 풍경"(subject "창밖 풍경").
-   - `PHOTO_GALLERY`: `params{condition}`, 예 "갤러리에서 가장 오래된 사진 하나" .
-   - `PHOTO_COLOR`: `params{color}`, 예 color "파란색", content "주변에서 파란색인 것을 찍어줘".
-   - `VOICE_LINE`: `params{sentence, tone}`, content 에 문장을 포함 ("이 문장을 {tone} 말투로 읽어줘").
-   - `DRAW_SKETCH`: `params{subject, seconds: 30}` (대상이 지정되면 `[대상]` 을 문장에 포함: 예 "[대상]의 얼굴을 30초 안에 그려줘" 와 대상 없는 변형). 대상 지정 여부는 호출자가 결정해 `generate` 가 `needsTarget` 변형을 고르도록 인자로 받는다 → 시그니처를 `generate(template, seed, previousContent, boolean withTarget)` 로 한다.
-   - `DRAW_A_TO_B`: `params{a, b}` ("[대상]을 …"는 `withTarget` 일 때).
-   - `TEXT_ACROSTIC`: `params{word}` — **정확히 한글 3글자**.
-   - `TEXT_FILL_BLANK`: `params{sentence}`, `sentence` 에 `___` 정확히 1개와 `[대상]` 포함, `content` 와 `sentence` 동일 문장. (`withTarget` 은 항상 true)
-   - `category` 는 짧은 한글 라벨(예 "일상", "추억", "유머", "감성"), 50자 이하. `params` 에 `targetUserId` 는 **넣지 않는다**(서버가 5번에서 추가).
-5. **대상 지정**: `TEXT_FILL_BLANK` 는 항상, `DRAW_SKETCH`/`DRAW_A_TO_B` 는 확률 0.3(`seed(groupId, date, slotNo)` 로 결정 — `MissionPublisher`/Selector 의 상수 `DRAW_TARGET_PROBABILITY = 0.3`, 설정 속성은 만들지 않음 → `MissionProperties` 시그니처 불변). 대상 = 그룹 멤버(`joined_at` 오름차순, 새 mapper `findUserIdsByGroupId`) 중 `seed` 로 1명. `params.targetUserId`(숫자)로 저장.
-6. **"현재 미션" 쿼리**: 슬롯별 가장 최근 발행.
-   ```sql
-   ... FROM missions m WHERE m.group_id = #{groupId}
-     AND m.id = (SELECT m2.id FROM missions m2 WHERE m2.group_id = m.group_id AND m2.slot_no = m.slot_no
-                 ORDER BY m2.published_at DESC, m2.id DESC LIMIT 1)
-   ORDER BY m.slot_no
-   ```
-   자정을 넘겨도(23:30 발행) 다음 발행 전까지 현재 미션이다. `number` 는 `(SELECT COUNT(*) FROM missions x WHERE x.group_id = m.group_id AND (x.published_at < m.published_at OR (x.published_at = m.published_at AND x.id <= m.id)))`.
-7. **`closesAt` 은 예정값을 응답 시점에 계산**: `nextPublishAfter(m.publishedAt, 슬롯 발행 시각(현재 설정))`. 실제 "닫힘" 판정(다음 미션이 같은 슬롯에 발행되는 순간)은 6단계 제출에서 사용한다.
-8. **그룹 생성 직후 즉시 발행**: `GroupService.createGroup` 은 `@Transactional` 이므로 같은 트랜잭션에서 발행하면 FK/롤백 문제가 생긴다 → `ApplicationEventPublisher` 로 `GroupCreatedEvent(Long groupId)`(`group/domain/GroupCreatedEvent.java` record)를 발행하고, `mission/service/MissionPublishListener` 가 `@TransactionalEventListener(phase = AFTER_COMMIT)` 로 받아 `MissionPublisher.publishIfDue(groupId, SeoulTime.now())` 를 호출한다. 리스너는 `Exception` 을 잡아 로그만 남긴다(그룹 생성은 이미 커밋됨; 실패해도 스케줄러가 다음 분에 재시도). **생성 응답의 `missionCount` 는 0 일 수 있다**(발행이 커밋 이후) — 허용, 16 화면 진입 시 상세 조회에서 갱신됨. 문서에 한 줄 명시.
+1. **서버가 제출/피드의 단일 출처.** 앱은 (a) 제출을 서버로 보내고 (b) 결과 화면 진입 시 피드를 받아 `DataStore` 의 현재 미션에 저장한다. 로컬 제출 생성·오버레이를 없앤다.
+2. **`ApiClient` multipart 지원.** `postMultipart<T>(path, parts)` 신설. 요구사항:
+   - JSON 용 `Content-Type: application/json` 헤더를 **multipart 에서는 설정하지 않는다**(OkHttp `MultipartBody` 가 boundary 포함 Content-Type 을 직접 정함). `send` 를 `RequestBody` 팩토리 기반으로 일반화하되 기존 JSON 호출 동작은 동일해야 한다.
+   - 401 `TOKEN_EXPIRED` 재발급 후 재시도 시 **본문을 다시 보낼 수 있어야** 한다(바이트 배열/파일 기반 `RequestBody` 는 재사용 가능; 요청마다 새 `MultipartBody` 를 만드는 팩토리를 넘겨도 됨).
+   - 업로드용 타임아웃은 더 길게(예: write/read 60s) — 기본 `OkHttpClient` 를 `newBuilder()` 로 파생해 업로드에만 사용.
+   - 절대 URL 만들기: `fun absoluteUrl(path: String): String`(= `baseUrl.trimEnd('/') + path`) 공개.
+3. **`SubmissionRepository`(신규, `core/net/SubmissionRepository.kt` + `SubmissionApi.kt` DTO).**
+   - `suspend fun submit(missionId: Long, content: SubmissionContent, myUserId: Long): Submission` — `SubmissionContent` 별 파트 구성:
+     - `Image(bytes, ext)`: 파트 `file`, 파일명 `photo.jpg`/`drawing.png`(ext 에 따라), 미디어 타입 `image/jpeg`/`image/png`. **다른 파트 없음.**
+     - `Text(body)`: 폼 필드 `text` 만.
+     - `Voice(file, duration, waveform)`: 파트 `file`(`voice.m4a`, `audio/mp4`), `duration`, `waveform`.
+       - `duration` = `Locale.ROOT` 로 포맷한 소수 문자열, **`coerceIn(0.1, 30.0)`** (예 `"9.40"`; 서버는 30.0 허용, 30.01 거부).
+       - `waveform` = 값 `coerceIn(0f,1f)`, **64개 초과 시 64개로 균등 축소**, JSON 배열 문자열(예 `[0.25,0.42]`). 비어 있으면 `[]`.
+   - `suspend fun feed(missionId: Long, myUserId: Long): List<Submission>` — `GET /api/missions/{id}/submissions?page=0&size=100`. (그룹 최대 6명이라 한 페이지로 충분.)
+   - DTO(`@Serializable`, `ignoreUnknownKeys` 기존 설정): `SubmissionDto(id: Long, missionId: Long, author: AuthorDto, template: String, mediaUrl: String? , mediaType: String?, duration: Double?, waveform: List<Float>?, caption: String?, text: String?, submittedAt: String, isLate: Boolean)`. `isLate` 키 이름 주의(`@SerialName` 필요 없음, 프로퍼티명이 `isLate` 면 그대로). 알 수 없는 키(`reactions`, `commentCount`)는 무시.
+   - 변환: `Submission.id = Long`, `author = Profile(AvatarContent.Character(ProfileCharacter.fromKey(characterKey)), nickname)`(기존 `GroupRepository.toMember` 와 같은 방식 재사용), `isMine = author.userId == myUserId`, `type = 템플릿 → MissionType`(서버 `template` 의 `PHOTO_`/`DRAW_`/`VOICE_`/`TEXT_` 접두 또는 `mediaType`/필드 존재로 매핑; `mediaToType` 은 `media` 문자열용이라 템플릿 접두 매핑 함수를 새로 둔다. 알 수 없으면 해당 항목을 건너뛴다), `createdAt = OffsetDateTime.parse(submittedAt).toInstant()`, `mediaURL = mediaUrl?.let { URI(api.absoluteUrl(it)) }`, `isLate`.
+4. **모델 변경(`core/model/Submission.kt`).** `Submission.id: UUID → Long`, `isLate: Boolean = false` 추가. 임시 좋아요/댓글 필드(`likeCount`, `likedByMe`, `likerNames`, `comments`)와 `SubmissionComment` 는 서버에 없으므로 **제거**(7A 에서 서버 모양으로 다시 추가). `authorID` 는 `author` 에 userId 가 없으므로 유지(= 서버 `author.userId`).
+5. **`DataStore` 정리.**
+   - 제거: `submit()`, `saveMedia`/`mediaDir` 관련(테스트/프리뷰 생성자 파라미터가 필요하면 최소 유지), `toggleLike`, `addComment`, `deleteComment`, `updateSubmission`, 제출 오버레이(4A) 로직 및 `// 6A 에서 서버 제출로 교체` 주석. `poke` 는 5단계 대상이라 그대로 둔다.
+   - 추가: `applyFeed(groupID, missionID, submissions: List<Submission>)` — 현재 미션 id 가 일치할 때만 `submissions` 를 교체하고 `feedLoaded=true`; `applySubmitted(groupID, missionID, submission)` — 제출 성공 응답 반영: `serverSubmittedByMe=true`, `serverMembers[me]=true`, `submissions` 에 추가(중복 id 방지), 그룹 `summary` 가 같은 미션이면 `submittedCount+1`·`submittedByMe=true`.
+   - `StoredMission`: `feedLoaded: Boolean = false` 추가. 새 미션(`applyCurrentMission` 에서 id 가 바뀜)이면 `submissions` 비우고 `feedLoaded=false`. 같은 id 면 기존 `submissions`/`feedLoaded` 유지(현재도 같은 id 면 유지하는 동작 확인).
+   - `todayMission()` 의 `isDone`: `serverMembers[id] == true || (member.isMe && serverSubmittedByMe)` (로컬 제출 항목 제거). `summaries` 의 `didSubmit`/`submittedCount`: **요약(`summary`)만** 사용(오버레이 제거).
+   - `result(groupID, missionID)`: 미션이 존재하고 `serverSubmittedByMe || feedLoaded` 인 경우 반환하되, **피드가 로드되지 않았으면 로딩 상태를 구분**할 수 있어야 한다(예: `feedLoaded=false` 면 null 반환 + 화면은 별도 상태로 로딩/실패를 표시). `pending` = 그룹 멤버 중 제출자(authorID)가 아닌 사람.
+   - `stats`/`records`: 사용처가 없어졌거나(마이페이지 요약 숨김, 캘린더 준비 중) 로컬 제출 필드를 쓰면 컴파일이 깨지지 않게 최소 수정(필요하면 `records` 는 빈 목록 반환 대신 기존 로직 유지가 불가능하므로 제거 가능 — 호출처 확인 후 판단, 불필요한 대규모 삭제는 하지 말 것).
+   - `DemoSeed` 는 **삭제하지 않는다**(테스트·프리뷰 용). 모델 변경에 맞게 컴파일만 맞춘다(샘플 제출의 좋아요 필드 제거, id 는 `Long` 로컬 음수 id).
+6. **제출 흐름(`MainNavigation` MissionPerform 라우트 + `MissionPerformScreen`).**
+   - 각 유형 화면의 `onSubmit` 을 **`suspend (…) -> Boolean`**(true = 화면을 닫아도 됨, false = 실패→입력 유지·재시도 가능)으로 바꾼다. 화면 안에서 `submitted`/로딩 플래그는 호출 중 true, 실패(false) 시 false 로 되돌린다(Write/Voice 도 `rememberCoroutineScope` 로 호출). 호출 중에는 올리기 버튼 비활성 + 진행 표시(스피너/문구), 뒤로가기·닫기는 허용하되 진행 중 요청은 취소하지 않거나 취소 시 서버 상태를 신뢰(아래 멱등 처리).
+   - 라우트가 `SubmissionRepository.submit` 을 호출하고 결과를 **순수 함수로 분류**한다(테스트 대상): `classifySubmitFailure(e): SubmitOutcome`
+     - 성공: `store.applySubmitted(...)`, `savedStateHandle["submitted"]=true`(+ 지각이면 `"submittedLate"=true`), pop. 지각이면 토스트 "지각으로 올렸어요", 아니면 기존 "오늘의 미션을 올렸어요".
+     - `ALREADY_SUBMITTED`(409) → **성공으로 간주**(이전 요청이 서버에 도달했으나 응답을 못 받은 재시도 케이스): 미션 새로고침을 유발하고(`savedStateHandle["refresh"]=true` 등) pop, 토스트 "이미 올렸어요".
+     - `MISSION_CLOSED`(409) → 입력은 버려지지만 안내: pop + 토스트 "새 미션이 열려서 마감됐어요", 05 가 미션 재조회.
+     - `INVALID_SUBMISSION`(400) → 서버 `message` 를 토스트로, 화면 유지(재시도 가능).
+     - `FILE_TOO_LARGE`(413) → "파일이 너무 커요", `UNSUPPORTED_FILE_TYPE`(415) → "지원하지 않는 파일이에요", 화면 유지.
+     - `NOT_GROUP_MEMBER`(403)/`MISSION_NOT_FOUND`(404) → Home 으로 pop + 목록 재조회.
+     - `NetworkException` → "네트워크 연결을 확인해 주세요", 화면 유지(입력 보존).
+     - 그 외 → 일반 실패 안내, 화면 유지.
+   - `NetworkException` 이후 사용자가 같은 입력으로 다시 누를 수 있어야 하며, 서버가 이미 받았다면 위 `ALREADY_SUBMITTED` 처리로 수렴한다.
+   - 현재 `performEntryDecision`/`didSubmit` 가드는 그대로(서버값 기반으로 이미 동작).
+7. **결과 화면 서버 연결.**
+   - `ResultsScreen` 은 `SubmissionRepository` 를 받아 진입(및 앱 복귀 `ON_RESUME`)마다 피드를 불러 `store.applyFeed`. 상태: 로딩(빈 화면 또는 스피너), 실패(재시도 화면 — `MissionLoadFailed` 와 같은 구성의 "결과를 불러오지 못했어요 / 다시 시도"), 성공. **423** 이면 05 로 pop + 미션 재조회 유도 + 토스트 "먼저 미션을 올려 주세요". 403/404 → Home 으로.
+   - 진입 가드(`MainNavigation` Results/SubmissionDetail 의 `LaunchedEffect`): `store.result()==null` 이면 무조건 pop 하던 것을, **미션이 없거나(id 불일치) 내가 제출하지 않았을 때만** pop 하도록 바꾼다(피드 미로딩 상태에서 튕기지 않게).
+   - `SubmissionDetailScreen` 은 `store` 에 로드된 피드에서 해당 제출을 찾는다(별도 상세 API 호출 없음). 피드가 비어 있거나 제출이 없으면 pop. 라우트 `SubmissionDetail.submissionId: String → Long`.
+   - 지각 표시: 결과 항목(사진 피드 작성자 행, 글 카드, 음성 행, 그림 그리드, 상세 부제)에 `isLate` 이면 작은 "지각" 칩/문구. 문구는 상수로 한 곳에 둔다.
+   - **숨김(7단계 전)**: 좋아요 버튼/수, 좋아요한 사람 문구, 댓글 수/목록/입력창/삭제 다이얼로그, 글 카드의 "좋아요·댓글 n". `hintText` 의 "댓글을 남겨보세요" 문구도 제거("눌러서 자세히 보기" 등으로). 순수 헬퍼(`likersText`, `commentSendEnabled`, `commentPlaceholder`, `koreanRelativeText`)는 7A 에서 재사용하므로 **삭제하지 않는다**.
+8. **이미지/음성 재생.**
+   - `gradle/libs.versions.toml` + `app/build.gradle.kts`: `coil-network-okhttp`(`io.coil-kt.coil3:coil-network-okhttp`, version.ref = coil) 추가. 이로써 `AsyncImage(model = "http://…")` 가 동작. (새 의존성 다운로드가 필요하다 — 오프라인이면 보고서에 명시.)
+   - `ResultComponents.kt` 의 `imageModel`: 절대 http(s) URL 이면 문자열 모델, `file:` 은 기존 분기 유지(테스트/프리뷰 호환). 로딩 전/실패 시 기존 플레이스홀더 텍스트 유지.
+   - `VoicePlayerController`: `playingID: Long?`. `mediaURL.scheme` 이 http/https 이면 `MediaPlayer().setDataSource(url)` + **`prepareAsync()`** + `OnPreparedListener` 에서 `start()`·`player` 할당·틱 시작, `OnErrorListener`/`OnCompletionListener` 에서 다음 곡/정지. 준비 중 `stop()`/다른 항목 재생이 오면 이전 `generation` 콜백은 무시(기존 `generation` 패턴 유지). `file:` 재생은 기존 동작 유지. 준비 전에는 진행률을 제출의 `duration` 으로 근사하던 기존 틱 로직이 오작동하지 않게 한다.
 
 ## Files / Functions to Change
 
-### A. 신규
-- `mission/domain/MissionTiming.java`, `mission/domain/MissionTemplateSelector.java`(+ `MVP_POOL`), `mission/domain/GeneratedMission.java`(record), `mission/service/MissionGenerator.java`(interface), `mission/service/PlaceholderMissionGenerator.java`, `mission/service/MissionPublisher.java`, `mission/service/MissionScheduler.java`, `mission/service/MissionPublishListener.java`, `group/domain/GroupCreatedEvent.java`, `mission/dto/MissionMemberStatus.java`(`record(Long userId, boolean submitted)`), `mission/dto/TodayMissionSummary.java`(`record(Long missionId, String media, String content, long submittedCount, boolean submittedByMe)`).
-- `MissionScheduler`: `@Component`, `@Scheduled(cron = "0 * * * * *", zone = "Asia/Seoul")` 메서드가 `groupMapper.findAllIds()`(신규)로 모든 그룹 id 를 순회하며 `publisher.publishIfDue(id, SeoulTime.now())`, 그룹별 `try/catch(Exception)` + 로그(한 그룹의 실패가 다른 그룹을 막지 않게). `@EnableScheduling` 을 `HaweApplication` 또는 `global/config` 의 설정 클래스에 추가.
+신규 (`android/app/src/main/java/com/sapphire/hawe/`):
+- `core/net/SubmissionApi.kt`(DTO), `core/net/SubmissionRepository.kt`(`submit`, `feed`, 파라미터 생성 순수 함수 `voiceDurationParam`, `waveformParam`, 템플릿→`MissionType` 매핑, 실패 분류 `classifySubmitFailure`/`SubmitOutcome` — 위치는 `core/net` 또는 `feature/mission`, 한 파일에 모아 테스트하기 쉽게).
 
-### B. 수정
-- `application.properties`: `hawe.mission.max-daily-count=1`.
-- `mission/dao/MissionMapper.java`: `findTodayByGroupId` → `findCurrentByGroupId(groupId, userId)`(위 6번 SQL, 컬럼에 `mission_date`, `number` 추가), `findById` 에 `mission_date`, `number` 추가, 신규: `insert(MissionInsertRow)`(`group_id, content, category, mission_date, template, params, slot_no, published_at, deadline_at`; `useGeneratedKeys`), `existsByGroupIdAndDateAndSlot(groupId, date, slotNo)`, `findTemplatesByGroupIdAndDate(groupId, date)`, `findLatestContentByGroupId(groupId)`(직전 미션 content, 없으면 null), `findMemberStatuses(missionId)`(`SELECT gm.user_id, EXISTS(submission) FROM group_members gm WHERE gm.group_id = ? ORDER BY gm.joined_at, gm.id` → 새 row 클래스 `MissionMemberRow`), `findCurrentSummariesByGroupIds(List<Long> groupIds, Long userId)`(`<script>` + `foreach`, 그룹별 가장 낮은 `slot_no` 의 현재 미션 + `submitted_count` + `submitted_by_me` → 새 row `MissionSummaryRow`), `MissionRow` 에 `missionDate`(LocalDate), `number`(int) 필드. `insert` 용 파라미터 객체 클래스는 `mission/dao/` 에 둔다.
-- `group/dao/GroupMapper.java`: `findSummariesByUserId` 에서 `submitted_today` 서브쿼리 삭제(`GroupSummaryRow.submittedToday` 필드·접근자 삭제), 신규 `findAllIds()`. `group/dao/GroupMemberMapper.java`: `stamped_today` 를 "현재 미션(슬롯별 최신) 제출 여부" 로 교체(위 6번 서브쿼리 패턴), 신규 `findUserIdsByGroupId(groupId)`(`joined_at, id` 오름차순).
-- `poke/dao/PokeMapper.java`: `existsTodaySubmission` → `existsCurrentMissionSubmission(groupId, userId)`(현재 미션 기준), `poke/service/PokeService.java` 호출 이름 수정 + 관련 테스트의 이름만 수정.
-- `mission/dto/MissionResponse.java`: `(Long missionId, Long groupId, int slotNo, int number, String content, String category, String template, String media, Map<String,Object> params, OffsetDateTime publishedAt, OffsetDateTime deadlineAt, OffsetDateTime closesAt, boolean submittedByMe, List<MissionMemberStatus> members)`. `TodayMissionsResponse` 는 필드 유지(날짜 의미만 변경).
-- `mission/service/MissionService.java`:
-  - `getTodayMissions`: `findCurrentByGroupId`; `date = rows 가 있으면 첫 미션의 mission_date, 없으면 SeoulTime.today()`; `nextPublishAt = min over slot(1..dailyMissionCount) of (해당 슬롯의 현재 미션이 있으면 그 closesAt, 없으면 nextPublishAfter(SeoulTime.now(), 슬롯 발행 시각))`.
-  - `toResponse(row)`: `closesAt` 계산, `members` 조회, **`content` 의 `[대상]` 치환**: `params.targetUserId` 의 사용자 닉네임(`UserMapper.findById`), 사용자가 없으면 "친구". `params.target{userId,nickname}` 은 기존대로 유지.
-  - 신규 `Map<Long, TodayMissionSummary> summarizeCurrent(List<Long> groupIds, Long userId)`(`GroupService` 가 사용; `media` 는 템플릿에서, `content` 는 같은 `[대상]` 치환 적용).
-  - `getMission` 도 새 필드 포함.
-- `group/service/GroupService.java` + `group/dto/GroupSummaryResponse.java`: `GroupSummaryResponse` 에 `TodayMissionSummary todayMission` 추가(없으면 `null`), `submittedToday` 는 유지하되 **`todayMission != null && todayMission.submittedByMe()`** 로 계산. `listMyGroups` 가 `missionService.summarizeCurrent(groupIds, userId)` 를 한 번 호출(그룹 0개면 생략). `createGroup` 이 커밋 이후 처리를 위해 `ApplicationEventPublisher.publishEvent(new GroupCreatedEvent(group.getId()))`. 생성자에 `ApplicationEventPublisher`, `MissionService` 추가(→ 테스트의 생성자 호출 수정).
-- `mission/service/MissionErrorCode`: 변경 없음(`MISSION_CLOSED` 는 6단계).
-
-### C. 문서
-- `docs/BACKEND/MISSIONS_API.md`: §0 지각/종료(마감 이후~다음 미션 발행 전은 지각 제출 가능, 다음 미션 발행 순간 종료 — 적용은 6단계), §2 `today` 응답에 `number`, `closesAt`, `members`, "현재 미션" 의미, `nextPublishAt` 정의 변경, §6 첫 미션 즉시 발행·`deadlineAt` 계산·스케줄러 동작·임시 생성기, §6-1 MVP 틀 풀, §3·§10 `MISSION_CLOSED` 는 "6단계 구현 예정" 표기. 문서 맨 위 "구현되지 않았다" 문구를 코드 상태(조회·생성 구현, 제출/피드 미구현)에 맞게 한 줄 수정.
-- `docs/BACKEND/API_DESIGN.md` §2: 그룹 목록에 `todayMission`(필드 설명), `submittedToday` 정의 변경.
-- `docs/BACKEND/CONTRACT_DECISIONS.md` §3 헤더 상태 → `반영됨 (1차: AI 연동·하루 여러 개·MISSION_CLOSED 는 제외)`, §3-5 미결 중 "생성 실패 시 대체 문장 정책"에 "임시 생성기가 항상 성공, 실패 시 스케줄러 1분 후 재시도" 반영.
-- `docs/FEATURE/PROJECT_OVERVIEW.md`: §3 마감과 지각, §5 MVP 하루 1개, §11-6 자정 넘는 마감 항목을 위 규칙으로 최소 수정(해당 문장만).
-- Postman `HAWE_MISSION.postman_collection.json`, `HAWE_GROUP.postman_collection.json`: 하루 미션 수가 1로 고정되므로 `dailyMissionCount` 2 이상을 쓰는 요청은 400 기대로 바꾸거나 제거. `today` 응답 모양(`number/closesAt/members`)과, 그룹 생성 시 **발행 시각 이후면 미션이 이미 열려 있음**(시간 의존)을 반영 — 기대값을 시각에 따라 달라지게(`missions` 비어 있음 vs 1개) 쓰고, SQL 로 미리 넣는 픽스처(`INSERT INTO missions … CURDATE()`)가 있으면 `(group, date, slot)` 유일 제약과 충돌하지 않게 슬롯/날짜를 조정. 컬렉션 JSON 유효성과 한글 이름 깨짐(`?`)이 없는지 확인(UTF-8 저장).
+수정:
+- `core/net/ApiClient.kt` — `postMultipart`, `absoluteUrl`, JSON 헤더 분기, 업로드 타임아웃, 재시도 가능한 본문.
+- `core/model/Submission.kt` — `Submission`(id Long, `isLate`, 좋아요/댓글 필드 제거), `SubmissionComment` 제거.
+- `core/data/DataStore.kt` — 위 5번. (`SubmissionContent` 는 그대로 유지: 화면과 레포지토리가 공유.)
+- `core/data/DemoSeed.kt` — 컴파일 맞춤.
+- `app/AppViewModel.kt` — `val submissions = SubmissionRepository(api)`; `app/RootScreen.kt` → `MainNavHost(..., submissions)` 전달.
+- `app/MainNavigation.kt` — `MainNavHost` 파라미터에 `submissions`; MissionPerform 제출 흐름, Results/SubmissionDetail 가드·시그니처, 라우트 `SubmissionDetail.submissionId: Long`, 푸시 스냅샷(`last?.serverSubmittedByMe`), 05 가 `"submittedLate"`/`"refresh"` 신호 처리(필요 시 `MissionScreen` 파라미터).
+- `feature/mission/MissionPerformScreen.kt`, `WriteMissionScreen.kt`, `PhotoMissionScreen.kt`, `DrawMissionScreen.kt`, `VoiceMissionScreen.kt` — `onSubmit` suspend/Boolean, 진행 표시, 실패 시 재활성화, 토스트 호스트(Draw 는 이미 있음; 나머지는 공통 래퍼에서 제공해도 됨).
+- `feature/mission/MissionScreen.kt` — 지각 제출 토스트 분기(`submittedLate`), `refresh` 신호 시 `refresh++`.
+- `feature/results/ResultsScreen.kt`, `SubmissionDetailScreen.kt`, `ResultComponents.kt`, `ResultsFormat.kt`(`hintText`), `VoicePlayerController.kt` — 위 7·8번.
+- `core/push/PushModel.kt` — 변경 불필요할 수 있음(이미 `Long` 미션 id). 스냅샷 생성부만 수정.
+- `gradle/libs.versions.toml`, `app/build.gradle.kts` — `coil-network-okhttp`.
+- `docs/FRONTEND/ANDROID.md` — 제출·결과가 서버 연결됨, 좋아요/댓글은 7A, 로컬 임시 로직 제거 반영.
+- 테스트 갱신/신규는 아래 "Tests Required".
 
 ## Implementation Steps
 
-0. `git status`/`git diff` 로 트리 확인(앞 단계 미커밋 보존). 베이스라인 `.\mvnw.cmd test` 확인(JDK 25; `JAVA_HOME` 문제 이력 있음).
-1. **테스트 먼저(RED)**: `MissionTimingTest`, `MissionTemplateSelectorTest`, `PlaceholderMissionGeneratorTest`, `MissionPublisherTest`, 갱신된 `MissionServiceTests`, `MissionMapperTests`(DB), 그룹/콕 mapper·service 테스트. 컴파일 실패/RED 확인.
-2. `MissionTiming` → `MissionTemplateSelector` → `MissionGenerator`/`PlaceholderMissionGenerator` 구현, 순수 단위 테스트 GREEN.
-3. mapper 변경(현재 미션 쿼리, insert 등) + `MissionRow` 확장, DB 통합 테스트 GREEN.
-4. `MissionPublisher`(+`MissionScheduler`, `@EnableScheduling`), `MissionPublishListener`/`GroupCreatedEvent`, `GroupService` 연결.
-5. `MissionService`/DTO 확장, 그룹 목록 `todayMission`, `CURDATE()` 쿼리 교체(`GroupMapper`, `GroupMemberMapper`, `PokeMapper`).
-6. `max-daily-count=1`, 문서·Postman 갱신.
-7. `.\mvnw.cmd clean test`(낡은 `target/classes` 방지) 전체 통과 → 실서버 스모크 → `.agent/report.md`.
+1. 테스트 먼저(실패 확인): `SubmissionRepositoryTest`, `ApiClientTest`(multipart), 제출 실패 분류 테스트, 파라미터 변환 테스트, `DataStoreTest` 신규 케이스.
+2. `ApiClient`: 요청 본문 팩토리로 일반화 → `postMultipart`·`absoluteUrl`·업로드 클라이언트. 기존 `ApiClientTest` 전부 통과 유지.
+3. `Submission` 모델 정리 → 컴파일 에러를 따라 `DataStore`/`DemoSeed`/화면/테스트 수정.
+4. `SubmissionApi`/`SubmissionRepository` 구현.
+5. `DataStore`: `applyFeed`/`applySubmitted`/`feedLoaded`, 오버레이·로컬 제출·좋아요·댓글 제거.
+6. 의존성 `coil-network-okhttp`, `imageModel` 확인.
+7. 제출 UI 흐름: 유형별 화면 `onSubmit` suspend/Boolean + 진행 표시 + 재시도, `MainNavigation` MissionPerform 라우트에서 레포지토리 호출·결과 분류·네비게이션.
+8. Results/SubmissionDetail: 피드 로딩/실패/423 처리, 진입 가드 수정, 지각 표시, 좋아요·댓글 UI 숨김, `hintText`.
+9. `VoicePlayerController`: http 재생(`prepareAsync`), id 타입 `Long`.
+10. 푸시 스냅샷·05 신호·문서 갱신. 전체 테스트·빌드.
 
 ## Constraints
 
-- **스키마(V1) 변경 금지** — DB 초기화가 필요 없어야 한다. 새 컬럼/인덱스/테이블 없음.
-- `MissionProperties` 시그니처(3개 필드) 불변. 새 설정 속성 추가 금지(`DRAW_TARGET_PROBABILITY` 는 상수). 새 의존성 금지.
-- 범위 밖 금지: AI 호출, `MISSION_CLOSED` 적용, 알림, 콕 응답(`pokedByMe`), 제출/피드 API, 클라이언트.
-- 시각 계산은 모두 `SeoulTime`/`LocalDateTime`(Seoul 벽시계)로, JVM 기본 시간대에 의존하지 않는다(1단계 규칙). DB `DATETIME` 컬럼에는 `LocalDateTime` 을 그대로 넣는다.
-- 패키지 구조 유지(5개 하위 패키지: controller/service/dto/domain/dao). 코드 스타일은 기존 `mission`/`group` 패키지(4칸 스페이스, MyBatis 어노테이션 SQL, getter/setter Row 클래스)를 따른다. 무관한 포맷 변경 금지. `git commit`/`push` 금지.
-- 스케줄러/리스너는 예외를 삼키되 **로그를 남긴다**(SLF4J), 민감 정보 로그 금지.
+- Android 만. 백엔드·iOS·`frontend/` 변경 금지. Flyway/서버 계약 변경 금지(계약이 불편해도 앱에서 맞춘다 — 서버 이슈는 보고서에 기록).
+- 서버 계약에 없는 필드를 보내지 않는다(특히 글 틀에 `file`/`caption`, 사진 틀에 `duration` 등 금지 → 400).
+- 좋아요·댓글·콕·달력·활동 요약은 **숨김/준비 중** 유지. 목업 데이터를 서버 데이터와 섞지 않는다. `TopicPool`/`DemoSeed` 는 테스트·프리뷰 용으로만 남긴다.
+- 토큰/로그: 업로드 본문·URL 을 로그에 남기지 않는다. 디버그 빌드의 cleartext 설정은 그대로(릴리스 변경 없음).
+- 사용자에게 보이는 문자열은 한국어, 코드/주석은 기존 스타일(주석 최소).
+- 커밋·푸시 금지. `.agent/plan.md`·`.agent/review.md` 는 읽기만, 보고서는 `.agent/report.md`.
+- Gradle 은 JDK 17 로 실행(기존 보고서 방식): `android\.\gradlew.bat testDebugUnitTest assembleDebug lint assembleRelease --quiet`.
 
 ## Edge Cases
 
-- **멱등/동시 실행**: 같은 `(group, date, slot)` 을 스케줄러와 즉시 발행(또는 서버 두 대)이 동시에 시도 → `UNIQUE` 위반을 정상 흐름으로 처리, 미션은 하나.
-- **발행 시각 전/후**: 생성 08:59, p=09:00 → 즉시 발행 없음, `today` 응답 `missions=[]`, `nextPublishAt = 오늘 09:00`. 생성 14:00 → 즉시 발행(`publishedAt` ≈ 생성 시각, 마감 오늘 23:00, `closesAt` 내일 09:00). 생성 23:10, 마감 기본 23:00 → 마감 **내일** 23:00 (생성 22:55 → 마감 5분 뒤: §3-5 미결, 그대로 둔다).
-- **자정 넘김**: p=23:30 발행 → 다음 날 00:10 에도 그 미션이 현재 미션(`date` = 발행일). 다음 날 23:30 에 새 미션. `mission_date` 는 발행 기준 날짜(서울).
-- **서버 다운 후 복구**: 09:00~11:00 다운 → 11:00 첫 tick 에서 오늘 미션 발행(`publishedAt` = 09:00, 마감 오늘 23:00). 하루 전체 다운이면 어제 미션은 만들지 않음.
-- **어제 매체 제외**: 어제 미션 매체 PHOTO → 오늘 PHOTO 가 아닌 매체. 4매체를 모두 어제 썼다면(불가능한 상황이지만) `mediaOrder[0]`. 어제 미션이 없으면 제외 없음.
-- **그룹 설정 변경 후**: 슬롯 발행 시각이 바뀌면 이미 오늘 미션이 있으면 오늘은 유지(내일부터 적용), 없고 새 시각이 이미 지났으면 다음 tick 에서 발행.
-- **대상 지정**: 멤버 1명뿐인 그룹도 `TEXT_FILL_BLANK` 는 대상을 지정(본인). 대상 사용자가 닉네임을 바꿨으면 응답은 최신 닉네임. 대상 사용자가 없으면 "친구".
-- **`[대상]` 치환**: `content` 에 `[대상]` 이 여러 번이면 모두 치환. `params.sentence` 는 원문 유지(앱이 치환 책임 없음: `content` 사용).
-- **그룹 삭제 후**: 스케줄러가 id 목록을 가져온 뒤 삭제된 그룹 → `findById` null 이면 건너뜀(예외 아님).
-- **그룹 0개**: 스케줄러가 즉시 반환.
-- **응답**: 미발행 그룹의 `todayMission` 은 `null`, `submittedToday=false`. `members[]` 는 참여 순서, `submitted` 는 해당 미션 제출 여부. 제출이 없는 단계에서는 항상 false.
-- **동시성/성능**: 그룹 수가 늘면 분당 순회 비용이 커지지만 MVP 에서는 허용 — report 에 "분당 전체 그룹 순회"를 알려진 한계로 기록.
+- **오프라인/타임아웃 후 재시도**: 서버가 이미 저장했는데 응답을 못 받은 경우 재시도가 409 `ALREADY_SUBMITTED` → 성공으로 취급하고 서버 상태로 수렴(05 재조회). 입력 데이터는 실패 시 그대로 유지.
+- **더블탭/중복 제출**: 진행 중에는 버튼 비활성, 라우트 레벨에서도 진행 중 재진입 무시.
+- **음성 길이 30초 초과**: `elapsed` 가 30.0x 라도 `coerceIn(0.1,30.0)` 로 보정해 400 을 피한다. 0 에 가까운 길이도 0.1 로 보정.
+- **파형 개수/범위**: 32개 기본, 64 초과 시 축소, 음수·NaN 값 방지(`coerceIn`, 비유한 값은 0).
+- **MISSION_CLOSED**: 제출 중 새 미션이 열린 경우. 입력은 버려지므로 사용자에게 이유를 알린다. 05 가 새 미션을 보여준다.
+- **지각 제출**: 마감 후에도 가능, 결과에서 "지각" 표시. 토스트 분기.
+- **423 (결과 진입)**: 로컬은 "제출함"인데 서버는 아님(예: 앱 재설치 직후 로컬 상태 불일치 — 서버 값 기준이므로 드묾). 05 로 되돌리고 재조회.
+- **피드 로딩 중 뒤로가기/회전**: 요청 취소 시 상태가 깨지지 않게(`LaunchedEffect` 취소 안전).
+- **다른 사용자의 미디어 URL 실패**(파일 삭제/404): 이미지는 플레이스홀더 텍스트 유지, 음성은 에러 리스너에서 정지(앱이 죽지 않음).
+- **세션 만료 중 업로드**: `TOKEN_EXPIRED` 재발급 후 같은 본문 재전송이 되어야 한다(테스트). 재발급 실패 시 기존대로 로그아웃.
+- **알 수 없는 템플릿/미디어 타입**의 피드 항목은 건너뛴다(앱이 죽지 않음).
+- **작성자 캐릭터 키가 null/미지원**: 기존 `ProfileCharacter.fromKey` 의 기본 처리 사용.
+- **앱 재시작**: 제출 상태는 서버값(`submittedByMe`/`members`)에서 복구되므로 4A 의 "재시작 시 미제출로 보임" 한계가 해소된다 — 수동 검증 항목.
+- **긴 글/이모지**: 글 화면의 기존 grapheme 제한과 서버 제한이 같다(FILL_BLANK 100, ACROSTIC 3줄).
 
 ## Regression Risks
 
-- **`CURDATE()` 교체**: 미션이 "오늘 날짜"가 아니어도(어제 발행) 현재 미션이면 제출/콕 판단이 일관돼야 한다. `MissionMapperTests`, `PokeMapperTests`, `GroupMapperTests`(특히 3단계가 추가한 `GroupContractMapperTests`)가 `mission_date = CURDATE()` 로 직접 INSERT 하는 픽스처를 갖고 있으니 새 쿼리(슬롯별 최신 `published_at`)로 같은 단언이 성립하는지 확인하고, 필요 시 픽스처의 `published_at` 을 명시.
-- **`GroupService` 생성자 변경**(이벤트 발행자·`MissionService` 추가) → `GroupServiceTests`, `GroupContractServiceTests` 생성자 호출 수정. `MissionService` ↔ `GroupService` 순환 의존이 생기지 않게(MissionService 는 GroupService 를 참조하지 않는다; `GroupMapper`/`GroupMemberMapper` 직접 사용).
-- **`GroupSummaryRow.submittedToday` 삭제** → `GroupMapperTests` 의 해당 단언 수정(응답의 `submittedToday` 는 서비스에서 유도되므로 서비스 테스트로 이동).
-- **`@EnableScheduling`**: `@SpringBootTest` 컨텍스트에서도 분 단위 tick 이 돈다. 테스트 DB 의 커밋된 그룹(스모크로 남은 데이터)에 미션이 발행될 수 있으나 테스트 트랜잭션(롤백)의 데이터는 보이지 않아 영향 없음. 기존 테스트가 개발 DB 의 전체 미션 수에 의존하지 않는지 확인.
-- **`max-daily-count=1`**: 기존 서비스 테스트는 `MissionProperties(…, 5)` 를 직접 쓰므로 영향 없음. Postman/문서의 `dailyMissionCount` 2 이상 예시는 갱신.
-- **JSON `params`**: 대상 지정 시 `targetUserId` 는 숫자로 저장해 기존 `resolveParams`(`Number`/문자열 모두 허용)와 호환. `params` 직렬화는 `ObjectMapper.writeValueAsString`.
-- **트랜잭션 경계**: `MissionPublisher.publishIfDue` 는 `REQUIRES_NEW`. 스케줄러/리스너(트랜잭션 없는 호출자)에서 호출되므로 프록시를 거쳐야 한다(같은 클래스 내부 호출 금지).
-- **AFTER_COMMIT 리스너**: 단위 테스트에서 `createGroup` 이 이벤트를 발행하는지만 검증하고, 리스너 자체는 별도 테스트. 통합 테스트는 커밋이 필요하므로 non-@Transactional 테스트로 만들고 정리(cleanup)를 한다.
+- `ApiClient` 리팩터링이 기존 JSON 호출(로그인/그룹/미션)에 영향 — `ApiClientTest`·`AuthRepositoryTest`·`GroupRepositoryTest`·`MissionRepositoryTest` 전부 통과해야 한다. JSON 요청의 `Content-Type: application/json; charset=utf-8` 유지.
+- `Submission`/`StoredMission`/`DataStore` 모양 변경이 `DataStoreTest`, `DemoSeed`, `RecordCalendarLogicTest`, `PushModelTest`, 프리뷰에 파급 — 컴파일/테스트 정리 필요(의도된 변경).
+- 4A 의 `applyCurrentMission`(같은 id 면 submissions 유지)·`markMissionFailed`·`summaries` 와 새 `applyFeed`/`applySubmitted` 의 상호작용: 미션 재조회가 피드/제출 상태를 지우지 않아야 한다. 새 미션(id 변경)일 때만 비운다.
+- `VoicePlayerController` 변경으로 로컬 `file:` 재생(테스트/프리뷰/기존 녹음 미리 듣기 `VoiceRecorderController` 는 별개 클래스) 회귀 금지.
+- `MissionPerform` 화면의 뒤로가기·닫기 확인 다이얼로그(`MissionHeader`)가 진행 중 상태와 충돌하지 않게.
+- 푸시 → Results 이동(`PushTarget.Results`)은 이제 피드 로딩을 거친다. 스냅샷의 `lastMissionSubmittedByMe` 의미 유지.
+- `coil-network-okhttp` 추가로 APK/라이선스 화면(`LicensesScreen`) 영향 여부 확인(별도 라이선스 목록이 하드코딩이면 의존성 언급 필요 여부만 확인, 불필요하면 건드리지 않음).
 
 ## Tests Required
 
-**순수 단위**
-- `MissionTimingTest`: `deadlineAfter`(09:00→당일 23:00 / 23:30→다음 날 23:00 / 정확히 23:00→다음 날 / 14:00), `nextPublishAfter`(09:00 이전/정확히 09:00/이후), 월말·연말 경계.
-- `MissionTemplateSelectorTest`: 풀이 정확히 8종·매체 4종, 같은 입력 → 같은 출력(재현성), 여러 `groupId/date` 에서 `dailyMissionCount=1` 이면 어제 매체가 오늘과 다름(어제 매체 지정 케이스), 모두 겹치면 `mediaOrder[0]` 폴백, `dailyMissionCount>=2` 에서 슬롯 간 매체 중복 없음, 대상 지정(`TEXT_FILL_BLANK` 항상, DRAW 확률 0.3 근사 — 많은 시드의 비율이 0.2~0.4, 같은 시드는 같은 결과).
-- `PlaceholderMissionGeneratorTest`: 8개 틀 각각 `params` 키 집합이 `paramsSchema()` 에서 `targetUserId` 를 뺀 집합과 같음, `TEXT_ACROSTIC.word` 가 한글 3글자, `TEXT_FILL_BLANK.sentence` 에 `___` 정확히 1개, `withTarget=true` 인 틀의 `content` 에 `[대상]` 포함·`false` 에는 미포함, `category` ≤ 50자·비어 있지 않음, 같은 입력 재현성, `previousContent` 와 같은 문장을 연속으로 내지 않음(변형 ≥ 3).
-
-**Mockito**
-- `MissionPublisherTest`: 아직 시각 전(미발행), 시각 후(발행, 필드 검증: `mission_date`, `publishedAt`, `deadlineAt`, `slotNo`, `template ∈ 풀`), 이미 존재(발행 안 함), 그룹 생성 이후(`createdAt` > 예정 시각 → `publishedAt=createdAt`), `DuplicateKeyException` 무시, 대상 지정 시 `params.targetUserId` 저장, 그룹 없음 건너뜀, 어제 매체 조회가 선택에 반영.
-- `MissionSchedulerTest`/리스너 테스트: 한 그룹 예외가 다른 그룹 처리를 막지 않음, 리스너가 예외를 삼킴.
-- `MissionServiceTests` 갱신: 현재 미션 응답의 `number`, `closesAt`, `members`, `[대상]` 치환(닉네임/삭제된 대상 폴백), `nextPublishAt` 규칙(미션 없음: 다음 발행 시각, 있음: `closesAt`), `summarizeCurrent`.
-- `GroupServiceTests`/`GroupContractServiceTests` 갱신: 목록에 `todayMission`/`submittedToday` 유도, `createGroup` 이 `GroupCreatedEvent` 를 발행.
-- `PokeServiceTests`: 메서드 이름 변경 반영.
-
-**DB 통합 (`@SpringBootTest @Transactional`)**
-- `MissionMapperTests`: 현재 미션 = 슬롯별 최신(여러 날짜 미션 중 최신만), **어제 날짜에 발행된 미션도 현재 미션**(자정 넘김), `number` 계산, `insert` 후 조회, UNIQUE 위반, `existsByGroupIdAndDateAndSlot`, `findTemplatesByGroupIdAndDate`, `findMemberStatuses`(제출자/미제출자), `findCurrentSummariesByGroupIds`(제출 수·내 제출).
-- `GroupMapper`/`GroupMemberMapper`/`PokeMapper` 의 현재 미션 기준 `stamped_today`/`existsCurrentMissionSubmission`.
-- (선택, non-@Transactional) 그룹 생성 서비스 → 커밋 후 첫 미션 발행 통합 테스트: 요청에 슬롯 `publishTime="00:00"` 을 줘서 시각과 무관하게 즉시 발행되게 하고, 끝에서 그룹을 정리. 시간대(오전/오후)에 따라 결과가 달라지지 않는 형태로.
-
-기존 전체 테스트(3단계 포함)가 통과해야 한다.
+JVM 테스트 (MockWebServer/순수):
+- `SubmissionRepositoryTest`:
+  - 사진: 파트 `file` 하나, 파일명·`image/jpeg`, 다른 폼 필드 없음; 그림 PNG 도 동일(`image/png`).
+  - 글: `text` 필드만, `file` 없음.
+  - 음성: `file`(`audio/mp4`) + `duration` + `waveform`; 30.4 입력 → `"30.00"`; 0 → `"0.10"`; 70개 파형 → 64개; 범위 밖/비유한 값 보정; 요청 `Content-Type` 이 `multipart/form-data; boundary=…` 이고 JSON 이 아님; `Authorization` 헤더 포함.
+  - 응답 매핑: 필드(`id`, `author`→Profile, `isMine`, `type`, `createdAt`, `mediaURL` 절대 URL = baseUrl + `/files/...`, `isLate`, `duration`, `waveform`, `text`), 음성/글/사진 각각; 알 수 없는 키 무시; 알 수 없는 템플릿 항목 건너뜀.
+  - `feed`: 경로 `/api/missions/{id}/submissions?page=0&size=100`, 정렬 유지, 423 → `ApiException(423,"FEED_LOCKED")` 전파.
+  - 오류: 409 `ALREADY_SUBMITTED`/`MISSION_CLOSED`, 400 `INVALID_SUBMISSION`(메시지 보존), 413, 415 가 `ApiException` 코드·상태로 전달.
+- `ApiClientTest` 추가: multipart 요청에 JSON 헤더가 없음; 401 `TOKEN_EXPIRED` → 재발급 1회 후 **같은 multipart 본문 재전송**; 업로드 중 `NetworkException` 변환; `absoluteUrl`.
+- 실패 분류 테스트(`classifySubmitFailure`): 위 7가지 결과 매핑 전부(메시지 포함).
+- `DataStoreTest`(재작성): `applyCurrentMission` 이 같은 id 면 `submissions`/`feedLoaded` 유지·다른 id 면 비움; `applySubmitted` 가 `todayMission().didSubmit`, `members[me].isDone`, `summaries` 의 `submittedCount/didSubmit` 을 갱신(중복 호출 안전); `applyFeed` 후 `result()` 의 `pending` 계산; 피드 미로딩 시 `result()` 동작(약속한 계약대로); 로컬 오버레이가 없어졌음(서버 `submittedByMe=false` 이면 미제출). 좋아요/댓글 관련 기존 테스트 삭제.
+- `PushModelTest`/`MissionPerformCommonTest`/`RecordCalendarLogicTest`/`ResultsFormatTest`: 모델 변경에 맞춰 수정, `hintText` 변경 반영.
+- 기존 전체 JVM 테스트 통과(4A 시점 89개 + 신규).
 
 ## Validation Steps
 
-1. `.\mvnw.cmd clean test` 전체 통과.
-2. 실서버 스모크(`.\mvnw.cmd spring-boot:run`, 끝나면 종료). 더미 사용자 1~2명으로:
-   - 그룹을 슬롯 `publishTime="00:00"` 으로 생성(`missionSlots:[{"slotNo":1,"publishTime":"00:00"}]`) → 곧바로 `GET /api/groups/{id}/missions/today`: `missions` 1개, `number:1`, `template ∈ 8종`, `media`, `content`(대상 틀이면 `[대상]` 이 닉네임으로 치환), `publishedAt`/`deadlineAt`/`closesAt` 모두 `+09:00`, `members:[{userId, submitted:false}]`, `nextPublishAt == closesAt`.
-   - `GET /api/groups` 의 `todayMission` 요약과 `submittedToday:false`.
-   - 발행 시각이 미래인 그룹(슬롯 `publishTime` 을 현재+2분)을 만들고 `missions=[]`, `nextPublishAt` 확인 → 2분 뒤 tick 에서 미션이 열리는지(`todayMission` 이 채워짐) — 시간이 걸리면 report 에 미수행으로 기록.
-   - `dailyMissionCount:2` 로 그룹 생성 → 400 (`max-daily-count=1`).
-   - 스케줄러 로그에 예외가 반복되지 않는지.
-3. `GET /api/mission-templates` 는 변경 없이 15종 그대로.
-4. 문서·Postman 갱신 확인(JSON 유효성, 한글 깨짐 없음), `git diff --check`.
-5. report 에: 변경 파일, 명령·결과, 스모크 응답 예시(토큰 제외), 알려진 한계(분당 전체 그룹 순회, 생성 응답 `missionCount` 지연, `MISSION_CLOSED` 미적용), 4A/6단계가 알아야 할 것.
+1. JDK 17 로 `android\.\gradlew.bat testDebugUnitTest assembleDebug lint assembleRelease --quiet` 통과, 테스트 개수/실패 0 보고.
+2. `git diff --check` 통과. 잔여 코드 확인: `rg "toggleLike|addComment|deleteComment|LikeButton|CommentInput|saveMedia|SubmissionComment" android/app/src/main` 에서 숨김 대상이 남아있지 않을 것(`LikeButton` 정의 자체는 7A 재사용을 위해 남겨도 되나 **호출은 없어야** 함 — 남기면 보고서에 명시).
+3. 백엔드 로컬 서버(MariaDB, `mvnw.cmd spring-boot:run`) + 에뮬레이터(`http://10.0.2.2:8080`)로 **수동 시나리오**(가능하면 실행, 못 하면 사유와 함께 "미검증"으로 보고):
+   1. 회원가입 → 그룹 생성 → (슬롯 발행 시각을 `00:00` 으로 하면 즉시 미션) 05 진입.
+   2. 사진/그림/음성/글 각각 제출 → 성공 토스트 → 05 가 "제출함" 상태 → "친구들 작품 보기" → 결과에 내 작품이 서버 URL 로 표시(사진/그림 이미지 로드, 음성 재생, 글 표시), 상세 진입.
+   3. 두 번째 계정으로 같은 그룹 참여: 제출 전 결과 진입 불가(버튼이 "작품 올리기"), 제출 후 상대 작품이 보임.
+   4. 앱을 완전히 종료 후 재실행 → 제출 상태가 유지(서버 값).
+   5. 서버 중단 상태에서 제출 → 네트워크 안내·입력 보존 → 서버 재기동 후 재시도 성공.
+   6. DB 에서 마감 시각을 과거로(`UPDATE missions SET deadline_at = NOW() - INTERVAL 1 HOUR WHERE ...`) 바꾼 뒤 제출 → "지각" 표시.
+   7. 음성 30초 가득 녹음 제출 성공(400 이 아님), 글 틀: 삼행시/빈칸 제한 위반 시 올리기 비활성.
+4. 보고서에: 변경 파일, 테스트 결과(개수), 수동 검증 결과(실제 한 것/못 한 것), 의존성 추가(`coil-network-okhttp`), 남은 로컬 임시 코드(`DemoSeed`, `poke`, `records`, `stats` 등)와 이유.
 
 ## Potential Merge Conflicts
 
-- **3단계(Group, 백엔드)**: `GroupService`, `GroupMapper`, `GroupMemberMapper`, `GroupSummaryRow/Response`, 3단계 테스트(`GroupContractServiceTests`, `GroupContractMapperTests`, `GroupMapperTests`)를 이 단계가 다시 수정한다 → **3단계가 먼저 커밋돼 있어야 한다.** 미커밋이라면 3단계 변경을 보존한 채 필요한 부분만 수정.
-- **6단계(제출·피드)**: `MissionMapper`/`MissionService`/`MissionResponse` 를 다시 만진다 → 이 단계 커밋 후 시작. `MISSION_CLOSED` 와 "다음 미션이 발행되면 닫힘" 판정(`findCurrentByGroupId` 재사용 가능)은 6단계 몫.
-- **4A(Android 미션 연결)**: 이 단계의 응답(`number`, `closesAt`, `members`, `todayMission`, `content`)이 입력이다. 4A 는 이 단계가 확정된 뒤 시작.
-- 공유 파일: `application.properties`(1·3단계도 수정), `docs/BACKEND/*`, Postman — 미커밋 변경을 보존한 채 해당 부분만 편집.
+- **4A 가 아직 커밋되지 않았다면** 이 작업은 4A 의 `DataStore.kt`, `MainNavigation.kt`, `MissionScreen.kt`, `ResultsScreen.kt`, `SubmissionDetailScreen.kt`, `MissionPerformCommon.kt`, 테스트들을 그대로 이어서 수정한다. 4A 코드를 되돌리지 말고 그 위에서 수정한다(사용자가 4A 와 6A 를 별도 커밋으로 나누려면 6A 전에 4A 를 커밋해야 함 — Codex 는 커밋하지 않는다).
+- 병렬 작업 없음(백엔드 6단계는 완료). 7A(스티커·댓글)가 `Submission` 모델과 `ResultsScreen`/`SubmissionDetailScreen` 을 다시 수정하게 된다 — 이번 단계에서 좋아요/댓글 필드를 지우는 대신 7A 에서 서버 모양으로 추가한다.
+- iOS 는 이 단계에서 건드리지 않으므로 충돌 없음(iOS 는 별도 후속).

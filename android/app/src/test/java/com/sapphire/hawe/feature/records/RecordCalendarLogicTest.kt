@@ -11,7 +11,7 @@ import java.util.UUID
 
 class RecordCalendarLogicTest {
     private fun record(at: String, type: MissionType = MissionType.DRAW) =
-        DayRecord(Instant.parse(at), type, "주제", 3, 5, true, UUID.randomUUID())
+        DayRecord(Instant.parse(at), type, "주제", 3, 5, true, 100L)
 
     @Test fun weeksStartOnSundayAndPadWithNulls() {
         // 2026-10-01 은 목요일: 앞에 빈칸 4개

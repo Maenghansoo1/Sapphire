@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.navigation.compose)
     implementation(libs.browser)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.coroutines.android)

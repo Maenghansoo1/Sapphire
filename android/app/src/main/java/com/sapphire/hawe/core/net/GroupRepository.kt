@@ -5,6 +5,7 @@ import com.sapphire.hawe.core.model.GroupDetail
 import com.sapphire.hawe.core.model.GroupInvitePreview
 import com.sapphire.hawe.core.model.GroupMember
 import com.sapphire.hawe.core.model.Profile
+import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.designsystem.assets.ProfileCharacter
 import com.sapphire.hawe.designsystem.assets.Relationship
 import java.time.LocalDate
@@ -14,13 +15,19 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
+data class MissionSummary(val missionId: Long, val type: MissionType?, val topic: String,
+    val submittedCount: Int, val submittedByMe: Boolean)
+data class LoadedGroup(val detail: GroupDetail, val mission: MissionSummary?)
+
 class GroupRepository(private val api: ApiClient) {
-    suspend fun loadAll(myUserId: Long): List<GroupDetail> = coroutineScope {
+    suspend fun loadAll(myUserId: Long): List<LoadedGroup> = coroutineScope {
         val page: PageDto<GroupSummaryDto> = api.get("/api/groups?page=0&size=100")
         val results = page.content.map { summary -> async {
             try {
                 val detail: GroupDetailDto = api.get("/api/groups/${summary.id}")
-                detail.toModel(summary.members.map { it.toMember(myUserId, detail.ownerId) })
+                LoadedGroup(detail.toModel(summary.members.map { it.toMember(myUserId, detail.ownerId) }),
+                    summary.todayMission?.let { MissionSummary(it.missionId, mediaToType(it.media),
+                        it.content, it.submittedCount, it.submittedByMe) })
             } catch (e: ApiException) {
                 if (e.status == 403 || e.status == 404) null else throw e
             }

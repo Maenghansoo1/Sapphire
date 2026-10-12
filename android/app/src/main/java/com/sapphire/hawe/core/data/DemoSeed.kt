@@ -7,7 +7,6 @@ import com.sapphire.hawe.designsystem.assets.Relationship
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
-import java.util.UUID
 
 internal object DemoSeed {
     private var nextId = -1000L
@@ -38,7 +37,7 @@ internal object DemoSeed {
             val submissions = members.take(done).mapIndexed { offset, person ->
                 sample(person, type, opens.plusSeconds((offset + 1L) * 47 * 60), index + offset)
             }
-            missions.add(StoredMission(UUID.randomUUID(), type,
+            missions.add(StoredMission(localId(), type,
                 TopicPool.topics(type)[index % TopicPool.topics(type).size], index + 1,
                 opens, opens.atZone(HaweTime.SEOUL).plusDays(1).toInstant(), submissions))
             opens = opens.atZone(HaweTime.SEOUL).plusDays(1).toInstant()
@@ -66,10 +65,10 @@ internal object DemoSeed {
             "엄마가 전화로 밥은 잘 먹고 다니냐고 물어봤다.", "조별과제 팀원이 네 덕분에 끝났다고 말해줬다. 사실 나도 덕분이었는데.", "교수님이 질문 좋다고 하셨다.")
         val base = listOf(6, 10, 16, 22, 14, 20, 24, 12, 8, 18, 22, 16, 10, 6, 12, 20, 24, 18, 12, 8, 14, 20, 16, 10, 6, 10, 14, 8)
         val shift = (seed * 5) % base.size
-        return Submission(UUID.randomUUID(), person.displayed, false, type, at,
+        return Submission(localId(), person.displayed, false, type, at,
             text = if (type == MissionType.WRITE) texts[seed % texts.size] else null,
             duration = if (type == MissionType.VOICE) (7 + seed % 6).toDouble() else null,
             waveform = if (type == MissionType.VOICE) (base.drop(shift) + base.take(shift)).map { it / 24f } else emptyList(),
-            likeCount = seed % 4, authorID = person.id)
+            authorID = person.id)
     }
 }

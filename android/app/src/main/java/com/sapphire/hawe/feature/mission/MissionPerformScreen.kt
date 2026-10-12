@@ -7,19 +7,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.sapphire.hawe.core.data.SubmissionContent
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.MissionSpec
 import com.sapphire.hawe.designsystem.tokens.HColors
+import com.sapphire.hawe.designsystem.components.HToastHost
+import com.sapphire.hawe.designsystem.components.rememberHToastState
+import androidx.compose.runtime.LaunchedEffect
 
 @Composable
-fun MissionPerformScreen(type: MissionType, topic: String, onClose: () -> Unit,
-    onSubmit: (SubmissionContent) -> Unit) {
+fun MissionPerformScreen(type: MissionType, topic: String, template: String, spec: MissionSpec, onClose: () -> Unit,
+    message: String? = null, onMessageShown: () -> Unit = {},
+    onSubmit: suspend (SubmissionContent) -> Boolean) {
+    val toast = rememberHToastState()
+    LaunchedEffect(message) { if (message != null) { toast.show(message); onMessageShown() } }
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
         when (type) {
-            MissionType.WRITE -> WriteMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Text(it)) }
+            MissionType.WRITE -> WriteMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Text(it)) }
             MissionType.PHOTO -> PhotoMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "jpg")) }
-            MissionType.DRAW -> DrawMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
+            MissionType.DRAW -> DrawMissionScreen(topic, spec, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
             MissionType.VOICE -> VoiceMissionScreen(topic, onClose) { file, duration, waveform ->
                 onSubmit(SubmissionContent.Voice(file, duration, waveform))
             }
         }
+        HToastHost(toast)
     }
 }

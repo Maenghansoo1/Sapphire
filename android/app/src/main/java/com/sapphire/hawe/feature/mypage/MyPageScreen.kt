@@ -42,7 +42,6 @@ fun MyPageScreen(session: AppSession, store: DataStore, onBack: () -> Unit,
     onAppInfo: () -> Unit, onWithdraw: () -> Unit) {
     val context = LocalContext.current
     val account = session.account
-    val stats = store.stats
     val version = rememberAppVersionName()
     var confirmLogout by remember { mutableStateOf(false) }
     val toast = rememberHToastState()
@@ -69,8 +68,6 @@ fun MyPageScreen(session: AppSession, store: DataStore, onBack: () -> Unit,
                     }
                 }
             }
-            StatsCard(stats, Modifier.padding(top = 22.dp))
-            TypeCounts(stats, Modifier.padding(top = 14.dp))
             Column(Modifier.padding(top = 18.dp)) {
                 HListRow("알림 설정", height = 48.dp, onClick = onNotifications)
                 HListRow("유저 정보", height = 48.dp, onClick = onUserInfo)

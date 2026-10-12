@@ -6,7 +6,8 @@ import kotlinx.serialization.Serializable
     val characterKey: String? = null, val profileImageUrl: String? = null)
 @Serializable internal data class GroupSummaryDto(val id: Long, val name: String, val relationType: String,
     val memberCount: Int, val maxMembers: Int, val members: List<GroupMemberProfileDto>,
-    val startDate: String? = null, val submittedToday: Boolean = false)
+    val startDate: String? = null, val submittedToday: Boolean = false,
+    val todayMission: TodayMissionSummaryDto? = null)
 @Serializable internal data class MissionSlotDto(val slotNo: Int, val publishTime: String,
     val deadlineTime: String, val custom: Boolean)
 @Serializable internal data class GroupDetailDto(val id: Long, val name: String, val ownerId: Long,

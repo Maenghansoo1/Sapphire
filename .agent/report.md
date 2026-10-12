@@ -1,23 +1,25 @@
-# Backend Phase 4 implementation report
+﻿# 6A Android 서버 제출·결과 연결 보고
 
-## Files changed
+## 변경 파일
 
-- New mission timing, deterministic MVP template selection, placeholder generator, publisher, minute scheduler, and after-commit group creation listener under `src/main/java/com/sapphire/hawe/mission/`; new `GroupCreatedEvent` under `group/domain/`.
-- Updated mission, group, member, and poke mappers and services for latest mission per slot; added mission number, closesAt, member statuses, resolved target name, and group `todayMission` summary. Enabled scheduling, restricted MyBatis scanning to `@Mapper`, and set `hawe.mission.max-daily-count=1`.
-- Added and updated unit and MariaDB integration tests under `src/test/java/com/sapphire/hawe/`.
-- Updated `docs/BACKEND/MISSIONS_API.md`, `API_DESIGN.md`, `CONTRACT_DECISIONS.md`, `docs/FEATURE/PROJECT_OVERVIEW.md`, and both Group and Mission Postman collections. Overwrote this report.
+- `android/app/src/main/java/com/sapphire/hawe/core/net/ApiClient.kt`, `SubmissionApi.kt`, `SubmissionRepository.kt`: multipart 제출, 60초 업로드 타임아웃, 토큰 재발급 후 본문 재전송, 서버 DTO 및 오류 분류를 추가했습니다.
+- `android/app/src/main/java/com/sapphire/hawe/core/data/DataStore.kt`, `DemoSeed.kt`, `core/model/Submission.kt`: 제출·피드의 서버 ID와 상태를 사용하고, 로컬 제출·파일 저장·좋아요·댓글 상태를 제거했습니다. 같은 미션의 피드는 재조회 때 유지하고 새 미션에서는 비웁니다.
+- `android/app/src/main/java/com/sapphire/hawe/app/{AppViewModel,RootScreen,MainNavigation}.kt`, `feature/mission/*Screen.kt`: 네 유형을 서버에 업로드하며 진행 표시, 실패 시 입력 보존·재시도, 오류별 안내, 지각 안내와 미션 재조회 신호를 연결했습니다.
+- `android/app/src/main/java/com/sapphire/hawe/feature/results/{ResultsScreen,SubmissionDetailScreen,ResultsFormat,VoicePlayerController}.kt`: 진입·복귀 시 서버 피드 로드, 재시도 및 접근 오류 처리, 지각 표시, 좋아요·댓글 UI 숨김, 서버 URL 음성 비동기 재생을 적용했습니다. 기존 `ResultComponents.kt`의 URL 모델 경로는 그대로 사용합니다.
+- `android/gradle/libs.versions.toml`, `android/app/build.gradle.kts`: Coil `coil-network-okhttp`을 추가해 서버 이미지 URL을 로드합니다.
+- `android/app/src/test/java/com/sapphire/hawe/core/{data/DataStoreTest,net/ApiClientTest,net/SubmissionRepositoryTest}.kt`, `feature/results/ResultsFormatTest.kt`: 서버 상태·multipart·재발급·DTO·오류·표시 문구 회귀 검증을 갱신/추가했습니다.
+- `docs/FRONTEND/ANDROID.md`: 6A의 현재 서버 연결 상태를 기록했습니다.
 
-## Verification
+## 검증
 
-- JDK 25 `./mvnw.cmd clean test -q`: passed, 92 tests, 0 failures/errors.
-- `./mvnw.cmd -q -DskipTests package`: passed. No backend lint or separate typecheck command is configured; Maven compilation passed.
-- `git diff --check`: passed. Both Postman collections parse as UTF-8 JSON.
-- Live `spring-boot:run` smoke: registered a temporary user, created a group with slot 1 at 00:00, and fetched the current mission, single mission, group list, and template catalog. The mission was number 1, `VOICE_LINE`/`VOICE`, with one member; `publishedAt`, `deadlineAt`, and `closesAt` had `+09:00`; `nextPublishAt == closesAt`; group `todayMission` matched. A group request with `dailyMissionCount=2` returned 400. The server was stopped and the temporary group and user were removed.
-- Final diff inspected. Existing uncommitted backend, Android, plan, and review changes were preserved; no commit or push.
+- JDK 17: `android\gradlew.bat testDebugUnitTest assembleDebug lint assembleRelease --quiet` 통과. JVM 테스트 96개, 실패 0, 오류 0입니다.
+- `git diff --check` 통과(내용 오류 없음; 기존 파일의 LF/CRLF 변환 경고만 출력).
+- 잔여 코드 검색: 제품 화면에 `toggleLike`/`addComment`/`deleteComment`/`CommentInput` 호출 없음. `LikeButton` 정의만 7A 재사용을 위해 남아 있습니다.
+- 수동 서버 시나리오는 미검증입니다. `adb` 연결 기기는 있었으나 로컬 8080 백엔드가 실행 중이지 않아 가입·제출·피드·이미지·음성·재시작·오프라인·지각 동작을 실제 서버로 확인하지 못했습니다.
 
-## Remaining risks and plan adjustments
+## 남은 위험·가정·충돌
 
-- The scheduler scans all group IDs every minute; scaling that scan remains future work. A real future-minute tick was not observed, and the Postman runner was not executed. Scheduler exception isolation and after-commit publishing were covered by tests, and immediate publishing was covered by a committed DB integration test and HTTP smoke.
-- Group creation response `missionCount` can be 0 because first publication runs after commit. Submission close enforcement (`MISSION_CLOSED`), AI generation, notifications, and client integration remain later phases.
-- The plan described 15 template catalog entries, but the actual enum and live endpoint contain 16. All 16 remain readable; only the specified eight are eligible for automatic MVP publication. Documentation reflects the code.
-- This phase touches uncommitted Phase 3 group files and the mission contract needed by future Android 4A and submission Phase 6. Keep those changes together when merging. No schema migration was changed.
+- 4A Android 작업과 백엔드 6단계 변경이 작업 트리에 이미 미커밋 상태였습니다. 이 구현은 그 위에 6A를 쌓았고 백엔드, iOS, Cordova 파일은 수정하지 않았습니다. Android의 공통 파일(`DataStore.kt`, `MainNavigation.kt`, `MissionScreen.kt` 등)은 4A와 변경이 겹치므로 별도 커밋으로 분리하려면 검토가 필요합니다.
+- `DemoSeed`/`TopicPool`은 테스트·프리뷰용, `poke`/`records`/`stats`는 기존 코드 호환용으로 남겼습니다. 제품의 콕·달력·활동 요약은 계속 숨김/준비 중 상태입니다.
+- 서버 계약과 다른 별도 설계 변경은 하지 않았습니다. 서버에서 제공하지 않는 스티커·댓글은 7A까지 숨깁니다.
+- 디바이스 기반 흐름, 특히 URL 미디어 로딩·재생과 네트워크 타임아웃 후 중복 제출 수렴은 JVM 테스트 외 수동 확인이 필요합니다.

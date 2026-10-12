@@ -1,7 +1,6 @@
 package com.sapphire.hawe.core.push
 
 import com.sapphire.hawe.core.model.NotificationPrefs
-import java.util.UUID
 
 enum class PushKind(val value: String) {
     TOPIC("topic"), POKE("poke"), FRIEND_DONE("friend_done"), COMMENT("comment");
@@ -13,11 +12,11 @@ fun parsePushDestination(type: String?, groupId: String?, submissionId: String?)
     PushKind.fromValue(type)?.let { PushDestination(it, groupId?.takeIf(String::isNotBlank),
         submissionId?.takeIf(String::isNotBlank)) }
 
-data class PushGroupSnapshot(val id: Long, val lastMissionId: UUID?, val lastMissionSubmittedByMe: Boolean)
+data class PushGroupSnapshot(val id: Long, val lastMissionId: Long?, val lastMissionSubmittedByMe: Boolean)
 sealed interface PushTarget {
     data object None : PushTarget
     data class Mission(val groupId: Long) : PushTarget
-    data class Results(val groupId: Long, val missionId: UUID) : PushTarget
+    data class Results(val groupId: Long, val missionId: Long) : PushTarget
 }
 
 fun pushTarget(destination: PushDestination, groups: List<PushGroupSnapshot>): PushTarget {

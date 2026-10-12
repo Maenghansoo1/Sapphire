@@ -30,11 +30,13 @@ sealed interface PerformEntryDecision {
     data object Unsupported : PerformEntryDecision
 }
 
-fun performEntryDecision(mission: TodayMission?, requestedType: MissionType?): PerformEntryDecision = when {
-    mission == null -> PerformEntryDecision.Missing
-    mission.didSubmit -> PerformEntryDecision.AlreadySubmitted
-    !isPerformScreenAvailable(requestedType ?: mission.type) -> PerformEntryDecision.Unsupported
-    else -> PerformEntryDecision.Allow(requestedType ?: mission.type)
+fun performEntryDecision(mission: TodayMission?, requestedType: MissionType?): PerformEntryDecision {
+    if (mission == null) return PerformEntryDecision.Missing
+    if (mission.didSubmit) return PerformEntryDecision.AlreadySubmitted
+    val type = mission.type ?: return PerformEntryDecision.Unsupported
+    if (requestedType != null && requestedType != type) return PerformEntryDecision.Unsupported
+    return if (isPerformScreenAvailable(type)) PerformEntryDecision.Allow(type)
+        else PerformEntryDecision.Unsupported
 }
 
 @Composable

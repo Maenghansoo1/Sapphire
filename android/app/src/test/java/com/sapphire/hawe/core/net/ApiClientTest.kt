@@ -15,6 +15,37 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ApiClientTest {
+    @Test fun multipartRefreshResendsBodyAndBuildsAbsoluteUrl() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(error("TOKEN_EXPIRED"))
+            server.enqueue(MockResponse().setBody("""{"accessToken":"new","refreshToken":"next"}"""))
+            server.enqueue(MockResponse().setBody(me))
+            val tokens = InMemoryTokenStore().apply { save("old", "refresh") }
+            val api = ApiClient(server.url("/").toString(), tokens)
+            assertEquals(server.url("/files/a.jpg").toString(), api.absoluteUrl("/files/a.jpg"))
+            assertEquals("https://other.example/a", api.absoluteUrl("https://other.example/a"))
+            api.postMultipart<MeDto>("/upload", listOf(ApiClient.MultipartPart.Text("text", "same body")))
+            val original = server.takeRequest()
+            assertEquals("Bearer old", original.getHeader("Authorization"))
+            assertTrue(original.getHeader("Content-Type")!!.startsWith("multipart/form-data; boundary="))
+            assertEquals("/api/auth/refresh", server.takeRequest().path)
+            val retry = server.takeRequest()
+            assertEquals("Bearer new", retry.getHeader("Authorization"))
+            assertTrue(retry.getHeader("Content-Type")!!.startsWith("multipart/form-data; boundary="))
+            assertTrue("same body" in original.body.readUtf8())
+            assertTrue("same body" in retry.body.readUtf8())
+        }
+    }
+
+    @Test fun multipartNetworkFailureIsConverted() = runBlocking {
+        val port = ServerSocket(0).use { it.localPort }
+        val api = ApiClient("http://127.0.0.1:$port", InMemoryTokenStore())
+        assertThrows(NetworkException::class.java) { runBlocking {
+            api.postMultipart<MeDto>("/upload", listOf(ApiClient.MultipartPart.Text("text", "answer")))
+        } }
+        Unit
+    }
+
     @Test fun deleteAcceptsEmptyBodyAndRefreshes() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(error("TOKEN_EXPIRED"))

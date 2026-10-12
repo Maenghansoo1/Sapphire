@@ -21,8 +21,8 @@ class PushModelTest {
     }
 
     @Test fun targets() {
-        val first = PushGroupSnapshot(1L, UUID.randomUUID(), false)
-        val second = PushGroupSnapshot(2L, UUID.randomUUID(), true)
+        val first = PushGroupSnapshot(1L, 101L, false)
+        val second = PushGroupSnapshot(2L, 102L, true)
         assertEquals(PushTarget.None, pushTarget(PushDestination(PushKind.TOPIC, null, null), emptyList()))
         listOf(PushKind.TOPIC, PushKind.POKE, PushKind.FRIEND_DONE).forEach {
             assertEquals(PushTarget.Mission(first.id), pushTarget(PushDestination(it, null, null), listOf(first, second)))

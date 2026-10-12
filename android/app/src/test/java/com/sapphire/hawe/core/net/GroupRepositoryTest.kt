@@ -50,14 +50,18 @@ class GroupRepositoryTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
-                    "/api/groups?page=0&size=100" -> response("""{"content":[{"id":7,"name":"친구들","relationType":"FRIEND","memberCount":2,"maxMembers":6,"members":$members},{"id":9,"name":"gone","relationType":"CASUAL","memberCount":0,"maxMembers":6,"members":[]}]}""")
+                    "/api/groups?page=0&size=100" -> response("""{"content":[{"id":7,"name":"친구들","relationType":"FRIEND","memberCount":2,"maxMembers":6,"members":$members,"todayMission":{"missionId":10,"media":"TEXT","content":"서버 주제","submittedCount":1,"submittedByMe":false}},{"id":9,"name":"gone","relationType":"CASUAL","memberCount":0,"maxMembers":6,"members":[]}]}""")
                     "/api/groups/7" -> response(detail)
                     "/api/groups/9" -> MockResponse().setResponseCode(404).setBody("""{"code":"GROUP_NOT_FOUND","message":"gone"}""")
                     else -> MockResponse().setResponseCode(500)
                 }
             }
             val groups = GroupRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
-            val result = groups.loadAll(8L).single()
+            val loaded = groups.loadAll(8L).single()
+            val result = loaded.detail
+            assertEquals(10L, loaded.mission?.missionId)
+            assertEquals(com.sapphire.hawe.core.model.MissionType.WRITE, loaded.mission?.type)
+            assertEquals("서버 주제", loaded.mission?.topic)
             assertEquals(7L, result.id)
             assertEquals(LocalTime.of(10, 30), result.topicTime)
             assertEquals(ProfileCharacter.GAMJA, (result.members.first().displayed.avatar as com.sapphire.hawe.core.model.AvatarContent.Character).character)

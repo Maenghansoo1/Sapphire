@@ -20,6 +20,20 @@ fun countdownText(closesAt: Instant, now: Instant): String {
     return "${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}"
 }
 
+fun deadlineText(deadlineAt: Instant, closesAt: Instant, now: Instant): String? {
+    if (!now.isBefore(closesAt)) return null
+    if (!now.isBefore(deadlineAt)) return "마감이 지났어요 · 지금 올리면 지각이에요"
+    val deadline = deadlineAt.atZone(HaweTime.SEOUL)
+    val today = now.atZone(HaweTime.SEOUL).toLocalDate()
+    val date = when (deadline.toLocalDate()) {
+        today -> ""
+        today.plusDays(1) -> "내일 "
+        else -> "${deadline.monthValue}월 ${deadline.dayOfMonth}일 "
+    }
+    val hour = (deadline.hour % 12).let { if (it == 0) 12 else it }
+    return "마감 $date${if (deadline.hour < 12) "오전" else "오후"} $hour:${deadline.minute.toString().padStart(2, '0')}"
+}
+
 fun memberDisplayName(member: MissionMember): String =
     if (member.isMe) "${member.profile.nickname} (나)" else member.profile.nickname
 

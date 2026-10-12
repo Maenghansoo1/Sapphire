@@ -41,7 +41,7 @@ fun progressText(done: Int, memberCount: Int): String =
     if (done == memberCount) "${done}명 모두 완료" else "$done / ${memberCount}명 완료"
 
 fun hintText(type: MissionType): String = if (type == MissionType.VOICE)
-    "눌러서 듣고 댓글을 남겨보세요" else "${type.displayName}을 눌러 댓글을 남겨보세요"
+    "눌러서 듣고 자세히 보기" else "${type.displayName}을 눌러서 자세히 보기"
 
 fun likersText(names: List<String>, likeCount: Int): String? {
     if (names.isEmpty()) return null

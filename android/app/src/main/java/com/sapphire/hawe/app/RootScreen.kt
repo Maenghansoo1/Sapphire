@@ -23,7 +23,7 @@ fun RootScreen(viewModel: AppViewModel) {
             when (viewModel.appSession.state) {
                 AppSession.State.SIGNED_OUT -> AuthNavHost(viewModel.appSession, viewModel.dataStore, viewModel.auth)
                 AppSession.State.SIGNED_IN -> MainNavHost(viewModel.appSession, viewModel.dataStore, viewModel.push,
-                    viewModel.groups)
+                    viewModel.groups, viewModel.missions, viewModel.submissions)
                 AppSession.State.RESTORING -> Box(Modifier.fillMaxSize().background(HColors.bg))
             }
         }

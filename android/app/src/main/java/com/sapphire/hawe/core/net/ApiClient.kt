@@ -14,7 +14,11 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 
@@ -27,6 +31,32 @@ class ApiClient(
 ) {
     private val refreshMutex = Mutex()
     private val mediaType = "application/json; charset=utf-8".toMediaType()
+    private val uploadHttp = http.newBuilder().readTimeout(60, SECONDS).writeTimeout(60, SECONDS).build()
+
+    sealed interface MultipartPart {
+        data class Text(val name: String, val value: String) : MultipartPart
+        data class Bytes(val name: String, val filename: String, val mime: String, val value: ByteArray) : MultipartPart
+        data class FilePart(val name: String, val filename: String, val mime: String, val value: File) : MultipartPart
+    }
+
+    fun absoluteUrl(path: String): String = if (path.startsWith("http://") || path.startsWith("https://")) path
+        else baseUrl.trimEnd('/') + "/" + path.trimStart('/')
+
+    suspend inline fun <reified T> postMultipart(path: String, parts: List<MultipartPart>): T =
+        decode(executeMultipart(path, parts))
+
+    @PublishedApi internal suspend fun executeMultipart(path: String, parts: List<MultipartPart>): Pair<Int, String> =
+        executeRequest("POST", path, true, true) {
+            MultipartBody.Builder().setType(MultipartBody.FORM).apply {
+                parts.forEach { part -> when (part) {
+                    is MultipartPart.Text -> addFormDataPart(part.name, part.value)
+                    is MultipartPart.Bytes -> addFormDataPart(part.name, part.filename,
+                        part.value.toRequestBody(part.mime.toMediaType()))
+                    is MultipartPart.FilePart -> addFormDataPart(part.name, part.filename,
+                        part.value.asRequestBody(part.mime.toMediaType()))
+                } }
+            }.build()
+        }
 
     suspend inline fun <reified T> get(path: String, auth: Boolean = true): T =
         decode(execute("GET", path, null, auth))
@@ -49,14 +79,18 @@ class ApiClient(
         throw ApiException(result.first, "INVALID_RESPONSE", "서버 응답을 읽을 수 없습니다")
     }
 
-    @PublishedApi internal suspend fun execute(method: String, path: String, bodyJson: String?, auth: Boolean): Pair<Int, String> {
+    @PublishedApi internal suspend fun execute(method: String, path: String, bodyJson: String?, auth: Boolean): Pair<Int, String> =
+        executeRequest(method, path, auth, false) { bodyJson?.toRequestBody(mediaType) }
+
+    @PublishedApi internal suspend fun executeRequest(method: String, path: String, auth: Boolean,
+        upload: Boolean, body: () -> RequestBody?): Pair<Int, String> {
         val usedAccess = if (auth) tokens.accessToken else null
-        val first = send(method, path, bodyJson, usedAccess)
+        val first = send(method, path, body, usedAccess, upload)
         if (first.first in 200..299) return first
         val error = error(first)
         if (auth && first.first == 401 && error.code == "TOKEN_EXPIRED") {
             val access = refreshOnce(usedAccess)
-            val retry = send(method, path, bodyJson, access)
+            val retry = send(method, path, body, access, upload)
             if (retry.first in 200..299) return retry
             if (retry.first == 401) expireSession()
             throw error(retry)
@@ -72,7 +106,8 @@ class ApiClient(
             expireSession()
             throw ApiException(401, "INVALID_TOKEN", "다시 로그인해 주세요")
         }
-        val response = send("POST", "/api/auth/refresh", json.encodeToString(RefreshRequestDto(refresh)), null)
+        val response = send("POST", "/api/auth/refresh",
+            { json.encodeToString(RefreshRequestDto(refresh)).toRequestBody(mediaType) }, null, false)
         if (response.first !in 200..299) {
             val error = error(response)
             if (response.first == 401) expireSession()
@@ -98,13 +133,14 @@ class ApiClient(
             body?.message ?: "요청을 처리할 수 없습니다")
     }
 
-    private suspend fun send(method: String, path: String, bodyJson: String?, access: String?): Pair<Int, String> =
+    private suspend fun send(method: String, path: String, body: () -> RequestBody?, access: String?,
+        upload: Boolean): Pair<Int, String> =
         withContext(Dispatchers.IO) {
-            val request = Request.Builder().url(baseUrl.trimEnd('/') + path)
-                .header("Content-Type", "application/json; charset=utf-8")
+            val request = Request.Builder().url(absoluteUrl(path))
+                .apply { if (!upload) header("Content-Type", "application/json; charset=utf-8") }
                 .apply { if (access != null) header("Authorization", "Bearer $access") }
-                .method(method, bodyJson?.toRequestBody(mediaType)).build()
-            val call = http.newCall(request)
+                .method(method, body()).build()
+            val call = (if (upload) uploadHttp else http).newCall(request)
             val cancellation = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
                 if (cause is CancellationException) call.cancel()
             }
