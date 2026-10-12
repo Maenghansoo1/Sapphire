@@ -1,15 +1,12 @@
 import SwiftUI
 
-/// 14 작품 상세 · 댓글 (사진 1:1082 / 그림 1:1130 / 글 1:1179 / 음성 1:1227)
-/// 작품 + 좋아요(토글) + 댓글 목록 + 하단 댓글 입력. 내 댓글은 지울 수 있어요.
+/// 14 작품 상세 (사진 1:1082 / 그림 1:1130 / 글 1:1179 / 음성 1:1227)
+/// 서버 피드에서 받은 작품을 크게 보여 줘요. 좋아요·댓글은 서버에 생기면(7단계) 다시 붙여요.
 struct SubmissionDetailView: View {
     let feed: ResultFeed
     let submissionID: Submission.ID
 
     @Environment(\.dismiss) private var dismiss
-    @State private var draft = ""
-    @State private var deletingComment: SubmissionComment?
-    @FocusState private var isInputFocused: Bool
 
     private var submission: Submission? { feed.submission(submissionID) }
 
@@ -31,31 +28,10 @@ struct SubmissionDetailView: View {
                 .padding(.horizontal, HLayout.screenPaddingCompact)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    artwork(submission)
-                        .padding(.top, 12)
-                        .padding(.horizontal, HLayout.screenPaddingCompact)
-                    likes(submission)
-                        .padding(.top, 6)
-                        .padding(.horizontal, HLayout.screenPaddingCompact)
-                    comments(submission)
-                }
-                .padding(.bottom, 16)
-            }
-            .scrollDismissesKeyboard(.interactively)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            commentBar(submission)
-        }
-        .alert("댓글을 지울까요?", isPresented: Binding(
-            get: { deletingComment != nil },
-            set: { if !$0 { deletingComment = nil } }
-        )) {
-            Button("취소", role: .cancel) {}
-            Button("지우기", role: .destructive) {
-                if let comment = deletingComment {
-                    feed.deleteComment(comment.id, from: submission.id)
-                }
+                artwork(submission)
+                    .padding(.top, 12)
+                    .padding(.horizontal, HLayout.screenPaddingCompact)
+                    .padding(.bottom, 16)
             }
         }
     }
@@ -72,7 +48,7 @@ struct SubmissionDetailView: View {
                     Text(submission.author.nickname)
                         .font(.plex(15, .semibold))
                         .foregroundStyle(.ink)
-                    Text("\(submission.createdAt.koreanMonthDay) · \(submission.type.displayName)")
+                    Text("\(submission.createdAt.koreanMonthDay) · \(submission.type.displayName)" + (submission.isLate ? " · \(LateLabel.text)" : ""))
                         .font(.caption13)
                         .foregroundStyle(.textSecondary)
                 }
@@ -150,122 +126,6 @@ struct SubmissionDetailView: View {
                 .strokeBorder(.line, lineWidth: 1)
         )
         .onDisappear { player.stop() }
-    }
-
-    // MARK: - Likes
-
-    private func likes(_ submission: Submission) -> some View {
-        HStack(spacing: 10) {
-            LikeButton(count: submission.likeCount, isLiked: submission.likedByMe) {
-                feed.toggleLike(submission.id)
-            }
-            if let text = likersText(submission) {
-                Text(text)
-                    .font(.caption13)
-                    .foregroundStyle(.textSecondary)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    /// "지우, 서연님 외 2명이 좋아해요"
-    private func likersText(_ submission: Submission) -> String? {
-        let names = submission.likerNames
-        guard !names.isEmpty else { return nil }
-        let shown = names.prefix(2).joined(separator: ", ")
-        let others = submission.likeCount - min(names.count, 2)
-        return others > 0 ? "\(shown)님 외 \(others)명이 좋아해요" : "\(shown)님이 좋아해요"
-    }
-
-    // MARK: - Comments
-
-    /// 위 구분선 · 위 14 · 간격 16, 아바타 32 + 이름 13 SemiBold · 시간 12 + 본문 14 (줄 높이 1.55)
-    private func comments(_ submission: Submission) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("댓글 \(submission.comments.count)")
-                .font(.plex(14, .bold))
-                .foregroundStyle(.ink)
-
-            ForEach(submission.comments) { comment in
-                HStack(alignment: .top, spacing: 10) {
-                    HAvatar(content: comment.author.avatar, size: 32)
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(comment.author.nickname)
-                                .font(.plex(13, .semibold))
-                                .foregroundStyle(.ink)
-                            Text(comment.createdAt.koreanRelative)
-                                .font(.caption12)
-                                .foregroundStyle(.textSecondary)
-                            if comment.isMine {
-                                // Figma 에 삭제 모양이 없어서 시간 옆 작은 글자로 뒀어요.
-                                Button("삭제") { deletingComment = comment }
-                                    .font(.caption12)
-                                    .foregroundStyle(.textTertiary)
-                                    .buttonStyle(.plain)
-                                    .padding(.leading, 2)
-                            }
-                        }
-                        Text(comment.body)
-                            .font(.plex(14))
-                            .plexLineHeight(1.55, size: 14)
-                            .foregroundStyle(.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 14)
-        .padding(.horizontal, HLayout.screenPaddingCompact)
-        .overlay(alignment: .top) {
-            Rectangle().fill(.line).frame(height: 1)
-        }
-    }
-
-    // MARK: - Comment bar
-
-    /// 위 테두리 border · 위 10 · 좌우 16 · 입력 알약 44 + 등록 44
-    private func commentBar(_ submission: Submission) -> some View {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return HStack(spacing: 8) {
-            TextField("", text: $draft, prompt: Text("\(submission.author.nickname)님에게 댓글 남기기").foregroundStyle(.textTertiary))
-                .font(.plex(15))
-                .foregroundStyle(.ink)
-                .tint(.ink)
-                .focused($isInputFocused)
-                .submitLabel(.send)
-                .onSubmit { send(to: submission.id) }
-                .padding(.horizontal, 16)
-                .frame(height: 44)
-                .overlay(Capsule().strokeBorder(.border, lineWidth: 1))
-
-            Button { send(to: submission.id) } label: {
-                Text("등록")
-                    .font(.plex(15, .semibold))
-                    .foregroundStyle(trimmed.isEmpty ? .textSecondary : .onAccent)
-                    .padding(.horizontal, 16)
-                    .frame(height: 44)
-                    .background(trimmed.isEmpty ? Color.disabled : Color.accent, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(trimmed.isEmpty)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
-        .background(.bg)
-        .overlay(alignment: .top) {
-            Rectangle().fill(.border).frame(height: 1)
-        }
-    }
-
-    private func send(to id: Submission.ID) {
-        let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { return }
-        feed.addComment(body, to: id)
-        draft = ""
     }
 }
 

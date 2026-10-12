@@ -11,45 +11,79 @@ enum SubmissionContent {
 
 /// 초대 코드 조회 결과
 enum InviteLookupError: Error, Equatable {
-    case notFound, full, alreadyMember
+    case notFound, full, alreadyMember, network, unavailable
 
     var message: String {
         switch self {
         case .notFound: "초대 코드를 찾을 수 없어요. 다시 확인해 주세요."
         case .full: "이 그룹은 정원이 다 찼어요."
         case .alreadyMember: "이미 참여 중인 그룹이에요."
+        case .network: "네트워크 연결을 확인해 주세요"
+        case .unavailable: "잠시 후 다시 시도해 주세요"
+        }
+    }
+
+    init(error: Error) {
+        if error is NetworkError {
+            self = .network
+            return
+        }
+        switch error.apiCode {
+        case "INVITE_NOT_FOUND": self = .notFound
+        case "GROUP_FULL": self = .full
+        case "ALREADY_MEMBER": self = .alreadyMember
+        default: self = .unavailable
         }
     }
 }
 
-/// 그룹 하나와 그 그룹의 미션 기록
-struct StoredGroup: Identifiable, Hashable {
-    var detail: GroupDetail
-    /// 오래된 순
-    var missions: [StoredMission] = []
-
-    var id: UUID { detail.id }
+/// 서버에서 불러온 상태
+enum LoadState: Hashable {
+    case notLoaded, loaded, failed
 }
 
-/// 하루치 미션과 제출물
+/// 그룹 하나와 그 그룹의 미션
+struct StoredGroup: Identifiable, Hashable {
+    var detail: GroupDetail
+    /// 오래된 순 (서버 연결 뒤에는 지금 열린 미션 하나만 들고 있어요)
+    var missions: [StoredMission] = []
+    /// 그룹 목록이 알려 준 오늘 미션 요약 (홈 카드)
+    var summary: MissionSummary?
+    /// 미션이 없을 때 다음 미션이 열리는 시각
+    var nextPublishAt: Date?
+    var missionState: LoadState = .notLoaded
+
+    var id: Int { detail.id }
+}
+
+/// 미션 하나와 제출물
 struct StoredMission: Identifiable, Hashable {
-    let id: UUID
-    var type: MissionType
+    let id: Int
+    var type: MissionType?
     var topic: String
     var number: Int
     var opensAt: Date
     var closesAt: Date
     var submissions: [Submission] = []
     /// 오늘 내가 콕 찌른 멤버
-    var poked: Set<UUID> = []
+    var poked: Set<Int> = []
+    var deadlineAt: Date? = nil
+    var template: String = ""
+    var spec = MissionSpec()
+    /// 서버가 알려 준 멤버별 제출 여부 (userId → 제출)
+    var serverMembers: [Int: Bool] = [:]
+    var serverSubmittedByMe = false
+    /// 결과 피드를 서버에서 받아 왔는지
+    var feedLoaded = false
 }
 
-/// 앱 안 임시 저장소 — 서버를 붙이기 전까지 모든 화면이 여기서 데이터를 읽고 써요.
-/// 앱을 끄면 사라져요. Spring 서버를 붙일 때는 이 클래스의 공개 메서드 안쪽만 API 호출로 바꾸면 돼요.
+/// 화면이 읽는 앱 안 저장소. 서버에서 받은 값을 들고 있고, 화면이 바뀌면 다시 받아 와요.
+/// 로그아웃하면 비워요.
 @MainActor
 @Observable
 final class DataStore {
     private(set) var groups: [StoredGroup] = []
+    private(set) var groupsState: LoadState = .notLoaded
     /// 내 기본 프로필 (마이페이지)
     private(set) var myProfile: Profile = .mockMine
 
@@ -66,22 +100,23 @@ final class DataStore {
         }
     }
 
-    /// 회원 탈퇴 — 모두 지워요 (CLAUDE.md §5-5)
+    /// 로그아웃·회원 탈퇴 — 모두 지워요
     func reset() {
         groups = []
+        groupsState = .notLoaded
         myProfile = .mockMine
     }
 
-    /// 17 마이페이지 활동 요약
+    /// 17 마이페이지 활동 요약 (서버 통계 API 가 생기기 전까지 화면에서는 숨겨요)
     var stats: ActivityStats {
-        let mine = groups.flatMap { group in
-            group.missions.compactMap { mission in mission.submissions.first(where: \.isMine).map { (mission, $0) } }
-        }
+        let mine = groups.flatMap { $0.missions.filter(\.serverSubmittedByMe) }
         var byType: [MissionType: Int] = [:]
-        for (mission, _) in mine { byType[mission.type, default: 0] += 1 }
+        for mission in mine {
+            if let type = mission.type { byType[type, default: 0] += 1 }
+        }
         return ActivityStats(
             completedMissions: mine.count,
-            streakDays: streak(days: Set(mine.map { Self.calendar.startOfDay(for: $0.0.opensAt) })),
+            streakDays: streak(days: Set(mine.map { Self.calendar.startOfDay(for: $0.opensAt) })),
             groupCount: groups.count,
             byType: byType
         )
@@ -101,52 +136,210 @@ final class DataStore {
         return count
     }
 
-    // MARK: - 그룹
+    // MARK: - 그룹 (서버)
 
-    func group(_ id: UUID) -> GroupDetail? {
+    func group(_ id: Int) -> GroupDetail? {
         groups.first { $0.id == id }?.detail
     }
 
-    /// 04 홈 카드
+    func storedGroup(_ id: Int) -> StoredGroup? {
+        groups.first { $0.id == id }
+    }
+
+    /// 04 홈 카드 — 오늘 미션 요약은 그룹 목록 응답을 그대로 써요.
     var summaries: [GroupSummary] {
         groups.map { stored in
             let detail = stored.detail
-            let mission = stored.missions.last
+            let summary = stored.summary
             return GroupSummary(
                 id: detail.id,
                 name: detail.name,
                 relationship: detail.relationship,
                 members: detail.members.map(\.displayed.avatar),
                 startDate: detail.startDate,
-                missionType: mission?.type ?? .draw,
-                topic: mission?.topic ?? "",
-                submittedCount: mission?.submissions.count ?? 0,
-                didSubmit: mission?.submissions.contains(where: \.isMine) ?? false
+                missionType: summary?.type,
+                topic: summary?.topic,
+                submittedCount: summary?.submittedCount ?? 0,
+                didSubmit: summary?.submittedByMe ?? false
             )
         }
     }
 
-    /// 02 그룹 만들기 — 나 혼자, 방장. 오늘 미션도 바로 만들어요.
-    @discardableResult
-    func createGroup(name: String, relationship: Relationship, startDate: Date?) -> UUID {
-        var detail = GroupDetail(
-            id: UUID(),
-            name: name,
-            relationship: relationship,
-            createdAt: .now,
-            missionCount: 0,
-            inviteCode: makeInviteCode(),
-            topicTime: DateComponents(hour: 9, minute: 0),
-            notify: true,
-            members: [GroupMember(id: UUID(), defaultProfile: myProfile, isMe: true, isOwner: true)]
-        )
-        detail.startDate = relationship == .lover ? startDate : nil
-        groups.append(StoredGroup(detail: detail))
-        refreshTodayMissions()
-        return detail.id
+    /// 홈에서 받은 그룹 목록으로 바꿔요. 이미 받아 둔 미션은 유지해요.
+    func applyServerGroups(_ loaded: [LoadedGroup]) {
+        let old = Dictionary(groups.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        groups = loaded.map { item in
+            let previous = old[item.detail.id]
+            return StoredGroup(
+                detail: item.detail,
+                missions: previous?.missions ?? [],
+                summary: item.mission,
+                nextPublishAt: previous?.nextPublishAt,
+                missionState: previous?.missionState ?? .notLoaded
+            )
+        }
+        groupsState = .loaded
     }
 
-    /// 03 초대 코드 조회 — 내 그룹 코드는 '이미 참여 중', 체험용 그룹은 DemoSeed 에 있어요.
+    /// 그룹 하나를 넣거나 바꿔요 (만들기·참여·16 그룹 정보).
+    func applyServerGroup(_ detail: GroupDetail) {
+        if let index = groups.firstIndex(where: { $0.id == detail.id }) {
+            groups[index].detail = detail
+        } else {
+            groups.append(StoredGroup(detail: detail))
+        }
+    }
+
+    func markGroupsFailed() {
+        if groupsState == .notLoaded { groupsState = .failed }
+    }
+
+    func leave(_ groupID: Int) {
+        groups.removeAll { $0.id == groupID }
+    }
+
+    // MARK: - 미션 (서버)
+
+    /// 05 화면에서 받은 지금 미션. 같은 미션이면 받아 둔 피드·제출 상태를 유지해요.
+    func applyCurrentMission(_ state: CurrentMissionState, groupID: Int) {
+        update(groupID) { group in
+            let previous = group.missions.last.flatMap { $0.id == state.mission?.id ? $0 : nil }
+            let current = state.mission.map { row in
+                StoredMission(
+                    id: row.id,
+                    type: row.type,
+                    topic: row.topic,
+                    number: row.number,
+                    opensAt: row.publishedAt,
+                    closesAt: row.closesAt,
+                    submissions: previous?.submissions ?? [],
+                    poked: previous?.poked ?? [],
+                    deadlineAt: row.deadlineAt,
+                    template: row.template,
+                    spec: row.spec,
+                    serverMembers: row.members.merging((previous?.serverMembers ?? [:]).filter(\.value)) { a, b in a || b },
+                    serverSubmittedByMe: row.submittedByMe || (previous?.serverSubmittedByMe ?? false),
+                    feedLoaded: previous?.feedLoaded ?? false
+                )
+            }
+            group.missions = current.map { [$0] } ?? []
+            group.nextPublishAt = state.nextPublishAt
+            group.missionState = .loaded
+        }
+    }
+
+    func markMissionFailed(_ groupID: Int) {
+        update(groupID) { group in
+            if group.missions.isEmpty { group.missionState = .failed }
+        }
+    }
+
+    /// 05 화면용 오늘 미션
+    func todayMission(_ groupID: Int) -> TodayMission? {
+        guard let stored = groups.first(where: { $0.id == groupID }), let mission = stored.missions.last else { return nil }
+        let members = stored.detail.members.map { member in
+            MissionMember(
+                id: member.id,
+                profile: member.displayed,
+                isMe: member.isMe,
+                isDone: mission.serverMembers[member.id] == true || (member.isMe && mission.serverSubmittedByMe),
+                pokedToday: mission.poked.contains(member.id)
+            )
+        }
+        return TodayMission(
+            id: mission.id,
+            group: stored.detail,
+            type: mission.type,
+            topic: mission.topic,
+            number: mission.number,
+            opensAt: mission.opensAt,
+            closesAt: mission.closesAt,
+            members: members,
+            deadlineAt: mission.deadlineAt,
+            template: mission.template,
+            spec: mission.spec
+        )
+    }
+
+    /// 06~09 올리기 성공 — 서버가 돌려준 제출을 반영해요.
+    func applySubmitted(_ submission: Submission, missionID: Int, groupID: Int) {
+        update(groupID) { group in
+            guard let index = group.missions.indices.last, group.missions[index].id == missionID else { return }
+            group.missions[index].serverSubmittedByMe = true
+            if let myID = group.detail.me?.id { group.missions[index].serverMembers[myID] = true }
+            if !group.missions[index].submissions.contains(where: { $0.id == submission.id }) {
+                group.missions[index].submissions.append(submission)
+            }
+            if var summary = group.summary, summary.missionID == missionID {
+                if !summary.submittedByMe { summary.submittedCount += 1 }
+                summary.submittedByMe = true
+                group.summary = summary
+            }
+        }
+    }
+
+    /// 10~13 결과 피드
+    func applyFeed(_ submissions: [Submission], missionID: Int, groupID: Int) {
+        update(groupID) { group in
+            guard let index = group.missions.indices.last, group.missions[index].id == missionID else { return }
+            group.missions[index].submissions = submissions
+            group.missions[index].feedLoaded = true
+        }
+    }
+
+    /// 콕 찌르기 — 서버 기능이 생기기 전까지 화면에서는 숨겨요.
+    func poke(_ memberID: Int, groupID: Int) {
+        update(groupID) { group in
+            guard let index = group.missions.indices.last else { return }
+            group.missions[index].poked.insert(memberID)
+        }
+    }
+
+    // MARK: - 결과
+
+    /// 10~13 결과 — 피드를 받아 온 미션만 (내가 올려야 서버가 피드를 줘요, §5-2)
+    func result(groupID: Int, missionID: Int) -> MissionResult? {
+        guard let stored = groups.first(where: { $0.id == groupID }),
+              let mission = stored.missions.first(where: { $0.id == missionID }),
+              mission.feedLoaded, let type = mission.type else { return nil }
+        let done = Set(mission.submissions.compactMap(\.authorID))
+        return MissionResult(
+            id: mission.id,
+            groupName: stored.detail.name,
+            type: type,
+            topic: mission.topic,
+            date: mission.opensAt,
+            memberCount: stored.detail.members.count,
+            submissions: mission.submissions,
+            pending: stored.detail.members.filter { !done.contains($0.id) }.map(\.displayed)
+        )
+    }
+
+    // MARK: - 기록
+
+    /// 15 캘린더 — 지난 미션 중 누군가 올린 날 + 오늘(내가 올렸으면). 서버 기록 API 가 생기기 전까지 진입은 준비 중이에요.
+    func records(_ groupID: Int) -> [DayRecord] {
+        guard let stored = groups.first(where: { $0.id == groupID }) else { return [] }
+        let today = Self.calendar.startOfDay(for: .now)
+        return stored.missions.compactMap { mission in
+            let day = Self.calendar.startOfDay(for: mission.opensAt)
+            let mine = mission.serverSubmittedByMe
+            guard let type = mission.type, !mission.submissions.isEmpty, day < today || mine else { return nil }
+            return DayRecord(
+                date: mission.opensAt,
+                type: type,
+                topic: mission.topic,
+                doneCount: mission.submissions.count,
+                memberCount: stored.detail.members.count,
+                didSubmit: mine,
+                missionID: mission.id
+            )
+        }
+    }
+
+    // MARK: - 앱 안 체험 (미리보기 전용 — 실제 화면은 GroupRepository 를 써요)
+
+    /// 체험 그룹 코드 조회 (DemoSeed)
     func lookUpInvite(code: String) -> Result<GroupInvitePreview, InviteLookupError> {
         if groups.contains(where: { $0.detail.inviteCode == code }) {
             return .failure(.alreadyMember)
@@ -160,173 +353,51 @@ final class DataStore {
         return preview.isFull ? .failure(.full) : .success(preview)
     }
 
-    /// 03 참여하기
     @discardableResult
-    func join(code: String) -> UUID? {
+    func join(code: String) -> Int? {
         guard case .success = lookUpInvite(code: code), var demo = DemoSeed.group(code: code) else { return nil }
-        demo.detail.members.append(GroupMember(id: UUID(), defaultProfile: myProfile, isMe: true))
+        demo.detail.members.append(GroupMember(id: LocalID.next(), defaultProfile: myProfile, isMe: true))
         groups.append(demo)
-        refreshTodayMissions()
+        groupsState = .loaded
         return demo.id
     }
 
-    /// 16 그룹 나가기 — 내 작품·댓글은 남아요(사용자 결정). 방장이면 가장 오래된 멤버에게 넘겨요(§5-3).
-    /// 임시 저장소에서는 내 목록에서 그룹을 빼기만 해요.
-    func leave(_ groupID: UUID) {
-        groups.removeAll { $0.id == groupID }
-    }
-
-    func setTopicTime(_ time: DateComponents, for groupID: UUID) {
-        update(groupID) { $0.detail.topicTime = time }
-    }
-
-    func setNotify(_ on: Bool, for groupID: UUID) {
-        update(groupID) { $0.detail.notify = on }
-    }
-
-    /// 16-1 그룹 내 프로필 (nil 이면 기본 프로필)
-    func setMyGroupProfile(_ profile: Profile?, for groupID: UUID) {
-        update(groupID) { group in
-            guard let index = group.detail.members.firstIndex(where: \.isMe) else { return }
-            group.detail.members[index].groupProfile = profile
-        }
-    }
-
-    // MARK: - 미션
-
-    /// 그룹마다 지금 열려 있는 미션이 없으면 만들어요 (CLAUDE.md §5-1 — 원래는 서버 스케줄이 해요).
-    func refreshTodayMissions(now: Date = .now) {
-        for index in groups.indices {
-            let window = TodayMission.window(topicTime: groups[index].detail.topicTime, now: now)
-            if let last = groups[index].missions.last, last.opensAt >= window.opens { continue }
-            let mission = makeMission(for: groups[index], opensAt: window.opens, closesAt: window.closes)
-            groups[index].missions.append(mission)
-            groups[index].detail.missionCount = groups[index].missions.count
-        }
-    }
-
-    /// 05 화면용 오늘 미션
-    func todayMission(_ groupID: UUID) -> TodayMission? {
-        guard let stored = groups.first(where: { $0.id == groupID }), let mission = stored.missions.last else { return nil }
-        let members = stored.detail.members.map { member in
-            MissionMember(
-                id: member.id,
-                profile: member.displayed,
-                isMe: member.isMe,
-                isDone: mission.submissions.contains { $0.authorID == member.id },
-                pokedToday: mission.poked.contains(member.id)
-            )
-        }
-        return TodayMission(
-            id: mission.id,
-            group: stored.detail,
-            type: mission.type,
-            topic: mission.topic,
-            number: mission.number,
-            opensAt: mission.opensAt,
-            closesAt: mission.closesAt,
-            members: members
+    @discardableResult
+    func createGroup(name: String, relationship: Relationship, startDate: Date?) -> Int {
+        var detail = GroupDetail(
+            id: LocalID.next(),
+            name: name,
+            relationship: relationship,
+            createdAt: .now,
+            missionCount: 0,
+            inviteCode: "H4W3K2",
+            topicTime: DateComponents(hour: 9, minute: 0),
+            notify: true,
+            members: [GroupMember(id: LocalID.next(), defaultProfile: myProfile, isMe: true, isOwner: true)]
         )
+        detail.startDate = relationship == .lover ? startDate : nil
+        groups.append(StoredGroup(detail: detail, missionState: .loaded))
+        groupsState = .loaded
+        return detail.id
     }
 
-    /// 06~09 올리기 — 한 번 올리면 수정·삭제할 수 없어요 (§5-2)
-    func submit(_ content: SubmissionContent, groupID: UUID) {
-        update(groupID) { group in
-            guard let me = group.detail.members.first(where: \.isMe),
-                  let index = group.missions.indices.last,
-                  !group.missions[index].submissions.contains(where: \.isMine) else { return }
-            var submission = Submission(
-                id: UUID(),
-                author: me.displayed,
-                isMine: true,
-                type: group.missions[index].type,
-                createdAt: .now,
-                likeCount: 0
-            )
-            submission.authorID = me.id
-            switch content {
-            case .image(let data, let ext):
-                submission.mediaURL = Self.saveMedia(data, fileExtension: ext)
-            case .text(let text):
-                submission.text = text
-            case .voice(let fileURL, let duration, let waveform):
-                if let data = try? Data(contentsOf: fileURL) {
-                    submission.mediaURL = Self.saveMedia(data, fileExtension: "m4a")
-                }
-                submission.duration = duration
-                submission.waveform = waveform
-            }
-            group.missions[index].submissions.append(submission)
-        }
-    }
-
-    /// 콕 찌르기 — 하루 1회 (TODO: 서버 연결 시 pokes 저장 + 푸시)
-    func poke(_ memberID: UUID, groupID: UUID) {
+    /// 미리보기에서 오늘 미션을 올린 상태로 만들어요.
+    func markSubmittedForPreview(_ groupID: Int) {
         update(groupID) { group in
             guard let index = group.missions.indices.last else { return }
-            group.missions[index].poked.insert(memberID)
-        }
-    }
-
-    // MARK: - 결과 · 댓글
-
-    /// 10~13 결과 — 내가 올린 미션만 볼 수 있어요 (§5-2, 서버에서는 RLS 로 막아요)
-    func result(groupID: UUID, missionID: UUID) -> MissionResult? {
-        guard let stored = groups.first(where: { $0.id == groupID }),
-              let mission = stored.missions.first(where: { $0.id == missionID }),
-              mission.submissions.contains(where: \.isMine) else { return nil }
-        let done = Set(mission.submissions.compactMap(\.authorID))
-        return MissionResult(
-            id: mission.id,
-            groupName: stored.detail.name,
-            type: mission.type,
-            topic: mission.topic,
-            date: mission.opensAt,
-            memberCount: stored.detail.members.count,
-            submissions: mission.submissions,
-            pending: stored.detail.members.filter { !done.contains($0.id) }.map(\.displayed)
-        )
-    }
-
-    func toggleLike(_ submissionID: UUID, missionID: UUID, groupID: UUID) {
-        updateSubmission(submissionID, missionID: missionID, groupID: groupID) { submission in
-            submission.likedByMe.toggle()
-            submission.likeCount += submission.likedByMe ? 1 : -1
-        }
-    }
-
-    func addComment(_ body: String, to submissionID: UUID, missionID: UUID, groupID: UUID) {
-        let me = group(groupID)?.me?.displayed ?? myProfile
-        updateSubmission(submissionID, missionID: missionID, groupID: groupID) { submission in
-            submission.comments.append(SubmissionComment(id: UUID(), author: me, isMine: true, body: body, createdAt: .now))
-        }
-    }
-
-    func deleteComment(_ commentID: UUID, from submissionID: UUID, missionID: UUID, groupID: UUID) {
-        updateSubmission(submissionID, missionID: missionID, groupID: groupID) { submission in
-            submission.comments.removeAll { $0.id == commentID && $0.isMine }
-        }
-    }
-
-    // MARK: - 기록
-
-    /// 15 캘린더 — 지난 미션 중 누군가 올린 날 + 오늘(내가 올렸으면)
-    func records(_ groupID: UUID) -> [DayRecord] {
-        guard let stored = groups.first(where: { $0.id == groupID }) else { return [] }
-        let today = Self.calendar.startOfDay(for: .now)
-        return stored.missions.compactMap { mission in
-            let day = Self.calendar.startOfDay(for: mission.opensAt)
-            let mine = mission.submissions.contains(where: \.isMine)
-            guard !mission.submissions.isEmpty, day < today || mine else { return nil }
-            return DayRecord(
-                date: mission.opensAt,
-                type: mission.type,
-                topic: mission.topic,
-                doneCount: mission.submissions.count,
-                memberCount: stored.detail.members.count,
-                didSubmit: mine,
-                missionID: mission.id
-            )
+            group.missions[index].serverSubmittedByMe = true
+            group.missions[index].feedLoaded = true
+            if let me = group.detail.me {
+                group.missions[index].serverMembers[me.id] = true
+                let type = group.missions[index].type ?? .write
+                group.missions[index].submissions.append(Submission(
+                    id: LocalID.next(), author: me.displayed, isMine: true, type: type, createdAt: .now,
+                    text: type == .write ? "미리보기에서 올린 글이에요." : nil,
+                    duration: type == .voice ? 8 : nil,
+                    waveform: type == .voice ? Array(repeating: 0.5, count: 28) : [],
+                    authorID: me.id
+                ))
+            }
         }
     }
 
@@ -338,61 +409,13 @@ final class DataStore {
         return calendar
     }()
 
-    private func update(_ groupID: UUID, _ change: (inout StoredGroup) -> Void) {
+    private func update(_ groupID: Int, _ change: (inout StoredGroup) -> Void) {
         guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
         change(&groups[index])
     }
-
-    private func updateSubmission(_ id: UUID, missionID: UUID, groupID: UUID, _ change: (inout Submission) -> Void) {
-        update(groupID) { group in
-            guard let m = group.missions.firstIndex(where: { $0.id == missionID }),
-                  let s = group.missions[m].submissions.firstIndex(where: { $0.id == id }) else { return }
-            change(&group.missions[m].submissions[s])
-        }
-    }
-
-    /// 6자리 영문 대문자 + 숫자, 그룹마다 고유 (§5-3). 헷갈리는 0·O·1·I 는 빼요.
-    private func makeInviteCode() -> String {
-        let alphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
-        while true {
-            let code = String((0..<6).map { _ in alphabet.randomElement()! })
-            if !groups.contains(where: { $0.detail.inviteCode == code }) && DemoSeed.group(code: code) == nil {
-                return code
-            }
-        }
-    }
-
-    /// 유형은 3일 연속 같지 않게, 주제는 최근 30일 안에 쓴 것 빼고 (§5-1)
-    private func makeMission(for group: StoredGroup, opensAt: Date, closesAt: Date) -> StoredMission {
-        let recent = group.missions.suffix(2).map(\.type)
-        var types = MissionType.allCases
-        if recent.count == 2, recent[0] == recent[1] {
-            types.removeAll { $0 == recent[0] }
-        }
-        let type = types.randomElement() ?? .draw
-        let usedRecently = Set(group.missions.filter { opensAt.timeIntervalSince($0.opensAt) < 30 * 86_400 }.map(\.topic))
-        let pool = TopicPool.topics(for: type)
-        let topic = pool.filter { !usedRecently.contains($0) }.randomElement() ?? pool.randomElement() ?? ""
-        return StoredMission(
-            id: UUID(),
-            type: type,
-            topic: topic,
-            number: group.missions.count + 1,
-            opensAt: opensAt,
-            closesAt: closesAt
-        )
-    }
-
-    /// 올린 그림·사진·음성을 기기 캐시 폴더에 저장해요. (서버 연결 시 Storage 업로드로 바뀌어요)
-    private static func saveMedia(_ data: Data, fileExtension: String) -> URL? {
-        let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("hawe-media")
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let url = folder.appendingPathComponent("\(UUID().uuidString).\(fileExtension)")
-        return (try? data.write(to: url)) != nil ? url : nil
-    }
 }
 
-/// 유형별 주제 풀 (CLAUDE.md §6 topics — 원래는 서버 DB 에 있어요)
+/// 유형별 주제 풀 (체험 데이터용)
 enum TopicPool {
     static func topics(for type: MissionType) -> [String] {
         switch type {

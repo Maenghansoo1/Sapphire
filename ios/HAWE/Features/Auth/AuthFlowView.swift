@@ -11,6 +11,8 @@ enum AuthRoute: Hashable {
 
 struct AuthFlowView: View {
     @State private var path: [AuthRoute] = []
+    /// A2 에서 넣은 비밀번호·약관 동의 — 저장하지 않고 이 흐름이 살아 있는 동안만 들고 있어요.
+    @State private var signup = SignupAccountModel()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -18,9 +20,9 @@ struct AuthFlowView: View {
                 .navigationDestination(for: AuthRoute.self) { route in
                     switch route {
                     case .signupAccount:
-                        SignupAccountView(path: $path)
+                        SignupAccountView(path: $path, model: signup)
                     case .signupProfile(let provider, let email):
-                        SignupProfileView(provider: provider, email: email)
+                        SignupProfileView(provider: provider, email: email, signup: signup)
                     case .passwordReset(let email):
                         PasswordResetView(initialEmail: email)
                     }
@@ -33,4 +35,5 @@ struct AuthFlowView: View {
     AuthFlowView()
         .environment(AppSession())
         .environment(DataStore())
+        .environment(Services.preview)
 }

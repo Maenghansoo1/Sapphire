@@ -6,9 +6,10 @@ import SwiftUI
 /// 카메라(플래시, 전·후면 전환) + 앨범 선택. 3:4 로 잘라서 올려요.
 struct PhotoMissionView: View {
     let topic: String
-    var onSubmit: (SubmissionContent) -> Void = { _ in }
+    var onSubmit: (SubmissionContent) async -> Bool = { _ in true }
 
     @State private var camera = CameraModel()
+    @State private var isSubmitting = false
     @State private var photo: UIImage?
     @State private var albumItem: PhotosPickerItem?
 
@@ -37,9 +38,9 @@ struct PhotoMissionView: View {
                 // Figma 에 찍은 뒤 화면이 없어서 '다시 찍기 / 올리기' 두 버튼으로 정했어요.
                 HStack(spacing: 8) {
                     HButton("다시 찍기", kind: .secondary) { photo = nil }
-                    HButton("올리기") {
-                        if let jpeg = photo?.jpegData(compressionQuality: 0.85) { onSubmit(.image(jpeg, fileExtension: "jpg")) }
-                    }
+                        .disabled(isSubmitting)
+                    HButton(isSubmitting ? "올리는 중..." : "올리기", action: submit)
+                        .disabled(isSubmitting)
                 }
             }
         }
@@ -127,6 +128,16 @@ struct PhotoMissionView: View {
             .accessibilityLabel("카메라 전환")
         }
         .padding(.horizontal, 20)
+    }
+
+    private func submit() {
+        guard !isSubmitting, let photo else { return }
+        isSubmitting = true
+        Task {
+            let jpeg = await Task.detached { photo.jpegData(compressionQuality: 0.85) }.value
+            if let jpeg, await onSubmit(.image(jpeg, fileExtension: "jpg")) { return }
+            isSubmitting = false
+        }
     }
 
     private func loadAlbumPhoto(_ item: PhotosPickerItem?) async {

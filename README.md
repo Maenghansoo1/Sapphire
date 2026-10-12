@@ -13,7 +13,7 @@
 | `docs/` | 기획·설계 문서 |
 
 프론트엔드는 iOS·Android 네이티브 앱만 써요. (이전 Cordova 하이브리드 앱은 폐기했어요.)
-두 앱 모두 아직 서버에 연결하지 않고 앱 안 임시 저장소(`DataStore`)로 동작해요.
+두 앱 모두 Spring 서버에 연결돼 있어요 (로그인·그룹·오늘의 미션·제출·결과 피드). 좋아요·댓글·기록 캘린더·프로필 수정 등 서버 API 가 아직 없는 기능은 "준비 중"으로 안내해요.
 화면·정책 결정 사항과 체험용 초대 코드는 `docs/FRONTEND/APP_DECISIONS.md` 를 보세요.
 
 ## iOS 실행
@@ -25,6 +25,8 @@ cp Config.example.xcconfig Config.xcconfig     # 최초 1회
 xcodegen generate                              # project.yml → HAWE.xcodeproj (파일을 추가·삭제한 뒤에도 다시 실행)
 open HAWE.xcodeproj                            # Xcode 에서 HAWE 스킴을 시뮬레이터로 실행
 ```
+
+서버 주소는 `Config.xcconfig` 의 `API_BASE_URL` 이에요. 비워 두면 디버그 빌드는 `http://localhost:8080`(시뮬레이터 → Mac 의 백엔드)을 써요. 실기기에서는 Mac 의 IP 주소로 바꿔 주세요.
 
 명령줄로 빌드만 확인하려면:
 

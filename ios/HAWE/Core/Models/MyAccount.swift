@@ -42,6 +42,8 @@ struct MyAccount: Hashable {
     /// 처음 가입한 방법
     var signUpProvider: LoginProvider
     var linkedProviders: Set<LoginProvider>
+    /// 서버 userId — 그룹 멤버 중 '나'를 찾을 때 써요.
+    var userID: Int = 0
 
     /// 비밀번호 변경은 이메일 가입자만 (CLAUDE.md §4 17-2)
     var canChangePassword: Bool { linkedProviders.contains(.email) }

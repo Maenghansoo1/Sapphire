@@ -5,18 +5,12 @@ extension DataStore {
     static func preview(submitted: Bool = true) -> DataStore {
         let store = DataStore()
         guard let id = store.join(code: "K7Q2PX") else { return store }
-        if submitted, let type = store.todayMission(id)?.type {
-            switch type {
-            case .write: store.submit(.text("미리보기에서 올린 글이에요."), groupID: id)
-            case .voice: store.submit(.voice(fileURL: URL(fileURLWithPath: "/dev/null"), duration: 8, waveform: Array(repeating: 0.5, count: 28)), groupID: id)
-            case .draw, .photo: store.submit(.image(Data(), fileExtension: "png"), groupID: id)
-            }
-        }
+        if submitted { store.markSubmittedForPreview(id) }
         return store
     }
 }
 
-/// 서버 연결 전 체험용 그룹 — 03 초대 코드로 참여할 수 있어요.
+/// #Preview 용 체험 그룹 (실제 화면은 서버 데이터를 써요).
 /// K7Q2PX: 컴공 동기(친구 4명, 지난 기록·오늘 올린 친구 있음) · LOVE22: 우리 둘(연인 1명) · FULL00: 정원 초과
 enum DemoSeed {
     static func group(code: String) -> StoredGroup? {
@@ -40,7 +34,7 @@ enum DemoSeed {
         ]
         let created = calendar.date(from: DateComponents(year: 2026, month: 6, day: 2)) ?? .now
         var group = StoredGroup(detail: GroupDetail(
-            id: UUID(),
+            id: LocalID.next(),
             name: "컴공 동기",
             relationship: .friend,
             createdAt: created,
@@ -52,6 +46,7 @@ enum DemoSeed {
         ))
         group.missions = history(from: created, members: members, todayDone: 3)
         group.detail.missionCount = group.missions.count
+        group.missionState = .loaded
         return group
     }
 
@@ -59,7 +54,7 @@ enum DemoSeed {
     private static var lovers: StoredGroup {
         let members = [member("도윤", .ipsagwi, owner: true)]
         var detail = GroupDetail(
-            id: UUID(),
+            id: LocalID.next(),
             name: "우리 둘",
             relationship: .lover,
             createdAt: calendar.date(byAdding: .day, value: -127, to: .now) ?? .now,
@@ -70,14 +65,14 @@ enum DemoSeed {
             members: members
         )
         detail.startDate = detail.createdAt
-        return StoredGroup(detail: detail)
+        return StoredGroup(detail: detail, missionState: .loaded)
     }
 
     /// 정원 초과 확인용 (6명)
     private static var full: StoredGroup {
         let names: [(String, ProfileCharacter)] = [("가온", .gamja), ("나래", .gomdol), ("다온", .kkotnim), ("라온", .ipsagwi), ("마루", .mulbangul), ("바다", .pilleum)]
         return StoredGroup(detail: GroupDetail(
-            id: UUID(),
+            id: LocalID.next(),
             name: "꽉 찬 그룹",
             relationship: .friend,
             createdAt: .now,
@@ -90,7 +85,7 @@ enum DemoSeed {
     }
 
     private static func member(_ name: String, _ character: ProfileCharacter, owner: Bool = false) -> GroupMember {
-        GroupMember(id: UUID(), defaultProfile: Profile(avatar: .character(character), nickname: name), isOwner: owner)
+        GroupMember(id: LocalID.next(), defaultProfile: Profile(avatar: .character(character), nickname: name), isOwner: owner)
     }
 
     /// 만든 날부터 오늘까지 미션. 지난날은 3~4명이 올렸고, 오늘은 앞 `todayDone` 명이 올렸어요.
@@ -110,13 +105,14 @@ enum DemoSeed {
                 sample(by: member, type: type, at: opens.addingTimeInterval(Double(offset + 1) * 47 * 60), seed: index + offset)
             }
             missions.append(StoredMission(
-                id: UUID(),
+                id: LocalID.next(),
                 type: type,
                 topic: topics[index % topics.count],
                 number: index + 1,
                 opensAt: opens,
                 closesAt: calendar.date(byAdding: .day, value: 1, to: opens) ?? opens,
-                submissions: submissions
+                submissions: submissions,
+                serverMembers: Dictionary(submissions.compactMap { $0.authorID.map { ($0, true) } }, uniquingKeysWith: { a, _ in a })
             ))
             index += 1
             opens = calendar.date(byAdding: .day, value: 1, to: opens) ?? opens.addingTimeInterval(86_400)
@@ -134,16 +130,14 @@ enum DemoSeed {
         let base: [CGFloat] = [6, 10, 16, 22, 14, 20, 24, 12, 8, 18, 22, 16, 10, 6, 12, 20, 24, 18, 12, 8, 14, 20, 16, 10, 6, 10, 14, 8]
         let shift = (seed * 5) % base.count
         var submission = Submission(
-            id: UUID(),
+            id: LocalID.next(),
             author: member.displayed,
             isMine: false,
             type: type,
             createdAt: date,
             text: type == .write ? texts[seed % texts.count] : nil,
             duration: type == .voice ? TimeInterval(7 + seed % 6) : nil,
-            waveform: type == .voice ? (base[shift...] + base[..<shift]).map { $0 / 24 } : [],
-            likeCount: seed % 4,
-            likerNames: []
+            waveform: type == .voice ? (base[shift...] + base[..<shift]).map { $0 / 24 } : []
         )
         submission.authorID = member.id
         return submission

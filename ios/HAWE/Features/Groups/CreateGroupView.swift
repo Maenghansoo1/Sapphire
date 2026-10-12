@@ -4,18 +4,24 @@ import SwiftUI
 /// 그룹 이름(최대 16자), 관계 5종, 관계별 장식 미리보기.
 /// 연인을 고르면 '우리의 1일' 날짜 입력이 나타나고 최대 인원이 2명이 돼요.
 struct CreateGroupView: View {
-    var onCreated: (_ name: String, _ relationship: Relationship, _ startDate: Date?) -> Void = { _, _, _ in }
+    /// 서버에 만든 그룹 id
+    var onCreated: (_ groupID: Int) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(DataStore.self) private var store
+    @Environment(AppSession.self) private var session
+    @Environment(Services.self) private var services
 
     @State private var name = ""
     /// Figma 02 기본 화면이 '친구' 선택 상태예요.
     @State private var relationship: Relationship = .friend
     @State private var startDate = Calendar.current.startOfDay(for: .now)
     @State private var showsDatePicker = false
+    @State private var isSubmitting = false
+    @State private var toast: String?
 
     private var canCreate: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
+        !isSubmitting && !name.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
@@ -44,17 +50,35 @@ struct CreateGroupView: View {
                 .padding(.top, 12)
                 .animation(.snappy(duration: 0.25), value: relationship)
             } cta: {
-                // TODO: 서버 연결 시 그룹 생성 요청
-                HButton("그룹 만들고 초대 코드 받기") {
-                    onCreated(name.trimmingCharacters(in: .whitespaces), relationship, relationship == .lover ? startDate : nil)
-                }
+                HButton("그룹 만들고 초대 코드 받기", action: create)
                     .disabled(!canCreate)
             }
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .hToast($toast)
         .sheet(isPresented: $showsDatePicker) {
             StartDateSheet(date: $startDate)
+        }
+    }
+
+    private func create() {
+        guard canCreate else { return }
+        isSubmitting = true
+        Task {
+            do {
+                let detail = try await services.groups.create(
+                    name: name, relationship: relationship, startDate: relationship == .lover ? startDate : nil,
+                    myUserID: session.account.userID, myProfile: session.account.profile
+                )
+                store.applyServerGroup(detail)
+                onCreated(detail.id)
+            } catch is CancellationError {
+                isSubmitting = false
+            } catch {
+                toast = error.userMessage
+                isSubmitting = false
+            }
         }
     }
 
@@ -202,4 +226,7 @@ private struct StartDateSheet: View {
     NavigationStack {
         CreateGroupView()
     }
+    .environment(DataStore())
+    .environment(AppSession(state: .signedIn))
+    .environment(Services.preview)
 }

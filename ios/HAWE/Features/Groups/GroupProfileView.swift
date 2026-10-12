@@ -11,6 +11,7 @@ struct GroupProfileView: View {
     @State private var useDefault: Bool
     @State private var avatar: AvatarContent
     @State private var nickname: String
+    @State private var toast: String?
 
     init(groupName: String, member: Binding<GroupMember>) {
         self.groupName = groupName
@@ -62,13 +63,14 @@ struct GroupProfileView: View {
                 .padding(.top, 8)
                 .animation(.snappy(duration: 0.25), value: useDefault)
             } cta: {
-                // TODO: 서버 연결 시 group_members 의 *_override 저장
-                HButton("저장", action: save)
+                // 그룹 내 프로필 API(group_members 의 *_override)가 생기면 save() 로 저장해요.
+                HButton("저장") { toast = ComingSoon.message }
                     .disabled(!canSave)
             }
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .hToast($toast)
     }
 
     /// 기본 프로필 사용 — surface · 모서리 16 · 좌우 16 · 위아래 14
@@ -122,7 +124,7 @@ struct GroupProfileView: View {
 }
 
 #Preview("기본 프로필 사용 중") {
-    @Previewable @State var member = GroupMember(id: UUID(), defaultProfile: .mockMine, isMe: true)
+    @Previewable @State var member = GroupMember(id: LocalID.next(), defaultProfile: .mockMine, isMe: true)
     NavigationStack {
         GroupProfileView(groupName: "우리 둘", member: $member)
     }

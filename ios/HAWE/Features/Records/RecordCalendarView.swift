@@ -10,14 +10,14 @@ struct DayRecord: Hashable {
     /// 내가 그날 올렸는지 — 안 올린 날은 결과를 볼 수 없어요 (CLAUDE.md §5-2, 사용자 결정 2026-10-12)
     var didSubmit: Bool
     /// '모아보기'로 열 미션
-    var missionID: UUID? = nil
+    var missionID: Int? = nil
 }
 
 /// 15 기록 캘린더 (Figma 1:1311)
 /// 그룹별 월간 캘린더. 기록 있는 날에 유형 이름(그림/사진/글/음성), 오늘 테두리,
 /// 날짜를 고르면 아래 카드 → '모아보기'로 그날 결과 공개 화면 (내가 올린 날만)
 struct RecordCalendarView: View {
-    let groupID: UUID
+    let groupID: Int
     @Binding var path: [MainRoute]
 
     @Environment(\.dismiss) private var dismiss
@@ -33,7 +33,7 @@ struct RecordCalendarView: View {
         return calendar
     }()
 
-    init(groupID: UUID, path: Binding<[MainRoute]>) {
+    init(groupID: Int, path: Binding<[MainRoute]>) {
         self.groupID = groupID
         self._path = path
         self._month = State(initialValue: Self.calendar.dateInterval(of: .month, for: .now)?.start ?? .now)

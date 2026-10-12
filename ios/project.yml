@@ -42,6 +42,10 @@ targets:
           - IBMPlexSansKR-SemiBold.ttf
           - IBMPlexSansKR-Bold.ttf
           - Fredoka-SemiBold.ttf
+        API_BASE_URL: $(API_BASE_URL)
+        # 시뮬레이터에서 Mac 의 개발 서버(http://localhost:8080)에 붙을 수 있게 로컬 주소만 http 를 허용해요.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         SUPABASE_URL: $(SUPABASE_URL)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
     settings:

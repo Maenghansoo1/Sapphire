@@ -3,9 +3,10 @@ import SwiftUI
 /// A2 회원가입 · 계정 정보 (Figma 1:222)
 struct SignupAccountView: View {
     @Binding var path: [AuthRoute]
+    /// A3 에서 가입 요청에 같이 써요 (AuthFlowView 가 들고 있어요).
+    @Bindable var model: SignupAccountModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var model = SignupAccountModel()
     @State private var openedLink: WebLink?
 
     var body: some View {
@@ -134,6 +135,6 @@ private extension Character {
 
 #Preview {
     NavigationStack {
-        SignupAccountView(path: .constant([]))
+        SignupAccountView(path: .constant([]), model: SignupAccountModel())
     }
 }

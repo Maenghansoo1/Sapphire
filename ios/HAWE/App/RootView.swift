@@ -12,6 +12,8 @@ struct RootView: View {
                 AuthFlowView()
             case .signedIn:
                 MainFlowView()
+            case .restoring:
+                Color.bg.ignoresSafeArea()
             }
         }
         .animation(.default, value: session.state)
@@ -22,10 +24,12 @@ struct RootView: View {
     RootView()
         .environment(AppSession())
         .environment(DataStore())
+        .environment(Services.preview)
 }
 
 #Preview("체험 그룹 참여") {
     RootView()
         .environment(AppSession(state: .signedIn))
         .environment(DataStore.preview())
+        .environment(Services.preview)
 }

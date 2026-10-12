@@ -5,10 +5,11 @@ import SwiftUI
 /// 녹음(최대 30초)·정지·다시·미리 듣기, 파형 표시. m4a(AAC)
 struct VoiceMissionView: View {
     let topic: String
-    var onSubmit: (SubmissionContent) -> Void = { _ in }
+    var onSubmit: (SubmissionContent) async -> Bool = { _ in true }
 
     @Environment(\.openURL) private var openURL
     @State private var recorder = VoiceRecorder()
+    @State private var isSubmitting = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,18 +33,24 @@ struct VoiceMissionView: View {
             Spacer(minLength: 24)
 
             controls
+                .disabled(isSubmitting)
                 .padding(.bottom, 32)
 
-            HButton("올리기") {
+            HButton(isSubmitting ? "올리는 중..." : "올리기") {
+                guard !isSubmitting else { return }
+                isSubmitting = true
                 recorder.stopPlayback()
-                onSubmit(.voice(
+                let content = SubmissionContent.voice(
                     fileURL: recorder.fileURL,
                     duration: recorder.elapsed,
                     // 녹음 안 된 막대(-1)는 빼고, 결과 화면 파형으로 써요.
                     waveform: recorder.levels.filter { $0 >= 0 }
-                ))
+                )
+                Task {
+                    if await !onSubmit(content) { isSubmitting = false }
+                }
             }
-            .disabled(!recorder.hasRecording || recorder.isRecording)
+            .disabled(!recorder.hasRecording || recorder.isRecording || isSubmitting)
         }
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .padding(.bottom, 32)

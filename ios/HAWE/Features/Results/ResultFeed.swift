@@ -2,24 +2,28 @@ import AVFoundation
 import Foundation
 import Observation
 
-/// 결과 공개(10~13)와 작품 상세(14)가 함께 쓰는 상태 — 좋아요·댓글은 DataStore 에 저장돼서 두 화면에 같이 반영돼요.
+/// 결과 공개(10~13)와 작품 상세(14)가 함께 쓰는 상태 — 피드는 서버에서 받아 DataStore 에 넣어요.
 @MainActor
 @Observable
 final class ResultFeed {
     let store: DataStore
-    let groupID: UUID
-    let missionID: UUID
+    let groupID: Int
+    let missionID: Int
     let player = VoicePlayer()
 
-    init(store: DataStore, groupID: UUID, missionID: UUID) {
+    init(store: DataStore, groupID: Int, missionID: Int) {
         self.store = store
         self.groupID = groupID
         self.missionID = missionID
     }
 
-    /// 내가 올리지 않은 미션이면 비어 있어요 (§5-2)
+    /// 피드를 아직 못 받았으면 nil
+    var loadedResult: MissionResult? {
+        store.result(groupID: groupID, missionID: missionID)
+    }
+
     var result: MissionResult {
-        store.result(groupID: groupID, missionID: missionID) ?? MissionResult(
+        loadedResult ?? MissionResult(
             id: missionID, groupName: "", type: .draw, topic: "", date: .now, memberCount: 0, submissions: [], pending: []
         )
     }
@@ -27,23 +31,10 @@ final class ResultFeed {
     func submission(_ id: Submission.ID) -> Submission? {
         result.submissions.first { $0.id == id }
     }
-
-    func toggleLike(_ id: Submission.ID) {
-        store.toggleLike(id, missionID: missionID, groupID: groupID)
-    }
-
-    func addComment(_ body: String, to id: Submission.ID) {
-        store.addComment(body, to: id, missionID: missionID, groupID: groupID)
-    }
-
-    /// 내 댓글만 지울 수 있어요.
-    func deleteComment(_ commentID: SubmissionComment.ID, from id: Submission.ID) {
-        store.deleteComment(commentID, from: id, missionID: missionID, groupID: groupID)
-    }
 }
 
 /// 음성 작품 재생 — 한 번에 하나씩, '전체 이어 듣기'면 끝나면 다음 것으로 넘어가요.
-/// 서버 연결 전에는 파일이 없어서 길이만큼 재생하는 척해요.
+/// 서버 파일(http) 은 내려받으면서 재생해요. 재생할 수 없으면 다음 것으로 넘어가요.
 @MainActor
 @Observable
 final class VoicePlayer: NSObject {
@@ -54,7 +45,7 @@ final class VoicePlayer: NSObject {
 
     private var queue: [Submission] = []
     private var current: Submission?
-    private var player: AVAudioPlayer?
+    private var player: AVPlayer?
     private var timer: Timer?
 
     func toggle(_ submission: Submission) {
@@ -74,7 +65,7 @@ final class VoicePlayer: NSObject {
     }
 
     func stop() {
-        player?.stop()
+        player?.pause()
         player = nil
         timer?.invalidate()
         timer = nil
@@ -86,29 +77,39 @@ final class VoicePlayer: NSObject {
 
     private func play(_ submission: Submission) {
         stop()
+        guard let url = submission.mediaURL else {
+            advance()
+            return
+        }
         current = submission
         playingID = submission.id
-        if let url = submission.mediaURL, let player = try? AVAudioPlayer(contentsOf: url) {
-            try? AVAudioSession.sharedInstance().setCategory(.playback)
-            player.play()
-            self.player = player
-        }
-        let started = Date.now
+        try? AVAudioSession.sharedInstance().setCategory(.playback)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        let player = AVPlayer(url: url)
+        player.play()
+        self.player = player
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick(started: started) }
+            MainActor.assumeIsolated { self?.tick() }
         }
     }
 
-    private func tick(started: Date) {
-        guard let current else { return }
-        let duration = player?.duration ?? current.duration ?? 1
-        elapsed = player?.currentTime ?? Date.now.timeIntervalSince(started)
-        progress = min(1, elapsed / max(duration, 0.1))
-        let finished = player.map { !$0.isPlaying } ?? (elapsed >= duration)
-        if finished || progress >= 1 {
-            let next = queue.first
-            queue = Array(queue.dropFirst())
-            if let next { play(next) } else { stop() }
+    private func tick() {
+        guard let current, let player, let item = player.currentItem else { return }
+        if item.status == .failed {
+            advance()
+            return
         }
+        let itemDuration = item.duration.seconds
+        let duration = itemDuration.isFinite && itemDuration > 0 ? itemDuration : (current.duration ?? 1)
+        elapsed = max(0, player.currentTime().seconds.isFinite ? player.currentTime().seconds : 0)
+        progress = min(1, elapsed / max(duration, 0.1))
+        let reachedEnd = item.status == .readyToPlay && elapsed >= duration - 0.05
+        if reachedEnd || progress >= 1 { advance() }
+    }
+
+    private func advance() {
+        let next = queue.first
+        queue = Array(queue.dropFirst())
+        if let next { play(next) } else { stop() }
     }
 }

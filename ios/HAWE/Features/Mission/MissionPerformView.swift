@@ -1,30 +1,49 @@
 import SwiftUI
 
 /// 미션 수행 화면 (06 그림 · 07 사진 · 08 글 · 09 음성) — 05 에서 전체 화면으로 띄워요.
+/// 올리는 동안 버튼을 잠그고, 실패하면 입력을 그대로 두고 안내해서 다시 올릴 수 있어요.
 /// 제출 후에는 수정·삭제할 수 없어요 (CLAUDE.md §5-2).
 struct MissionPerformView: View {
+    /// 올리기 결과
+    enum Reply {
+        /// 끝났어요 — 화면을 닫아요.
+        case done
+        /// 입력을 그대로 두고 안내만 해요.
+        case stay(String)
+    }
+
     let type: MissionType
     let topic: String
-    var onSubmit: (SubmissionContent) -> Void = { _ in }
+    var template = ""
+    var spec = MissionSpec()
+    var onSubmit: (SubmissionContent) async -> Reply = { _ in .done }
 
     @Environment(\.dismiss) private var dismiss
+    @State private var toast: String?
 
     var body: some View {
         Group {
             switch type {
-            case .draw: DrawMissionView(topic: topic, onSubmit: submit)
+            case .draw: DrawMissionView(topic: topic, spec: spec, onSubmit: submit)
             case .photo: PhotoMissionView(topic: topic, onSubmit: submit)
-            case .write: WriteMissionView(topic: topic, onSubmit: submit)
+            case .write: WriteMissionView(topic: topic, template: template, spec: spec, onSubmit: submit)
             case .voice: VoiceMissionView(topic: topic, onSubmit: submit)
             }
         }
         .background(.bg)
+        .hToast($toast)
     }
 
-    /// TODO: 서버 연결 시 Storage 업로드(submissions/{group}/{mission}/{user}.png|jpg|m4a) 후 제출 저장
-    private func submit(_ content: SubmissionContent) {
-        onSubmit(content)
-        dismiss()
+    /// true 면 올리기 성공(화면이 닫혀요), false 면 다시 올릴 수 있게 버튼을 풀어요.
+    private func submit(_ content: SubmissionContent) async -> Bool {
+        switch await onSubmit(content) {
+        case .done:
+            dismiss()
+            return true
+        case .stay(let message):
+            toast = message
+            return false
+        }
     }
 }
 

@@ -23,4 +23,9 @@ enum ProfileCharacter: String, CaseIterable, Identifiable, Codable {
     var image: Image { Image("character-\(rawValue)") }
 
     static let `default`: ProfileCharacter = .mongsil
+
+    /// 서버 `characterKey` — 모르는 값이면 기본 캐릭터
+    static func fromKey(_ key: String?) -> ProfileCharacter {
+        key.flatMap(ProfileCharacter.init(rawValue:)) ?? .default
+    }
 }

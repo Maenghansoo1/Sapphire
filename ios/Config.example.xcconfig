@@ -3,3 +3,6 @@
 
 SUPABASE_URL = https:/$()/your-project.supabase.co
 SUPABASE_ANON_KEY = your-anon-key
+
+// Spring 서버 주소. 비워 두면 디버그는 http://localhost:8080 을 써요. (실기기에서는 Mac 의 IP 로 바꿔 주세요)
+API_BASE_URL = http:/$()/localhost:8080

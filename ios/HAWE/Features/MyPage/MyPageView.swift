@@ -41,9 +41,10 @@ struct MyPageView: View {
     @Environment(DataStore.self) private var store
     @State private var openedLink: WebLink?
     @State private var confirmsLogout = false
+    @State private var toast: String?
 
     private var account: MyAccount { session.account }
-    /// 활동 요약은 실제로 올린 기록으로 계산해요.
+    /// 활동 요약 — 서버 통계 API 가 생기면 다시 보여요.
     private var activity: ActivityStats { store.stats }
 
     var body: some View {
@@ -53,8 +54,7 @@ struct MyPageView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     profile.padding(.top, 12)
-                    stats.padding(.top, 22)
-                    byType.padding(.top, 14)
+                    // 활동 요약(stats · byType)은 서버 통계 API 가 생기기 전까지 숨겨요.
                     menu.padding(.top, 18)
                 }
             }
@@ -85,6 +85,7 @@ struct MyPageView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: confirmsLogout)
+        .hToast($toast)
     }
 
     /// 원 76 · 캐릭터 60 + 이름 22 Bold + 이메일·로그인 방법 13 (줄 높이 1.45) + 프로필 편집
@@ -103,7 +104,8 @@ struct MyPageView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button { path.append(.myPage(.profileEdit)) } label: {
+            // 프로필 수정 API 가 생기면 ProfileEditView(.profileEdit)로 보내요.
+            Button { toast = ComingSoon.message } label: {
                 Text("프로필 편집")
                     .font(.plex(13, .semibold))
                     .foregroundStyle(.ink)
@@ -183,7 +185,8 @@ struct MyPageView: View {
             HListRow("이용약관", height: 48) { openedLink = WebLink(url: AppLinks.termsOfService) }
             HListRow("개인정보 처리방침", height: 48) { openedLink = WebLink(url: AppLinks.privacyPolicy) }
             dangerRow("로그아웃", showsDivider: true) { confirmsLogout = true }
-            dangerRow("회원 탈퇴", showsDivider: false) { path.append(.myPage(.withdraw)) }
+            // 탈퇴 API 가 생기면 WithdrawView(.withdraw)로 보내요.
+            dangerRow("회원 탈퇴", showsDivider: false) { toast = ComingSoon.message }
         }
     }
 
@@ -217,4 +220,5 @@ enum AppInfo {
     }
     .environment(AppSession(state: .signedIn))
     .environment(DataStore.preview())
+    .environment(Services.preview)
 }

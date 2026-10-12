@@ -5,9 +5,16 @@ struct LoginView: View {
     @Binding var path: [AuthRoute]
     @Environment(AppSession.self) private var session
     @Environment(DataStore.self) private var store
+    @Environment(Services.self) private var services
 
     @State private var email = ""
     @State private var password = ""
+    @State private var isLoading = false
+    @State private var toast: String?
+
+    private var canLogIn: Bool {
+        !isLoading && !email.trimmingCharacters(in: .whitespaces).isEmpty && !password.isEmpty
+    }
 
     var body: some View {
         ScrollView {
@@ -25,20 +32,24 @@ struct LoginView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .hToast($toast)
     }
 
-    /// TODO: 서버 연결 시 실제 로그인. 지금은 이 기기에서 가입한 이메일이면 그 계정으로,
-    /// 처음 보는 이메일이면 그 이메일로 가입된 계정이 있다고 보고 들어가요.
     private func logIn() {
-        let trimmed = email.trimmingCharacters(in: .whitespaces).lowercased()
-        if !trimmed.isEmpty, session.account.email?.lowercased() != trimmed {
-            let nickname = String(trimmed.split(separator: "@").first ?? "하늘").prefix(10)
-            let profile = Profile(avatar: .character(.default), nickname: String(nickname))
-            session.account = MyAccount(profile: profile, email: trimmed, joinedAt: .now, signUpProvider: .email, linkedProviders: [.email])
-            store.reset()
-            store.setMyProfile(profile)
+        guard canLogIn else { return }
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let account = try await services.auth.login(email: email, password: password)
+                store.reset()
+                store.setMyProfile(account.profile)
+                session.signIn(account)
+            } catch is CancellationError {
+            } catch {
+                toast = error.userMessage
+            }
         }
-        session.signIn()
     }
 
     private var intro: some View {
@@ -55,8 +66,8 @@ struct LoginView: View {
         VStack(spacing: 12) {
             HTextField(placeholder: "이메일", text: $email, keyboard: .emailAddress, contentType: .username)
             HTextField(placeholder: "비밀번호", text: $password, isSecure: true, contentType: .password)
-            // TODO: 서버 연결 시 실제 로그인. 지금은 그룹이 있는 사용자로 들어가요.
             HButton("로그인", action: logIn)
+                .disabled(!canLogIn)
             links
         }
     }
@@ -69,7 +80,8 @@ struct LoginView: View {
             Text("|")
                 .font(.plex(14))
                 .foregroundStyle(.controlOff)
-            Button("비밀번호 찾기") { path.append(.passwordReset(email: email)) }
+            // 비밀번호 재설정 API 가 생기면 PasswordResetView 로 보내요.
+            Button("비밀번호 찾기") { toast = ComingSoon.message }
                 .font(.plex(14))
                 .foregroundStyle(.textSecondary)
         }
@@ -90,10 +102,10 @@ struct LoginView: View {
 
     private var socialButtons: some View {
         VStack(spacing: 10) {
-            // TODO: 서버 연결 시 실제 간편 로그인. 지금은 신규 가입자로 보고 A3 로 가요.
-            SocialLoginButton(provider: .apple) { path.append(.signupProfile(provider: .apple, email: nil)) }
-            SocialLoginButton(provider: .kakao) { path.append(.signupProfile(provider: .kakao, email: nil)) }
-            SocialLoginButton(provider: .google) { path.append(.signupProfile(provider: .google, email: nil)) }
+            // 간편 로그인은 MVP 범위 밖이라 아직 준비 중이에요.
+            SocialLoginButton(provider: .apple) { toast = ComingSoon.message }
+            SocialLoginButton(provider: .kakao) { toast = ComingSoon.message }
+            SocialLoginButton(provider: .google) { toast = ComingSoon.message }
         }
     }
 }
@@ -171,4 +183,5 @@ struct SocialLoginButton: View {
     }
     .environment(AppSession())
     .environment(DataStore())
+    .environment(Services.preview)
 }

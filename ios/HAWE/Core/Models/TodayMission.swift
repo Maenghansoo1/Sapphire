@@ -15,9 +15,18 @@ extension MissionType {
     var subjectForm: String { "\(displayName)이" }
 }
 
+/// 서버 미션 `params` — 30초 스케치 시간, 삼행시 제시어, 'a 를 b 로' 그리기
+struct MissionSpec: Hashable {
+    var seconds: Int?
+    var word: String?
+    var drawFrom: String?
+    var drawTo: String?
+}
+
 /// 오늘의 미션 참여 현황 한 줄
 struct MissionMember: Identifiable, Hashable {
-    let id: UUID
+    /// 서버 userId
+    let id: Int
     var profile: Profile
     var isMe = false
     var isDone = false
@@ -27,9 +36,11 @@ struct MissionMember: Identifiable, Hashable {
 
 /// 05 그룹 · 오늘의 미션
 struct TodayMission: Identifiable, Hashable {
-    let id: UUID
+    /// 서버 missionId
+    let id: Int
     var group: GroupDetail
-    var type: MissionType
+    /// 앱에서 아직 열 수 없는 유형이면 nil
+    var type: MissionType?
     var topic: String
     /// 그룹의 몇 번째 미션인지 (#142)
     var number: Int
@@ -37,6 +48,11 @@ struct TodayMission: Identifiable, Hashable {
     /// 다음 미션이 열리는 시각 — 이때까지 제출할 수 있어요.
     var closesAt: Date
     var members: [MissionMember]
+    /// 마감 — 지나도 다음 미션이 열리기 전까지는 '지각'으로 올릴 수 있어요.
+    var deadlineAt: Date? = nil
+    /// 서버 템플릿 (TEXT_FILL_BLANK, TEXT_ACROSTIC, DRAW_SKETCH_30S …)
+    var template: String = ""
+    var spec = MissionSpec()
 
     var doneCount: Int { members.filter(\.isDone).count }
     var didSubmit: Bool { members.first(where: \.isMe)?.isDone ?? false }
@@ -44,9 +60,9 @@ struct TodayMission: Identifiable, Hashable {
 
 extension TodayMission {
     /// 그룹이 없을 때 그릴 빈 값
-    static func empty(groupID: UUID) -> TodayMission {
+    static func empty(groupID: Int) -> TodayMission {
         TodayMission(
-            id: UUID(),
+            id: LocalID.next(),
             group: GroupDetail(
                 id: groupID, name: "", relationship: .friend, createdAt: .now, missionCount: 0,
                 inviteCode: "", topicTime: DateComponents(hour: 9, minute: 0), notify: false, members: []
@@ -89,7 +105,7 @@ extension TodayMission {
                 if isDone { othersDone -= 1 }
             }
             return MissionMember(
-                id: UUID(),
+                id: LocalID.next(),
                 profile: Profile(avatar: avatar, nickname: names[index % names.count]),
                 isMe: isMe,
                 isDone: isDone
@@ -97,10 +113,10 @@ extension TodayMission {
         }
         let window = window(topicTime: group.topicTime)
         return TodayMission(
-            id: UUID(),
+            id: LocalID.next(),
             group: group,
             type: summary.missionType,
-            topic: summary.topic,
+            topic: summary.topic ?? "",
             number: group.missionCount,
             opensAt: window.opens,
             closesAt: window.closes,

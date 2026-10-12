@@ -3,22 +3,41 @@ import SwiftUI
 
 /// 06 미션 수행 · 그림 (Figma 1:594)
 /// PencilKit. 펜/지우개, 굵기 3단계, 7색, 되돌리기/다시 실행. 올리기 → PNG
+/// 30초 스케치(`spec.seconds`)는 첫 획부터 시간을 재고, 시간이 끝나면 더 그릴 수 없어요.
 struct DrawMissionView: View {
     let topic: String
-    var onSubmit: (SubmissionContent) -> Void = { _ in }
+    var spec = MissionSpec()
+    var onSubmit: (SubmissionContent) async -> Bool = { _ in true }
 
     @State private var canvas = DrawingCanvasModel()
+    @State private var isSubmitting = false
+    @State private var toast: String?
 
     var body: some View {
         VStack(spacing: 16) {
             MissionHeader(hasDraft: !canvas.isEmpty) {
                 HStack(spacing: 16) {
+                    if let seconds = spec.seconds {
+                        TimelineView(.periodic(from: .now, by: 0.2)) { context in
+                            Text("0:" + String(format: "%02d", canvas.remainingSeconds(total: seconds, now: context.date)))
+                                .font(.caption13)
+                                .monospacedDigit()
+                                .foregroundStyle(.textSecondary)
+                        }
+                    }
                     historyButton(.undo, label: "되돌리기", enabled: canvas.canUndo) { canvas.undo() }
                     historyButton(.redo, label: "다시 실행", enabled: canvas.canRedo) { canvas.redo() }
                 }
             }
 
-            MissionTitle(type: .draw, topic: topic)
+            VStack(alignment: .leading, spacing: 4) {
+                MissionTitle(type: .draw, topic: topic)
+                if let from = spec.drawFrom, let to = spec.drawTo {
+                    Text("‘\(from)’를 ‘\(to)’로")
+                        .font(.caption13)
+                        .foregroundStyle(.textSecondary)
+                }
+            }
 
             // 테두리 line · 모서리 20 · 높이 400 (작은 화면에서는 줄어들어요)
             PencilCanvas(model: canvas)
@@ -35,16 +54,33 @@ struct DrawMissionView: View {
 
             Spacer(minLength: 0)
 
-            HButton("올리기") {
-                if let png = canvas.pngData() { onSubmit(.image(png, fileExtension: "png")) }
-            }
-                .disabled(canvas.isEmpty)
+            HButton(isSubmitting ? "올리는 중..." : "올리기", action: submit)
+                .disabled(canvas.isEmpty || isSubmitting)
         }
         .padding(.horizontal, HLayout.screenPaddingCompact)
         // 올리기 버튼은 화면 아래 끝에서 32 위 (Figma pb 32)
         .padding(.bottom, 32)
         .ignoresSafeArea(.container, edges: .bottom)
         .background(.bg)
+        .hToast($toast)
+        // 첫 획을 그으면 시간을 재기 시작해요.
+        .task(id: canvas.startedAt) {
+            guard let seconds = spec.seconds, canvas.startedAt != nil else { return }
+            while canvas.remainingSeconds(total: seconds, now: .now) > 0 {
+                try? await Task.sleep(for: .milliseconds(200))
+                if Task.isCancelled { return }
+            }
+            canvas.lock()
+            toast = "시간이 끝났어요"
+        }
+    }
+
+    private func submit() {
+        guard !isSubmitting, let png = canvas.pngData() else { return }
+        isSubmitting = true
+        Task {
+            if await !onSubmit(.image(png, fileExtension: "png")) { isSubmitting = false }
+        }
     }
 
     private func historyButton(_ icon: HIcon, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -164,6 +200,10 @@ final class DrawingCanvasModel {
     private(set) var isEmpty = true
     private(set) var canUndo = false
     private(set) var canRedo = false
+    /// 첫 획을 그은 시각 (스케치 타이머)
+    private(set) var startedAt: Date?
+    /// 시간이 끝나 더 그릴 수 없어요.
+    private(set) var isLocked = false
 
     @ObservationIgnored weak var canvasView: PKCanvasView?
 
@@ -178,6 +218,20 @@ final class DrawingCanvasModel {
 
     func applyTool() {
         canvasView?.tool = pkTool
+    }
+
+    func markStarted() {
+        if startedAt == nil { startedAt = .now }
+    }
+
+    func remainingSeconds(total: Int, now: Date) -> Int {
+        guard let startedAt else { return total }
+        return max(0, total - Int(now.timeIntervalSince(startedAt)))
+    }
+
+    func lock() {
+        isLocked = true
+        canvasView?.drawingGestureRecognizer.isEnabled = false
     }
 
     func undo() {
@@ -238,6 +292,10 @@ struct PencilCanvas: UIViewRepresentable {
         let model: DrawingCanvasModel
         init(model: DrawingCanvasModel) { self.model = model }
 
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            DispatchQueue.main.async { [model] in model.markStarted() }
+        }
+
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             // 되돌리기 기록이 쌓인 다음에 상태를 읽어요.
             DispatchQueue.main.async { [model] in model.refresh() }
@@ -247,4 +305,8 @@ struct PencilCanvas: UIViewRepresentable {
 
 #Preview {
     DrawMissionView(topic: "요즘 제일 웃겼던 순간")
+}
+
+#Preview("30초 스케치") {
+    DrawMissionView(topic: "30초 안에 그려 보세요", spec: MissionSpec(seconds: 30))
 }

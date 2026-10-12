@@ -31,6 +31,27 @@ enum Relationship: String, CaseIterable, Identifiable, Codable {
     /// 연인은 2명, 나머지는 최대 6명
     var maxMembers: Int { self == .lover ? 2 : 6 }
 
+    /// 서버 `relationType` (COUPLE · FRIEND · FAMILY · RIVAL · CASUAL)
+    var serverValue: String {
+        switch self {
+        case .lover: "COUPLE"
+        case .friend: "FRIEND"
+        case .family: "FAMILY"
+        case .rival: "RIVAL"
+        case .soso: "CASUAL"
+        }
+    }
+
+    init(server value: String?) {
+        switch value {
+        case "COUPLE": self = .lover
+        case "FAMILY": self = .family
+        case "FRIEND": self = .friend
+        case "RIVAL": self = .rival
+        default: self = .soso
+        }
+    }
+
     /// 장식 색 (§3-7)
     var decorColor: Color {
         switch self {

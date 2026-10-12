@@ -5,9 +5,13 @@ import SwiftUI
 /// 초대 링크(Universal Link)로 열면 `initialCode` 로 코드가 자동 입력돼요.
 struct JoinGroupView: View {
     var initialCode = ""
-    var onJoined: (_ code: String) -> Void = { _ in }
+    var onJoined: () -> Void = {}
 
     @Environment(DataStore.self) private var store
+    @Environment(AppSession.self) private var session
+    @Environment(Services.self) private var services
+    @State private var isSubmitting = false
+    @State private var toast: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var model = JoinGroupModel()
@@ -39,13 +43,15 @@ struct JoinGroupView: View {
                 .padding(.top, 16)
                 .animation(.default, value: model.preview)
             } cta: {
-                // TODO: 서버 연결 시 그룹 참여 요청
-                HButton("참여하기") { onJoined(model.code) }
-                    .disabled(model.preview == nil)
+                HButton("참여하기", action: join)
+                    .disabled(model.preview == nil || isSubmitting)
             }
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .hToast($toast)
+        // 6자리가 되면 서버에 미리보기를 물어봐요. 코드가 바뀌면 앞 요청은 취소돼요.
+        .task(id: model.code) { await lookUp(model.code) }
         .onAppear {
             if model.code.isEmpty && !initialCode.isEmpty {
                 model.code = JoinGroupModel.sanitize(initialCode)
@@ -105,9 +111,45 @@ struct JoinGroupView: View {
                 model.code = sanitized
                 return
             }
-            model.lookUp(in: store)
             if sanitized.count == JoinGroupModel.codeLength {
                 isCodeFocused = false
+            }
+        }
+    }
+}
+
+extension JoinGroupView {
+    private func lookUp(_ code: String) async {
+        // 소문자 등은 onChange 가 고쳐서 다시 들어와요.
+        guard code == JoinGroupModel.sanitize(code) else { return }
+        model.begin(code)
+        guard code.count == JoinGroupModel.codeLength else { return }
+        do {
+            let preview = try await services.groups.preview(code: code)
+            model.finish(.success(preview), for: code)
+        } catch is CancellationError {
+        } catch {
+            model.finish(.failure(InviteLookupError(error: error)), for: code)
+        }
+    }
+
+    private func join() {
+        guard model.preview != nil, !isSubmitting else { return }
+        isSubmitting = true
+        let code = model.code
+        Task {
+            do {
+                let groupID = try await services.groups.join(code: code)
+                // 상세를 못 받아도 참여는 끝났어요 — 홈이 목록을 다시 받아요.
+                if let detail = try? await services.groups.detail(groupID: groupID, myUserID: session.account.userID) {
+                    store.applyServerGroup(detail)
+                }
+                onJoined()
+            } catch is CancellationError {
+                isSubmitting = false
+            } catch {
+                toast = error.userMessage
+                isSubmitting = false
             }
         }
     }
@@ -127,7 +169,7 @@ private struct GroupInviteCard: View {
                     .font(.plex(18, .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
-                Text("\(preview.relationship.displayName) · \(preview.members.count) / \(preview.relationship.maxMembers)명 참여 중")
+                Text("\(preview.relationship.displayName) · \(preview.memberCount) / \(preview.maxMembers)명 참여 중")
                     .font(.plex(14))
                     .foregroundStyle(.textSecondary)
             }
@@ -147,11 +189,21 @@ struct GroupInvitePreview: Hashable {
     var name: String
     var relationship: Relationship
     var members: [AvatarContent]
+    var memberCount: Int
+    var maxMembers: Int
 
-    var isFull: Bool { members.count >= relationship.maxMembers }
+    init(name: String, relationship: Relationship, members: [AvatarContent], memberCount: Int? = nil, maxMembers: Int? = nil) {
+        self.name = name
+        self.relationship = relationship
+        self.members = members
+        self.memberCount = memberCount ?? members.count
+        self.maxMembers = maxMembers ?? relationship.maxMembers
+    }
+
+    var isFull: Bool { memberCount >= maxMembers }
 }
 
-/// 03 입력 상태와 코드 조회 (DataStore — 체험 코드는 DemoSeed 참고)
+/// 03 입력 상태와 코드 조회 결과
 @Observable
 final class JoinGroupModel {
     static let codeLength = 6
@@ -159,19 +211,25 @@ final class JoinGroupModel {
     var code = ""
     private(set) var preview: GroupInvitePreview?
     private(set) var errorMessage: String?
+    /// 서버에 묻는 중
+    private(set) var isLoading = false
 
     /// 영문 대문자 + 숫자만, 6자리까지
     static func sanitize(_ text: String) -> String {
         String(text.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(codeLength))
     }
 
-    @MainActor
-    func lookUp(in store: DataStore) {
+    func begin(_ code: String) {
         preview = nil
         errorMessage = nil
-        guard code.count == Self.codeLength else { return }
+        isLoading = code.count == Self.codeLength
+    }
 
-        switch store.lookUpInvite(code: code) {
+    /// 그사이 코드가 바뀌었으면 늦게 온 결과는 버려요.
+    func finish(_ result: Result<GroupInvitePreview, InviteLookupError>, for code: String) {
+        guard code == self.code else { return }
+        isLoading = false
+        switch result {
         case .success(let found): preview = found
         case .failure(let error): errorMessage = error.message
         }
@@ -192,6 +250,8 @@ extension GroupInvitePreview {
         JoinGroupView()
     }
     .environment(DataStore())
+    .environment(AppSession(state: .signedIn))
+    .environment(Services.preview)
 }
 
 #Preview("링크로 열림") {
@@ -199,4 +259,6 @@ extension GroupInvitePreview {
         JoinGroupView(initialCode: "k7q2px")
     }
     .environment(DataStore())
+    .environment(AppSession(state: .signedIn))
+    .environment(Services.preview)
 }

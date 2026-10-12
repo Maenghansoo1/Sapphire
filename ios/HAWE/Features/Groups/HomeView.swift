@@ -37,8 +37,6 @@ struct HomeView: View {
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
-        // 하루가 지나 새 미션이 열렸으면 만들어 둬요.
-        .onAppear { store.refreshTodayMissions() }
     }
 
     private var header: some View {
@@ -89,23 +87,31 @@ struct GroupCard: View {
             MemberRow(members: group.members, relationship: group.relationship)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("오늘의 미션 · \(group.missionType.displayName)")
-                    .font(.plex(12, .semibold))
-                    .foregroundStyle(.textSecondary)
-                Text(group.topic)
-                    .font(.plex(15, .semibold))
-                    .foregroundStyle(.ink)
+                if let type = group.missionType {
+                    Text("오늘의 미션 · \(type.displayName)")
+                        .font(.plex(12, .semibold))
+                        .foregroundStyle(.textSecondary)
+                    Text(group.topic ?? "")
+                        .font(.plex(15, .semibold))
+                        .foregroundStyle(.ink)
+                } else {
+                    Text("아직 오늘의 미션이 열리지 않았어요")
+                        .font(.plex(15, .semibold))
+                        .foregroundStyle(.ink)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(.surface, in: RoundedRectangle(cornerRadius: HRadius.input, style: .continuous))
 
-            HStack {
-                Text("\(group.submittedCount) / \(group.members.count)명 완료")
-                    .font(.caption13)
-                    .foregroundStyle(.textSecondary)
-                Spacer()
-                statusBadge
+            if group.missionType != nil {
+                HStack {
+                    Text("\(group.submittedCount) / \(group.members.count)명 완료")
+                        .font(.caption13)
+                        .foregroundStyle(.textSecondary)
+                    Spacer()
+                    statusBadge
+                }
             }
         }
         .padding(18)

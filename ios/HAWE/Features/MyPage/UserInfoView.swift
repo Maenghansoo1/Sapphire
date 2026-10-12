@@ -8,6 +8,7 @@ struct UserInfoView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
     @State private var unlinking: LoginProvider?
+    @State private var toast: String?
 
     private var account: MyAccount { session.account }
 
@@ -18,8 +19,9 @@ struct UserInfoView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     sectionLabel("기본 정보", top: 14)
+                    // 프로필 수정 API 가 생기면 ProfileEditView 로 보내요.
                     HListRow("닉네임", value: account.profile.nickname, height: 56) {
-                        path.append(.myPage(.profileEdit))
+                        toast = ComingSoon.message
                     }
                     infoRow("이메일", value: account.email ?? "없음")
                     infoRow("가입일", value: account.joinedAt.formatted(.dateTime.year().month(.defaultDigits).day().locale(Locale(identifier: "ko_KR"))))
@@ -43,6 +45,7 @@ struct UserInfoView: View {
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .hToast($toast)
         .confirmationDialog(
             "\(unlinking?.displayName ?? "") 연결을 해제할까요?",
             isPresented: Binding(get: { unlinking != nil }, set: { if !$0 { unlinking = nil } }),
@@ -92,7 +95,8 @@ struct UserInfoView: View {
                 .foregroundStyle(.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if isLinked {
-                Button { unlinking = provider } label: {
+                // 간편 로그인 연결·해제는 MVP 범위 밖이라 준비 중이에요. (API 가 생기면 unlinking 확인창을 다시 써요)
+                Button { toast = ComingSoon.message } label: {
                     Text("연결됨")
                         .font(.plex(13, .semibold))
                         .foregroundStyle(.ink)
@@ -104,8 +108,7 @@ struct UserInfoView: View {
                 .accessibilityHint(canUnlink ? "눌러서 연결 해제" : "마지막 로그인 방법이라 해제할 수 없어요")
             } else {
                 Button {
-                    // TODO: 서버 연결 시 각 SDK 로그인 후 계정 연결
-                    session.account.linkedProviders.insert(provider)
+                    toast = ComingSoon.message
                 } label: {
                     Text("연결하기")
                         .font(.plex(13, .semibold))
@@ -142,7 +145,8 @@ struct UserInfoView: View {
     /// 높이 60 · 15 + 설명 12 + 꺾쇠. 이메일 가입자가 아니면 흐리게 막아요.
     private var passwordRow: some View {
         let enabled = account.canChangePassword
-        return Button { path.append(.myPage(.changePassword)) } label: {
+        // 비밀번호 변경 API 가 생기면 ChangePasswordView(.changePassword)로 보내요.
+        return Button { toast = ComingSoon.message } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("비밀번호 변경")

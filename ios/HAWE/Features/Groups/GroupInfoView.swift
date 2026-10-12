@@ -1,16 +1,18 @@
 import SwiftUI
 
 /// 16 그룹 정보 · 설정 (Figma 1:1454)
-/// 초대 코드 복사·링크 공유, 멤버 목록(내 줄에 '내 프로필 편집'), 주제 도착 시간(방장만 변경), 그룹 알림, 그룹 나가기
+/// 초대 코드 복사·링크 공유, 멤버 목록, 그룹 나가기.
+/// 그룹 내 프로필·주제 도착 시간·그룹 알림은 서버 API 가 생기기 전까지 '준비 중'이에요.
 struct GroupInfoView: View {
-    let groupID: UUID
+    let groupID: Int
     var onLeft: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @Environment(DataStore.self) private var store
-    @State private var isEditingProfile = false
-    @State private var showsTimePicker = false
+    @Environment(AppSession.self) private var session
+    @Environment(Services.self) private var services
     @State private var showsLeaveAlert = false
+    @State private var isLeaving = false
     @State private var toast: String?
 
     /// 나간 직후처럼 그룹이 사라졌을 때는 빈 값으로 그려요.
@@ -18,15 +20,6 @@ struct GroupInfoView: View {
         store.group(groupID) ?? GroupDetail(
             id: groupID, name: "", relationship: .friend, createdAt: .now, missionCount: 0,
             inviteCode: "", topicTime: DateComponents(hour: 9, minute: 0), notify: false, members: []
-        )
-    }
-
-    /// 16-1 에서 저장하면 DataStore 에 그룹 내 프로필로 반영돼요.
-    private var myMember: Binding<GroupMember>? {
-        guard let me = group.me else { return nil }
-        return Binding(
-            get: { store.group(groupID)?.me ?? me },
-            set: { store.setMyGroupProfile($0.groupProfile, for: groupID) }
         )
     }
 
@@ -49,32 +42,15 @@ struct GroupInfoView: View {
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(isPresented: $isEditingProfile) {
-            if let myMember {
-                GroupProfileView(groupName: group.name, member: myMember)
-            }
-        }
-        .sheet(isPresented: $showsTimePicker) {
-            TopicTimeSheet(time: Binding(
-                get: { group.topicTime },
-                set: { store.setTopicTime($0, for: groupID) }
-            ))
-        }
         .alert("그룹에서 나갈까요?", isPresented: $showsLeaveAlert) {
             Button("취소", role: .cancel) {}
-            // TODO: 서버 연결 시 나가기 요청
-            Button("나가기", role: .destructive) { onLeft() }
+            Button("나가기", role: .destructive, action: leave)
         } message: {
             Text(leaveMessage)
         }
-        .overlay(alignment: .bottom) {
-            if let toast {
-                HToast(text: toast)
-                    .padding(.bottom, 24)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy, value: toast)
+        .hToast($toast)
+        // 들어올 때마다 멤버·초대 코드를 서버에서 다시 받아요.
+        .task { await reload() }
     }
 
     // MARK: - Sections
@@ -165,7 +141,8 @@ struct GroupInfoView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     if member.isMe {
-                        Button { isEditingProfile = true } label: {
+                        // 그룹 내 프로필 API 가 생기면 16-1 GroupProfileView 로 보내요.
+                        Button { toast = ComingSoon.message } label: {
                             Text("내 프로필 편집")
                                 .font(.plex(13, .semibold))
                                 .foregroundStyle(.ink)
@@ -191,19 +168,23 @@ struct GroupInfoView: View {
     /// 위 구분선 + 위 12 · 목록 줄 52
     private var settings: some View {
         VStack(spacing: 0) {
-            // 주제 도착 시간은 방장만 바꿀 수 있어요 — 방장이 아니면 꺾쇠 없이 값만 보여요.
-            HListRow("주제 도착 시간", value: Self.timeText(group.topicTime), showsChevron: group.amIOwner) {
-                if group.amIOwner { showsTimePicker = true }
+            // 주제 도착 시간 변경·그룹 알림은 서버 API 가 생기면 TopicTimeSheet·토글로 다시 열어요.
+            HListRow("주제 도착 시간", value: Self.timeText(group.topicTime), showsChevron: false) {
+                toast = ComingSoon.message
             }
 
-            // Figma 에 그룹 알림 설정 화면이 없어서, 누르면 켜짐 ↔ 꺼짐이 바로 바뀌어요.
-            HListRow("알림", value: group.notify ? "켜짐" : "꺼짐") {
-                let on = !group.notify
-                store.setNotify(on, for: groupID)
-                show(toast: on ? "이 그룹 알림을 켰어요" : "이 그룹 알림을 껐어요")
+            HListRow("알림", value: "준비 중") {
+                toast = ComingSoon.message
             }
 
-            Button { showsLeaveAlert = true } label: {
+            Button {
+                // 그룹장 넘기기(후임자 선택)는 아직 준비 중이에요.
+                if group.amIOwner && group.members.count > 1 {
+                    toast = "그룹장은 다른 멤버에게 그룹장을 넘긴 뒤 나갈 수 있어요. 지금은 준비 중이에요"
+                } else {
+                    showsLeaveAlert = true
+                }
+            } label: {
                 Text("그룹 나가기")
                     .font(.body15)
                     .foregroundStyle(.danger)
@@ -211,6 +192,7 @@ struct GroupInfoView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(isLeaving)
         }
         .padding(.top, 12)
         .overlay(alignment: .top) {
@@ -221,25 +203,50 @@ struct GroupInfoView: View {
     // MARK: - Helpers
 
     private var leaveMessage: String {
-        // 나간 뒤에도 내가 올린 작품·댓글은 그룹에 남아요 (사용자 결정 2026-10-12).
-        var text = "'\(group.name)'에서 나가도 내가 올린 작품과 댓글은 그룹에 남아요. 다시 들어오려면 초대 코드가 필요해요."
-        if group.amIOwner, group.members.count > 1 {
-            text += "\n방장은 가장 먼저 들어온 멤버에게 넘어가요."
+        // 혼자 남은 방장이 나가면 서버가 그룹을 지워요.
+        if group.amIOwner && group.members.count == 1 {
+            return "나가면 이 그룹이 삭제돼요. 초대 코드도 더는 쓸 수 없어요."
         }
-        return text
+        // 나간 뒤에도 내가 올린 작품·댓글은 그룹에 남아요 (사용자 결정 2026-10-12).
+        return "'\(group.name)'에서 나가도 내가 올린 작품과 댓글은 그룹에 남아요. 다시 들어오려면 초대 코드가 필요해요."
+    }
+
+    private func reload() async {
+        do {
+            let detail = try await services.groups.detail(groupID: groupID, myUserID: session.account.userID)
+            store.applyServerGroup(detail)
+        } catch let error as APIError where error.status == 403 || error.status == 404 {
+            // 이미 나갔거나 사라진 그룹이에요.
+            store.leave(groupID)
+            onLeft()
+        } catch {
+            // 네트워크 오류면 갖고 있던 값을 그대로 보여 줘요.
+        }
+    }
+
+    private func leave() {
+        guard !isLeaving else { return }
+        isLeaving = true
+        Task {
+            do {
+                try await services.groups.leave(groupID: groupID)
+                store.leave(groupID)
+                onLeft()
+            } catch let error as APIError where error.code == "GROUP_NOT_FOUND" || error.code == "NOT_GROUP_MEMBER" {
+                store.leave(groupID)
+                onLeft()
+            } catch is CancellationError {
+                isLeaving = false
+            } catch {
+                toast = error.userMessage
+                isLeaving = false
+            }
+        }
     }
 
     private func copyCode() {
         UIPasteboard.general.string = group.inviteCode
-        show(toast: "초대 코드를 복사했어요")
-    }
-
-    private func show(toast text: String) {
-        toast = text
-        Task {
-            try? await Task.sleep(for: .seconds(1.6))
-            if toast == text { toast = nil }
-        }
+        toast = "초대 코드를 복사했어요"
     }
 
     private static let korean = Locale(identifier: "ko_KR")
@@ -254,8 +261,8 @@ struct GroupInfoView: View {
     }
 }
 
-/// 주제 도착 시간 고르기
-private struct TopicTimeSheet: View {
+/// 주제 도착 시간 고르기 — 서버에 변경 API 가 생기면 다시 연결해요.
+struct TopicTimeSheet: View {
     @Binding var time: DateComponents
     @Environment(\.dismiss) private var dismiss
 
@@ -296,27 +303,14 @@ private struct TopicTimeSheet: View {
     }
 }
 
-/// 잠깐 떴다 사라지는 안내 — Figma 에 없어서 ink 알약 모양으로 정했어요.
-struct HToast: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.plex(14, .semibold))
-            .foregroundStyle(.onAccent)
-            .padding(.horizontal, 18)
-            .frame(height: 44)
-            .background(Color.ink.opacity(0.9), in: Capsule())
-            .accessibilityAddTraits(.updatesFrequently)
-    }
-}
-
 #Preview("체험 그룹") {
     let store = DataStore.preview()
     NavigationStack {
         GroupInfoView(groupID: store.groups[0].id)
     }
     .environment(store)
+    .environment(AppSession(state: .signedIn))
+    .environment(Services.preview)
 }
 
 #Preview("방금 만든 그룹") {
@@ -326,4 +320,6 @@ struct HToast: View {
         GroupInfoView(groupID: id)
     }
     .environment(store)
+    .environment(AppSession(state: .signedIn))
+    .environment(Services.preview)
 }

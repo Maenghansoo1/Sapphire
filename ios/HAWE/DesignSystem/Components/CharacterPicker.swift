@@ -11,6 +11,8 @@ struct CharacterPicker: View {
     var characterSize: CGFloat = 50
     var columnSpacing: CGFloat = 26
     var rowSpacing: CGFloat = 12
+    /// 사진 업로드 API 가 생기기 전에는 가입 화면에서 '내 사진' 칸을 숨겨요.
+    var showsPhoto = true
 
     @State private var photoItem: PhotosPickerItem?
     /// 마지막으로 고른 사진 — 캐릭터로 바꿨다가 다시 '내 사진'을 누르면 앨범을 열어요.
@@ -31,17 +33,19 @@ struct CharacterPicker: View {
                 .buttonStyle(.plain)
             }
 
-            PhotosPicker(selection: $photoItem, matching: .images) {
-                let photo = selection.isPhoto ? selection : lastPhoto
-                cell(name: "내 사진", isSelected: selection.isPhoto, dashed: photo == nil) {
-                    if let photo {
-                        HAvatar(content: photo, size: cellSize)
-                    } else {
-                        HIconView(icon: .image, size: 22)
+            if showsPhoto {
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    let photo = selection.isPhoto ? selection : lastPhoto
+                    cell(name: "내 사진", isSelected: selection.isPhoto, dashed: photo == nil) {
+                        if let photo {
+                            HAvatar(content: photo, size: cellSize)
+                        } else {
+                            HIconView(icon: .image, size: 22)
+                        }
                     }
                 }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .onAppear {
             if selection.isPhoto { lastPhoto = selection }
