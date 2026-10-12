@@ -12,16 +12,6 @@ public final class FileTypeDetector {
             return new Detected("IMAGE", "png");
         if (b.length >= 12 && text(b, 0, "RIFF") && text(b, 8, "WEBP"))
             return new Detected("IMAGE", "webp");
-        if (b.length >= 8 && text(b, 4, "ftyp")) return new Detected("AUDIO", "m4a");
-        if (b.length >= 4 && u(b[0]) == 0x1a && u(b[1]) == 0x45 && u(b[2]) == 0xdf && u(b[3]) == 0xa3)
-            return new Detected("AUDIO", "webm");
-        if (b.length >= 3 && text(b, 0, "ID3")) return new Detected("AUDIO", "mp3");
-        if (b.length >= 2 && u(b[0]) == 0xff) {
-            int second = u(b[1]);
-            if (second == 0xf1 || second == 0xf9) return new Detected("AUDIO", "aac");
-            if ((second & 0xe0) == 0xe0 && (second & 0x18) != 0x08 && (second & 0x06) != 0)
-                return new Detected("AUDIO", "mp3");
-        }
         return null;
     }
 

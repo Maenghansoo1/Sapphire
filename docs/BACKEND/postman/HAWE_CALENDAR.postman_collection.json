@@ -72,7 +72,8 @@
         "pm.test('200', () => pm.response.to.have.status(200));",
         "const body = pm.response.json();",
         "pm.test('그룹 수', () => pm.expect(body.groupCount).to.eql(1));",
-        "pm.test('유형 4개', () => pm.expect(body.byMedia).to.include.all.keys('DRAW', 'PHOTO', 'TEXT', 'VOICE'));"
+        "pm.test('유형 3개', () => pm.expect(body.byMedia).to.include.all.keys('DRAW', 'PHOTO', 'TEXT'));",
+        "pm.test('음성 유형 없음', () => pm.expect(body.byMedia).to.not.have.property('VOICE'));"
       ] } }],
       "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "url": "{{baseUrl}}/api/me/stats" }

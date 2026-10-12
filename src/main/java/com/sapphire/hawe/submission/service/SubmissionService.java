@@ -68,11 +68,9 @@ public class SubmissionService {
         String template = mission.getTemplate();
         boolean image = Set.of("PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "DRAW_SKETCH", "DRAW_A_TO_B")
                 .contains(template);
-        boolean audio = "VOICE_LINE".equals(template);
         boolean text = "TEXT_FILL_BLANK".equals(template) || "TEXT_ACROSTIC".equals(template);
-        if (!image && !audio && !text) invalid("지원하지 않는 미션 틀입니다");
-        Set<String> allowed = text ? Set.of("text") : audio
-                ? Set.of("file", "duration", "waveform", "caption") : Set.of("file", "caption");
+        if (!image && !text) invalid("지원하지 않는 미션 틀입니다");
+        Set<String> allowed = text ? Set.of("text") : Set.of("file", "caption");
         for (String key : fields.keySet()) if (!allowed.contains(key)) invalid("요구하지 않는 필드: " + key);
         for (String key : files.keySet()) if (!allowed.contains(key) || !"file".equals(key))
             invalid("요구하지 않는 필드: " + key);
@@ -96,7 +94,7 @@ public class SubmissionService {
         } else {
             MultipartFile file = files.getFirst("file");
             if (file == null || file.isEmpty()) invalid("파일을 첨부해 주세요");
-            long max = image ? 10L * 1024 * 1024 : 5L * 1024 * 1024;
+            long max = 10L * 1024 * 1024;
             if (file.getSize() > max) throw new BusinessException(CommonErrorCode.FILE_TOO_LARGE);
             byte[] bytes;
             try { bytes = file.getBytes(); }
@@ -104,19 +102,9 @@ public class SubmissionService {
             if (bytes.length == 0) invalid("파일을 첨부해 주세요");
             if (bytes.length > max) throw new BusinessException(CommonErrorCode.FILE_TOO_LARGE);
             FileTypeDetector.Detected detected = FileTypeDetector.detect(bytes);
-            mediaType = image ? "IMAGE" : "AUDIO";
+            mediaType = "IMAGE";
             if (detected == null || !mediaType.equals(detected.mediaType()))
                 throw new BusinessException(SubmissionErrorCode.UNSUPPORTED_FILE_TYPE);
-            if (audio) {
-                String durationText = one(fields, "duration");
-                double duration;
-                try { duration = Double.parseDouble(durationText); }
-                catch (Exception e) { throw new BusinessException(SubmissionErrorCode.INVALID_SUBMISSION, "음성 길이를 입력해 주세요"); }
-                if (!Double.isFinite(duration) || duration <= 0 || duration > 30)
-                    invalid("음성 길이는 30초 이하로 입력해 주세요");
-                List<Double> waveform = parseWaveform(one(fields, "waveform"));
-                answerData = json.writeValueAsString(Map.of("duration", duration, "waveform", waveform));
-            }
             key = storage.store("submissions", bytes, detected.extension());
             String storedKey = key;
             if (TransactionSynchronizationManager.isSynchronizationActive())
@@ -216,50 +204,18 @@ public class SubmissionService {
         }
     }
 
-    private List<Double> parseWaveform(String value) {
-        try {
-            Object parsed = json.readValue(value, Object.class);
-            if (!(parsed instanceof List<?> values) || values.size() > 64)
-                throw new BusinessException(SubmissionErrorCode.INVALID_SUBMISSION, "파형이 올바르지 않습니다");
-            List<Double> result = new ArrayList<>();
-            for (Object item : values) {
-                if (!(item instanceof Number number))
-                    throw new BusinessException(SubmissionErrorCode.INVALID_SUBMISSION, "파형이 올바르지 않습니다");
-                double v = number.doubleValue();
-                if (!Double.isFinite(v) || v < 0 || v > 1) invalid("파형이 올바르지 않습니다");
-                result.add(v);
-            }
-            return result;
-        } catch (BusinessException e) { throw e; }
-        catch (Exception e) { throw new BusinessException(SubmissionErrorCode.INVALID_SUBMISSION, "파형이 올바르지 않습니다"); }
-    }
-
     private SubmissionResponse response(SubmissionRow row, List<ReactionSummary> reactions, int commentCount) {
         if (row == null) throw new IllegalStateException("Inserted submission was not found");
         String text = null;
-        Double duration = null;
-        List<Double> waveform = null;
         if (row.getAnswerData() != null) try {
             Map<?, ?> answer = json.readValue(row.getAnswerData(), Map.class);
             if (answer.get("text") instanceof String value) text = value;
-            if (answer.get("duration") instanceof Number value && Double.isFinite(value.doubleValue()))
-                duration = value.doubleValue();
-            if (answer.get("waveform") instanceof List<?> values) {
-                List<Double> parsed = new ArrayList<>();
-                for (Object item : values) {
-                    if (!(item instanceof Number number) || !Double.isFinite(number.doubleValue())) {
-                        parsed = null; break;
-                    }
-                    parsed.add(number.doubleValue());
-                }
-                waveform = parsed;
-            }
         } catch (Exception ignored) { }
         return new SubmissionResponse(row.getId(), row.getMissionId(),
                 new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
                         row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())),
                 row.getTemplate(), row.getMediaUrl() == null ? null : storage.publicUrl(row.getMediaUrl()),
-                row.getMediaType(), row.getCaption(), text, duration, waveform, reactions, commentCount,
+                row.getMediaType(), row.getCaption(), text, reactions, commentCount,
                 SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
     }
 }

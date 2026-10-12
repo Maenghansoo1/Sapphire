@@ -271,8 +271,8 @@
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
                   "const c = pm.response.json().content;",
-                  "pm.test(\"16 phase-1 templates in doc order\", () => pm.expect(c.map(t => t.template)).to.eql([\"PHOTO_NOW\", \"PHOTO_GALLERY\", \"PHOTO_COLOR\", \"VOICE_LINE\", \"VOICE_MIMIC\", \"VOICE_IMPRESSION\", \"TEXT_ACROSTIC\", \"TEXT_ONE_WORD\", \"TEXT_REVIEW\", \"TEXT_BALANCE\", \"TEXT_FILL_BLANK\", \"DRAW_SKETCH\", \"DRAW_A_TO_B\", \"SLIDER_POSITION\", \"SLIDER_TASTE\", \"SLIDER_CONSENSUS\"]));",
-                  "pm.test(\"each has media/name/phase=1/schemas\", () => c.forEach(t => { pm.expect([\"PHOTO\",\"VOICE\",\"TEXT\",\"DRAW\",\"SLIDER\"]).to.include(t.media); pm.expect(t.name).to.be.a(\"string\").and.not.empty; pm.expect(t.phase).to.eql(1); pm.expect(t.paramsSchema).to.be.an(\"object\"); pm.expect(t.payloadSchema).to.be.an(\"object\").and.not.empty; }));",
+                  "pm.test(\"13 phase-1 templates in doc order\", () => pm.expect(c.map(t => t.template)).to.eql([\"PHOTO_NOW\", \"PHOTO_GALLERY\", \"PHOTO_COLOR\", \"TEXT_ACROSTIC\", \"TEXT_ONE_WORD\", \"TEXT_REVIEW\", \"TEXT_BALANCE\", \"TEXT_FILL_BLANK\", \"DRAW_SKETCH\", \"DRAW_A_TO_B\", \"SLIDER_POSITION\", \"SLIDER_TASTE\", \"SLIDER_CONSENSUS\"]));",
+                  "pm.test(\"each has media/name/phase=1/schemas\", () => c.forEach(t => { pm.expect([\"PHOTO\",\"TEXT\",\"DRAW\",\"SLIDER\"]).to.include(t.media); pm.expect(t.name).to.be.a(\"string\").and.not.empty; pm.expect(t.phase).to.eql(1); pm.expect(t.paramsSchema).to.be.an(\"object\"); pm.expect(t.payloadSchema).to.be.an(\"object\").and.not.empty; }));",
                   "pm.test(\"TEXT_ACROSTIC sample\", () => { const t = c.find(x => x.template === \"TEXT_ACROSTIC\"); pm.expect(t.media).to.eql(\"TEXT\"); pm.expect(t.paramsSchema.word).to.eql(\"string(3)\"); });"
                 ]
               }
@@ -393,7 +393,7 @@
                   "const j = pm.response.json();",
                   "pm.test(\"one current mission\", () => { pm.expect(j.dailyMissionCount).to.eql(1); pm.expect(j.missions).to.have.length(1); });",
                   "const m = j.missions[0];",
-                  "pm.test(\"MVP template and media\", () => { pm.expect([\"PHOTO_NOW\",\"PHOTO_GALLERY\",\"PHOTO_COLOR\",\"VOICE_LINE\",\"DRAW_SKETCH\",\"DRAW_A_TO_B\",\"TEXT_ACROSTIC\",\"TEXT_FILL_BLANK\"]).to.include(m.template); pm.expect([\"PHOTO\",\"VOICE\",\"TEXT\",\"DRAW\"]).to.include(m.media); });",
+                  "pm.test(\"MVP template and media\", () => { pm.expect([\"PHOTO_NOW\",\"PHOTO_GALLERY\",\"PHOTO_COLOR\",\"DRAW_SKETCH\",\"DRAW_A_TO_B\",\"TEXT_ACROSTIC\",\"TEXT_FILL_BLANK\"]).to.include(m.template); pm.expect([\"PHOTO\",\"TEXT\",\"DRAW\"]).to.include(m.media); });",
                   "pm.test(\"current mission contract\", () => { pm.expect(m.number).to.eql(1); pm.expect(m.slotNo).to.eql(1); pm.expect(m.content).to.be.a(\"string\"); pm.expect(m.content).to.not.include(\"[대상]\"); pm.expect(m.submittedByMe).to.eql(false); pm.expect(m.members).to.have.length(1); pm.expect(m.members[0].submitted).to.eql(false); pm.expect(m.publishedAt).to.match(/\\+09:00$/); pm.expect(m.deadlineAt).to.match(/\\+09:00$/); pm.expect(m.closesAt).to.match(/\\+09:00$/); pm.expect(j.nextPublishAt).to.eql(m.closesAt); });",
                   "pm.collectionVariables.set(\"missionId1\", m.missionId);"
                 ]

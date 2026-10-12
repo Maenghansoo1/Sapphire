@@ -12,9 +12,9 @@ public final class MissionTemplateSelector {
     public static final double DRAW_TARGET_PROBABILITY = 0.3;
     public static final List<MissionTemplate> MVP_POOL = List.of(
             MissionTemplate.PHOTO_NOW, MissionTemplate.PHOTO_GALLERY, MissionTemplate.PHOTO_COLOR,
-            MissionTemplate.VOICE_LINE, MissionTemplate.DRAW_SKETCH, MissionTemplate.DRAW_A_TO_B,
+            MissionTemplate.DRAW_SKETCH, MissionTemplate.DRAW_A_TO_B,
             MissionTemplate.TEXT_ACROSTIC, MissionTemplate.TEXT_FILL_BLANK);
-    private static final List<String> MEDIA = List.of("PHOTO", "VOICE", "TEXT", "DRAW");
+    private static final List<String> MEDIA = List.of("PHOTO", "TEXT", "DRAW");
 
     private MissionTemplateSelector() {
     }

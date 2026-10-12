@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MissionTemplateSelectorTests {
     @Test void poolAndSelectionAreStable() {
-        assertEquals(8, MissionTemplateSelector.MVP_POOL.size());
-        assertEquals(Set.of("PHOTO", "VOICE", "TEXT", "DRAW"), MissionTemplateSelector.MVP_POOL.stream()
+        assertEquals(7, MissionTemplateSelector.MVP_POOL.size());
+        assertEquals(Set.of("PHOTO", "TEXT", "DRAW"), MissionTemplateSelector.MVP_POOL.stream()
                 .map(MissionTemplate::media).collect(java.util.stream.Collectors.toSet()));
         LocalDate date = LocalDate.of(2026, 10, 12);
         for (long groupId = 1; groupId <= 100; groupId++) {
@@ -23,11 +23,11 @@ class MissionTemplateSelectorTests {
                     .media().equals(first.media()));
             assertTrue(MissionTemplateSelector.MVP_POOL.contains(first));
             assertTrue(MissionTemplateSelector.MVP_POOL.contains(MissionTemplateSelector.select(
-                    groupId, date, 1, 1, Set.of("PHOTO", "VOICE", "TEXT", "DRAW"))));
+                    groupId, date, 1, 1, Set.of("PHOTO", "TEXT", "DRAW"))));
             Set<String> media = new HashSet<>();
-            for (int slot = 1; slot <= 4; slot++) media.add(MissionTemplateSelector.select(
-                    groupId, date, slot, 4, Set.of()).media());
-            assertEquals(4, media.size());
+            for (int slot = 1; slot <= 3; slot++) media.add(MissionTemplateSelector.select(
+                    groupId, date, slot, 3, Set.of()).media());
+            assertEquals(3, media.size());
         }
     }
 

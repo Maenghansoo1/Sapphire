@@ -91,25 +91,28 @@ class SubmissionServiceTests {
         assertEquals("INVALID_SUBMISSION", error(fields("text", "😀".repeat(101)), new LinkedMultiValueMap<>()));
     }
 
-    @Test void imageAndVoiceRules() {
+    @Test void imageRules() {
         mission.setTemplate("PHOTO_NOW");
         assertEquals("INVALID_SUBMISSION", error(new LinkedMultiValueMap<>(), new LinkedMultiValueMap<>()));
         assertEquals("UNSUPPORTED_FILE_TYPE", error(new LinkedMultiValueMap<>(), files("not an image".getBytes())));
         assertEquals("FILE_TOO_LARGE", error(new LinkedMultiValueMap<>(), files(new byte[10 * 1024 * 1024 + 1])));
-        mission.setTemplate("VOICE_LINE");
-        byte[] audio = "ID3payload".getBytes();
-        assertEquals("UNSUPPORTED_FILE_TYPE", error(new LinkedMultiValueMap<>(), files(new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff})));
-        assertEquals("INVALID_SUBMISSION", error(fields("duration", "30.01"), files(audio)));
-        assertEquals("INVALID_SUBMISSION", error(fields("duration", "NaN"), files(audio)));
-        LinkedMultiValueMap<String, String> valid = fields("duration", "30"); valid.add("waveform", "[0,1]");
+        byte[] jpg = {(byte) 0xff, (byte) 0xd8, (byte) 0xff};
+        assertEquals("INVALID_SUBMISSION", error(fields("duration", "3"), files(jpg)));
+        assertEquals("INVALID_SUBMISSION", error(fields("waveform", "[0,1]"), files(jpg)));
         doThrow(new DuplicateKeyException("duplicate")).when(submissions).insert(any());
-        when(storage.store(eq("submissions"), any(), eq("mp3"))).thenReturn("submissions/test.mp3");
-        assertEquals("ALREADY_SUBMITTED", error(valid, files(audio)));
-        verify(storage).delete("submissions/test.mp3");
-        valid.set("waveform", "[1.01]");
-        assertEquals("INVALID_SUBMISSION", error(valid, files(audio)));
-        valid.set("waveform", "[0," + "1,".repeat(63) + "0]");
-        assertEquals("INVALID_SUBMISSION", error(valid, files(audio)));
+        when(storage.store(eq("submissions"), any(), eq("jpg"))).thenReturn("submissions/test.jpg");
+        assertEquals("ALREADY_SUBMITTED", error(fields("caption", "hi"), files(jpg)));
+        verify(storage).delete("submissions/test.jpg");
+    }
+
+    @Test void audioFilesAndRemovedVoiceTemplatesAreRejected() {
+        mission.setTemplate("PHOTO_NOW");
+        for (byte[] audio : List.of("ID3payload".getBytes(), "xxxxftypM4A ".getBytes(),
+                new byte[]{(byte) 0xff, (byte) 0xf1, 0}, new byte[]{0x1a, 0x45, (byte) 0xdf, (byte) 0xa3}))
+            assertEquals("UNSUPPORTED_FILE_TYPE", error(new LinkedMultiValueMap<>(), files(audio)));
+        mission.setTemplate("VOICE_LINE");
+        assertEquals("INVALID_SUBMISSION", error(new LinkedMultiValueMap<>(), files("ID3payload".getBytes())));
+        verify(storage, never()).store(any(), any(), any());
     }
 
     @Test void rollbackDeletesStoredFile() {

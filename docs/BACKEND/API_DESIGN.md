@@ -293,12 +293,12 @@ Response 204.
 ### GET /me/stats
 ```json
 { "completedMissions": 42, "streakDays": 5, "groupCount": 3,
-  "byMedia": { "DRAW": 10, "PHOTO": 15, "TEXT": 9, "VOICE": 8 } }
+  "byMedia": { "DRAW": 10, "PHOTO": 15, "TEXT": 9 } }
 ```
 - `completedMissions`: 내 제출 수 (지각 포함, 나간 그룹의 제출도 포함)
 - `streakDays`: 오늘(오늘 아직 안 냈으면 어제)부터 거꾸로 하루도 빠짐없이 제출한 날 수. 모든 그룹 합산, `mission_date` 기준
 - `groupCount`: 지금 속한 그룹 수
-- `byMedia`: 유형별 제출 수. 네 유형은 0이어도 항상 들어 있다 (`SLIDER`는 제출이 있을 때만)
+- `byMedia`: 유형별 제출 수. 세 유형(`DRAW`, `PHOTO`, `TEXT`)은 0이어도 항상 들어 있다 (`SLIDER`는 제출이 있을 때만). 음성 제거(2026-10-12)로 `VOICE` 키는 없어졌고, 지워진 틀의 예전 제출은 `completedMissions`에만 세고 `byMedia`에서는 빠진다
 
 ---
 

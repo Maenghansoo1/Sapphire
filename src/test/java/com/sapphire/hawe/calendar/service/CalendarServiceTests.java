@@ -132,7 +132,19 @@ class CalendarServiceTests {
 
         assertEquals(6, stats.completedMissions());
         assertEquals(2, stats.groupCount());
-        assertEquals(Map.of("DRAW", 1L, "PHOTO", 5L, "TEXT", 0L, "VOICE", 0L), stats.byMedia());
+        assertEquals(Map.of("DRAW", 1L, "PHOTO", 5L, "TEXT", 0L), stats.byMedia());
+    }
+
+    @Test
+    void statsSkipRemovedVoiceTemplatesInByMedia() {
+        when(calendarMapper.countSubmissionsByTemplate(7L)).thenReturn(List.of(
+                templateCount("PHOTO_NOW", 1), templateCount("VOICE_LINE", 2)));
+        when(calendarMapper.findSubmittedDates(7L)).thenReturn(List.of());
+
+        MyStatsResponse stats = service.getMyStats(7L);
+
+        assertEquals(3, stats.completedMissions());
+        assertEquals(Map.of("DRAW", 0L, "PHOTO", 1L, "TEXT", 0L), stats.byMedia());
     }
 
     @Test
@@ -177,9 +189,12 @@ class CalendarServiceTests {
     void unknownTemplateHasNoMedia() {
         givenMember(11L, 7L);
         when(calendarMapper.findMissionsInMonth(any(), any(), any(), any()))
-                .thenReturn(List.of(row(101L, "2026-10-01", "SOMETHING_NEW", "새 틀")));
+                .thenReturn(List.of(row(101L, "2026-10-01", "SOMETHING_NEW", "새 틀"),
+                        row(102L, "2026-10-01", "VOICE_LINE", "지워진 음성 틀")));
 
-        assertNull(service.getCalendar(7L, 11L, OCTOBER).days().getFirst().missions().getFirst().media());
+        List<CalendarMission> missions = service.getCalendar(7L, 11L, OCTOBER).days().getFirst().missions();
+        assertNull(missions.get(0).media());
+        assertNull(missions.get(1).media());
     }
 
     private void givenMember(Long groupId, Long userId) {

@@ -230,6 +230,18 @@ class MissionServiceTests {
     }
 
     @Test
+    void removedVoiceTemplateStillReadsWithoutMedia() {
+        allowGroup(1);
+        MissionRow row = row(10L, 11L, 1, "{\"sentence\":\"hello\"}");
+        row.setTemplate("VOICE_LINE");
+        when(missions.findCurrentByGroupId(11L, 7L)).thenReturn(List.of(row));
+        when(missions.findById(10L, 7L)).thenReturn(row);
+
+        assertNull(service.getTodayMissions(7L, 11L).missions().getFirst().media());
+        assertNull(service.getMission(7L, 10L).media());
+    }
+
+    @Test
     void singleMissionChecksExistenceBeforeMembership() {
         assertEquals(MissionErrorCode.MISSION_NOT_FOUND,
                 assertThrows(BusinessException.class, () -> service.getMission(7L, 10L)).errorCode());

@@ -2,7 +2,7 @@
 
 ## 계층 구조
 - **Controller** (REST API 진입점) → **Service** (비즈니스 로직) → **DAO** (MariaDB 접근, MyBatis)
-- 부가 저장소: **로컬 파일 시스템**(이미지·음성, 개발 환경) / **S3**(이미지·음성, 운영 환경 전환 예정), **LLM**(미션 생성 전용, 제공사 미정), **Qdrant**(벡터 검색, 도입 시 - 필수 X), **SNS/EventBridge**(알림·스케줄)
+- 부가 저장소: **로컬 파일 시스템**(이미지, 개발 환경) / **S3**(이미지, 운영 환경 전환 예정), **LLM**(미션 생성 전용, 제공사 미정), **Qdrant**(벡터 검색, 도입 시 - 필수 X), **SNS/EventBridge**(알림·스케줄)
 
 ---
 
@@ -152,12 +152,12 @@ erDiagram
 - `USERS` 인증 방식 — 소셜 로그인 대신 **이메일/비밀번호 자체 로그인**(`email` + `password_hash`) 사용. 필수 약관 동의 시각을 저장
 - `POKES.type` — `poke`(콕찌르기) / `fling`(똥뿌리기)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
-- `SUBMISSIONS.media_url` — 이미지·음성 파일 위치. 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
+- `SUBMISSIONS.media_url` — 이미지 파일 위치(음성은 2026-10-12 제거). 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
 - `COMMENTS.image_url` — 첨부 이미지의 저장 키. API에는 공개 파일 URL을 내려준다. 이미지만 있는 댓글은 `content = ''`로 저장한다.
 - `REACTIONS` — `(submission_id, user_id, sticker_type)` 유니크 키로 같은 멤버의 같은 스티커 중복을 막는다. 서로 다른 스티커는 각각 누를 수 있다.
 - `MISSIONS.template` / `MISSIONS.params` — 미션 틀(예: `TEXT_ACROSTIC`)과 그 빈칸 값(JSON). 틀 목록과 `params` 모양은 `docs/BACKEND/MISSIONS_API.md` §1이 기준
-- 제출 답은 **하이브리드 방식**으로 저장한다 (아래 "제출 답 저장 방식"). 집계하는 값은 컬럼(`number_value`, `choice_value`), 그 밖의 답은 JSON(`answer_data`)이다. 사진·그림·음성=`media_*`, 슬라이더·별점=`number_value`, 밸런스 게임=`choice_value`, 글=`answer_data.text`, 다수결 예측의 예측값=`answer_data.guess`. 쓰지 않는 컬럼은 NULL이며, 틀별 필수 여부는 DB가 아니라 서비스가 검증한다
-- `SUBMISSIONS.answer_text` / `answer_aliases` — 성대모사·소리 흉내 제출자가 적은 정답과 별칭(JSON 배열). 다른 멤버에게는 맞히거나 미션 마감 후에만 정답이 API 응답에 포함되고, 별칭은 내려주지 않는다. `SUBMISSION_GUESSES`는 다른 멤버의 정답 시도(원문, 정답 여부)를 쌓는다 (한 사람이 여러 번 시도할 수 있어 UNIQUE 없음)
+- 제출 답은 **하이브리드 방식**으로 저장한다 (아래 "제출 답 저장 방식"). 집계하는 값은 컬럼(`number_value`, `choice_value`), 그 밖의 답은 JSON(`answer_data`)이다. 사진·그림=`media_*`, 슬라이더·별점=`number_value`, 밸런스 게임=`choice_value`, 글=`answer_data.text`, 다수결 예측의 예측값=`answer_data.guess`. 쓰지 않는 컬럼은 NULL이며, 틀별 필수 여부는 DB가 아니라 서비스가 검증한다
+- `SUBMISSIONS.answer_text` / `answer_aliases`, `SUBMISSION_GUESSES` — **미사용(잔재).** 정답 맞히기(G 유형) 용도였으나 2026-10-12 음성 제거로 G 유형 틀이 없어졌다. 스키마는 지우지 않고 유지한다(나중에 서버 기반 맞히기 게임이 생기면 재사용, 탈퇴·그룹 삭제 쿼리가 아직 참조)
 - 하루 미션 수 — `GROUPS.daily_mission_count`(1~5, 기본 1)만큼 슬롯(`MISSIONS.slot_no` 1, 2, …)이 열린다. 슬롯별 발행·마감 시각은 `GROUP_MISSION_SLOTS`가 전담하며, **행이 없거나 값이 NULL이면 설정 파일의 기본 시각**(발행 09:00, 마감 23:00 — 초안)을 쓴다. `GROUPS`에는 시각 컬럼이 없다
 - `MISSIONS.published_at` / `deadline_at` — 발행 시점의 실제 발행·마감 시각을 고정 저장. 이후 그룹 설정이 바뀌어도 이미 열린 미션의 시각과 지각 판정(`SUBMISSIONS.is_late`)은 바뀌지 않는다
 - 유일성 제약 — `GROUP_MISSION_SLOTS (group_id, slot_no)`: 슬롯 재정의는 슬롯당 1행, `MISSIONS (group_id, mission_date, slot_no)`: 그룹·날짜·슬롯당 미션 1개(중복 발행 방지), `SUBMISSIONS (mission_id, user_id)`: 미션당 1인 1회 제출(`ALREADY_SUBMITTED`)
@@ -213,12 +213,12 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | 컬럼 | 변경 | 타입 | NULL | 설명 |
 |---|---|---|---|---|
 | `image_url` | `media_url`로 이름 변경, NULL 허용 | `VARCHAR(500)` | NULL | 글/슬라이더 제출은 파일이 없음 |
-| `media_type` | 추가 | `VARCHAR(10)` | NULL | `IMAGE` / `AUDIO`. `media_url`이 있을 때만 값이 있음 |
+| `media_type` | 추가 | `VARCHAR(10)` | NULL | `IMAGE` (음성 제거로 `AUDIO`는 더 이상 저장하지 않음). `media_url`이 있을 때만 값이 있음 |
 | `number_value` | 추가 | `TINYINT UNSIGNED` | NULL | 별점(1~5) 또는 슬라이더 위치(0~100). 평균·분포를 집계하므로 컬럼으로 둔다 |
 | `choice_value` | 추가 | `CHAR(1)` | NULL | 밸런스 게임 선택 `A` / `B`. 비율을 집계하므로 컬럼으로 둔다 |
 | `answer_data` | 추가 | `JSON` | NULL | 집계하지 않는 나머지 답. 글 본문(`{"text":"..."}`: 삼행시 3줄, 한 단어, 한 줄 후기, 빈칸 채우기), 다수결 예측의 예측값(`{"guess":70}`), 2차 틀의 구조적인 답. 모양은 틀마다 `MISSIONS_API.md`에서 정의하고 서비스가 검증한다 |
-| `answer_text` | 추가 | `VARCHAR(100)` | NULL | 성대모사(`VOICE_IMPRESSION`)·소리 흉내(`VOICE_MIMIC`)의 대표 정답. 제출자가 적고, 다른 멤버에게는 맞히거나 미션 마감 후에만 공개 |
-| `answer_aliases` | 추가 | `JSON` | NULL | 같은 정답으로 인정할 별칭 배열 (예: `["재석이","유느님"]`, 최대 5개). 다른 멤버에게 공개하지 않음. 정규화(공백·대소문자) 후 완전 일치 비교는 서비스에서 수행 |
+| `answer_text` | 추가 | `VARCHAR(100)` | NULL | **미사용(잔재).** 정답 맞히기의 대표 정답 용도였으나 음성 제거로 쓰는 틀이 없음 |
+| `answer_aliases` | 추가 | `JSON` | NULL | **미사용(잔재).** 정답 맞히기의 별칭 배열 용도였으나 음성 제거로 쓰는 틀이 없음 |
 | `caption` | 변경 없음 | `TEXT` | NULL | 보조 설명. 길이 제한(200자)은 서비스에서 수행 |
 | `(mission_id, user_id)` | UNIQUE 추가 | - | - | 미션당 1인 1회. 제약명 제안: `uk_submissions_mission_user` |
 
@@ -236,10 +236,10 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - **글 길이 제한(500자)** 은 컬럼 길이가 아니라 서비스 검증으로 한다.
 - **승격 규칙:** `answer_data` 안의 키를 집계하거나 검색해야 하게 되면 그 키를 컬럼으로 승격하는 마이그레이션을 새로 만든다. 처음부터 집계 대상인 값은 JSON에 넣지 않는다.
 - **MyBatis:** JSON 컬럼은 문자열로 읽고 쓰며(`missions.params`, `answer_aliases`와 같은 방식), 서비스에서 Jackson으로 변환하거나 공용 `JsonTypeHandler`를 쓴다.
-- **`answer_text`, `answer_aliases`는 이 방식과 별개다.** 정답 맞히기(G 유형)의 정답은 공개 조건과 비교 로직이 있어 별도 컬럼으로 둔다.
+- **`answer_text`, `answer_aliases`는 이 방식과 별개다.** 정답 맞히기(G 유형)의 정답용 별도 컬럼이었으나, 음성 제거로 현재는 쓰지 않는 잔재다.
 - **API와의 관계:** 제출 요청 필드(`text`, `number`, `guess`, `choice`)는 `MISSIONS_API.md` 그대로이고 저장 위치만 다르다. `number`→`number_value`, `choice`→`choice_value`, `text`→`answer_data.text`, `guess`→`answer_data.guess`. 응답도 기존 필드명(`text`, `guess`)으로 내려주며, 서비스가 JSON에서 꺼내 채운다.
 
-**`submission_guesses` (신규 테이블)** — 성대모사 정답 시도 기록.
+**`submission_guesses` (신규 테이블)** — 정답 시도 기록. **미사용(잔재):** 2026-10-12 음성 제거로 정답 맞히기가 폐기되어 쓰지 않지만 테이블은 유지한다.
 
 | 컬럼 | 타입 | NULL | 설명 |
 |---|---|---|---|
@@ -282,8 +282,8 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | `MissionTemplateSelector` | 슬롯별 틀 선택(하루 내 매체 중복 방지, 하루 1개일 때 어제와 매체 중복 방지, 후보 부족 시 예외 허용, 관계별 선호 없음)과 대상 멤버 지정(빈칸 채우기는 항상, 그림 틀은 설정된 확률). 어제 미션만 조회하고 시드 기반으로 계산 (`MISSIONS_API.md` §6-1) |
 | `SubmissionService` | 제출 처리(지각 판정, 중복 제출 차단), 잠금 해제 여부 판단 |
 | `MissionResultService` | 집계 틀(밸런스 게임, 슬라이더 3종)의 그룹 결과 계산 |
-| `GuessService` | 정답 시도 처리: 정규화·별칭 비교(오타 허용 없음), 시도 횟수 제한, 정답 공개 조건 판단 (알림 없음, `MISSIONS_API.md` §4-1) |
-| `FileStorageService` | 이미지·음성 파일 저장/조회 (개발=로컬, 운영=S3로 전환), 형식·크기 검증 |
+| ~~`GuessService`~~ | 폐기됨 (음성 제거로 정답 맞히기 없음, `MISSIONS_API.md` §4-1) |
+| `FileStorageService` | 이미지 파일 저장/조회 (개발=로컬, 운영=S3로 전환), 형식·크기 검증 |
 | `FeedService` | 그룹 피드 조회 (제출자만 열람 가능하도록 필터링) |
 | `CommentService` | 댓글 작성, @멘션 파싱, 사진 첨부 |
 | `ReactionService` | 스티커 반응 등록/집계 |
@@ -321,7 +321,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
   - 저장 위치만 환경별로 다름: 개발 환경은 로컬 디스크, 운영 환경은 내부적으로 S3 업로드 (presigned URL 방식은 사용하지 않음 — 클라이언트 변경 없이 저장소만 전환)
 - `GET /api/missions/{missionId}/submissions` — 그룹 피드 (내가 제출했을 때만 200, 아니면 423 Locked)
 - `GET /api/missions/{missionId}/result` — 집계 틀의 그룹 결과 (제출한 사람만, 집계 틀이 아니면 400)
-- `POST /api/submissions/{id}/guesses` — 성대모사·소리 흉내 정답 시도 (`guess`). 제출한 사람만, 본인 제출물 불가, 최대 시도 횟수 제한, 별칭 허용(오타 허용 없음)
+- ~~`POST /api/submissions/{id}/guesses`~~ — 폐기됨 (음성 제거로 정답 맞히기 틀 없음)
 
 ### 게시물 & 댓글
 - `GET /api/submissions/{id}` — 게시물 상세 (미션에 제출한 사람만)

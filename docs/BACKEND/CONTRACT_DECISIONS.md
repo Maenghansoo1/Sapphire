@@ -278,10 +278,10 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
-| 미션 모델 | **단계적으로 간다.** 서버의 슬롯·틀 구조(`MISSIONS_API.md`)는 유지한다. **MVP는 하루 1개**이고, 앱의 지금 4개 화면(사진/음성/글/그림)으로 제출할 수 있는 틀만 뽑는다. 나머지 틀과 하루 여러 개는 앱 화면이 생기면 켠다 | 사용자 결정. 서버 설계를 버리지 않으면서 앱 작업량을 MVP에 맞춤 |
+| 미션 모델 | **단계적으로 간다.** 서버의 슬롯·틀 구조(`MISSIONS_API.md`)는 유지한다. **MVP는 하루 1개**이고, 앱의 지금 4개 화면(사진/음성/글/그림)으로 제출할 수 있는 틀만 뽑는다(2026-10-12 음성 제거 후 3개 화면: 사진/글/그림). 나머지 틀과 하루 여러 개는 앱 화면이 생기면 켠다 | 사용자 결정. 서버 설계를 버리지 않으면서 앱 작업량을 MVP에 맞춤 |
 | MVP 하루 미션 수 | 1로 고정. `hawe.mission.max-daily-count=1`로 설정해 서버 검증으로 막는다. 앱에는 하루 미션 수 설정 UI가 없다 | 코드 변경 없이 설정값으로 나중에 늘릴 수 있음 |
-| MVP 틀 풀 | `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`(사진 화면), `VOICE_LINE`(음성 화면), `DRAW_SKETCH`, `DRAW_A_TO_B`(그림 화면), `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`(글 화면). **제외**: `TEXT_ONE_WORD`(캡션 칸), `TEXT_REVIEW`(별점), `TEXT_BALANCE`(A/B 선택), `SLIDER_*`(슬라이더), `VOICE_MIMIC`·`VOICE_IMPRESSION`(정답 입력·맞히기) | 각 틀이 요구하는 입력이 기존 화면 하나로 끝나는지 기준. 틀 선택 규칙(`MISSIONS_API.md` §6-1, 하루 1개면 어제와 같은 매체 피하기)은 이 풀 안에서 적용한다. 앱의 "같은 유형 3일 연속 금지" 규칙은 서버 규칙으로 대체 |
-| 유형 표시 | 앱은 서버 `media`(`PHOTO/VOICE/TEXT/DRAW`, 나중에 `SLIDER`)로 화면을 고르고, `content`를 주제 문장으로 보여 준다 | 앱의 `topic` 자리에 서버 `content`를 그대로 씀 |
+| MVP 틀 풀 | `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`(사진 화면), `DRAW_SKETCH`, `DRAW_A_TO_B`(그림 화면), `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`(글 화면)의 7종. **제외**: `TEXT_ONE_WORD`(캡션 칸), `TEXT_REVIEW`(별점), `TEXT_BALANCE`(A/B 선택), `SLIDER_*`(슬라이더). 처음에는 `VOICE_LINE`(음성 화면)을 넣은 8종이었으나 2026-10-12 음성 제거로 빠졌고, 음성 틀 3종은 틀 목록에서도 삭제됐다 | 각 틀이 요구하는 입력이 기존 화면 하나로 끝나는지 기준. 틀 선택 규칙(`MISSIONS_API.md` §6-1, 하루 1개면 어제와 같은 매체 피하기)은 이 풀 안에서 적용한다. 앱의 "같은 유형 3일 연속 금지" 규칙은 서버 규칙으로 대체 |
+| 유형 표시 | 앱은 서버 `media`(`PHOTO/TEXT/DRAW`, 나중에 `SLIDER`. `VOICE`는 음성 제거로 없어짐)로 화면을 고르고, `content`를 주제 문장으로 보여 준다 | 앱의 `topic` 자리에 서버 `content`를 그대로 씀 |
 | 시간 규칙 | **마감 + 지각, 다음 미션이 열리면 제출 종료.** 발행~마감 전은 정상, 마감~다음 미션 발행 전은 지각(`isLate=true`)으로 제출 가능, 그 뒤로는 제출 불가 | 사용자 결정. 지각 규칙(`PROJECT_OVERVIEW`)을 지키면서 며칠 지난 미션에 제출하는 일을 막음 |
 | 첫 미션 | 그룹을 만들 때 오늘 발행 시각이 이미 지났으면 **바로 연다.** 아직 안 지났으면 오늘 발행 시각에 연다 | 사용자 결정. 첫 경험이 비지 않게 (앱 현재 동작) |
 | 미션 번호 | 응답에 `number`(그룹에서 몇 번째 미션인지)를 넣는다 | 앱 05 화면 "#142" 유지. 계산 비용이 작음 |
@@ -458,8 +458,9 @@ DELETE /api/me — 회원 탈퇴, 204
 |---|---|---|
 | 제출 엔드포인트·형식 | 설계대로 `POST /api/missions/{missionId}/submissions`, `multipart/form-data`, 틀별 필수 필드 검증, 1인 1회(`ALREADY_SUBMITTED`), 수정·삭제 없음 | 앱도 "한 번 올리면 수정·삭제 불가" — 같음 |
 | 제출 기한 | §3-2 규칙: 다음 미션이 열리면 409 `MISSION_CLOSED`, 마감 뒤는 `isLate=true` | §3 결정 |
-| 음성 길이 | **최대 30초** (설계의 20초를 바꿈). 파일 ≤ 5MB 유지 | 사용자 결정. 앱 녹음 화면이 30초에서 자동 정지. m4a 30초는 보통 1MB 이하 |
-| 음성 길이·파형 전달 | 음성 제출 때 앱이 `duration`(초, 소수)과 `waveform`(0~1 실수 배열, 최대 64개)을 함께 보낸다. 서버는 `duration ≤ 30`을 검사하고 둘 다 `answer_data`에 저장해 피드에 내려준다 | 결과 화면이 파형 막대를 그림. 서버에서 오디오를 분석하려면 별도 라이브러리가 필요하고, 그림 제작 시간처럼 클라이언트 값을 신뢰하는 것이 설계의 기존 원칙과 같음 (기술 결정) |
+| **음성 제거 (2026-10-12)** | 음성 미션과 음성 제출을 서비스에서 **완전히 없앤다.** 음성 틀 3종(`VOICE_LINE`·`VOICE_MIMIC`·`VOICE_IMPRESSION`), 음성 파일 업로드·형식 판별, `duration`·`waveform` 필드를 삭제한다. 업로드 파일은 이미지(`jpg/png/webp ≤ 10MB`)만 받고, 오디오 파일은 415 `UNSUPPORTED_FILE_TYPE`, `duration`·`waveform` 필드는 400 `INVALID_SUBMISSION`. 스키마는 바꾸지 않는다(`answer_text`·`answer_aliases`·`submission_guesses`는 미사용 잔재로 유지) | 사용자 결정 ("음성 기능을 아예 제거한다") |
+| ~~음성 길이~~ | 폐기됨 (음성 제거). 이전 결정: 최대 30초, 파일 ≤ 5MB | 음성 제거로 해당 없음 |
+| ~~음성 길이·파형 전달~~ | 폐기됨 (음성 제거). 이전 결정: 앱이 `duration`·`waveform`을 보내고 서버가 `answer_data`에 저장해 피드에 내려줌 | 음성 제거로 해당 없음 |
 | 이미지 | 사진 JPEG(3:4로 잘림), 그림 PNG — 설계의 `jpg/png/webp ≤ 10MB` 안에 들어감 | 변경 없음 |
 | 글 길이 | 틀별 규칙을 따른다 (`TEXT_FILL_BLANK` ≤ 100자, `TEXT_ACROSTIC` 3줄). 앱의 일괄 300자 제한은 틀별 제한으로 바꾼다 | 서버 검증과 앱 입력 제한이 같아야 함 |
 | 캡션 | 서버는 선택 필드로 받지만 MVP 앱은 보내지 않는다 | MVP 틀 풀에서 캡션이 필수인 틀이 없음 (§3) |
@@ -472,14 +473,14 @@ DELETE /api/me — 회원 탈퇴, 204
 
 ```text
 POST /api/missions/{missionId}/submissions   (multipart)
-  음성 틀: file(m4a/mp3/aac/webm ≤ 5MB), duration(초, ≤ 30), waveform(JSON 배열 문자열, 0~1, 최대 64개)
+  사진·그림 틀: file(jpg/png/webp ≤ 10MB), caption(선택)
+  (음성 틀의 file(m4a 등)·duration·waveform 은 2026-10-12 음성 제거로 폐기)
 ```
 ```json
-// 피드 항목 (GET /api/missions/{missionId}/submissions) — 음성 예
+// 피드 항목 (GET /api/missions/{missionId}/submissions) — 사진 예
 { "id": 100,
   "author": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
-  "template": "VOICE_LINE", "mediaUrl": "/files/submissions/uuid.m4a", "mediaType": "AUDIO",
-  "duration": 9.4, "waveform": [0.25, 0.42, 0.67],
+  "template": "PHOTO_NOW", "mediaUrl": "/files/submissions/uuid.jpg", "mediaType": "IMAGE",
   "reactions": [], "commentCount": 0,
   "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
 ```
@@ -491,10 +492,10 @@ POST /api/missions/{missionId}/submissions   (multipart)
 
 | 대상 | 내용 |
 |---|---|
-| 백엔드 | 제출·피드·상세 구현(신규). multipart 한도(`spring.servlet.multipart.*`), 파일 저장소, 음성 `duration`·`waveform` 검증·저장, 작성자 프로필 객체, `MISSION_CLOSED` |
-| Android | `DataStore.submit`/`result` → API. `SubmissionContent.Voice`의 길이·파형 전송. 글 화면 틀별 제한. 결과 화면 지각 표시, 423 처리(05로 돌려보냄). `Submission.mediaURL`은 서버 URL |
+| 백엔드 | 제출·피드·상세 구현(신규). multipart 한도(`spring.servlet.multipart.*`), 파일 저장소, ~~음성 `duration`·`waveform` 검증·저장~~(음성 제거로 삭제됨), 작성자 프로필 객체, `MISSION_CLOSED` |
+| Android | `DataStore.submit`/`result` → API. ~~`SubmissionContent.Voice`의 길이·파형 전송~~(음성 제거로 N/A, A0에서 삭제). 글 화면 틀별 제한. 결과 화면 지각 표시, 423 처리(05로 돌려보냄). `Submission.mediaURL`은 서버 URL |
 | iOS | Android와 같음 (`DataStore.submit/result`, `WriteMissionView.maxLength`, `ResultsView`) |
-| 설계 문서 | `MISSIONS_API.md` §3-1(음성 필드), §3-2(음성 30초), §3-3·§4 응답(`author`, `duration`, `waveform`, `reactions`), §10 오류 코드 |
+| 설계 문서 | `MISSIONS_API.md` §3-3·§4 응답(`author`, `reactions`), §10 오류 코드. (§3-1 음성 필드·§3-2 음성 30초·응답의 `duration`/`waveform`은 음성 제거로 N/A) |
 
 ### 6-4. 미결
 
@@ -701,8 +702,9 @@ PATCH /api/notifications/read-all      204
 ```json
 // GET /api/me/stats — 17 마이페이지 활동 요약
 { "completedMissions": 42, "streakDays": 5, "groupCount": 3,
-  "byMedia": { "DRAW": 10, "PHOTO": 15, "TEXT": 9, "VOICE": 8 } }
+  "byMedia": { "DRAW": 10, "PHOTO": 15, "TEXT": 9 } }
 ```
+- `byMedia`는 `DRAW`·`PHOTO`·`TEXT`를 0이어도 항상 넣는다. 2026-10-12 음성 제거로 `VOICE` 키는 빠졌다(§6-1). 지워진 틀의 예전 제출은 `completedMissions`에만 센다.
 
 ### 9-3. 수정 대상
 

@@ -36,9 +36,6 @@ public class PlaceholderMissionGenerator implements MissionGenerator {
                     new GeneratedMission("주변에서 파란색인 것을 찍어줘", "일상", Map.of("color", "파란색")),
                     new GeneratedMission("주변에서 노란색인 것을 찍어줘", "일상", Map.of("color", "노란색")),
                     new GeneratedMission("주변에서 초록색인 것을 찍어줘", "일상", Map.of("color", "초록색")));
-            case VOICE_LINE -> List.of(
-                    voice("오늘도 수고했어", "다정한"), voice("곧 좋은 일이 생길 거야", "신나는"),
-                    voice("잠깐 쉬어 가도 괜찮아", "차분한"));
             case TEXT_ACROSTIC -> List.of(
                     acrostic("퇴근길"), acrostic("바람결"), acrostic("별자리"));
             case TEXT_FILL_BLANK -> List.of(
@@ -52,11 +49,6 @@ public class PlaceholderMissionGenerator implements MissionGenerator {
                     drawTo(withTarget, "책", "집"));
             default -> throw new IllegalArgumentException("Unsupported placeholder template: " + template);
         };
-    }
-
-    private GeneratedMission voice(String sentence, String tone) {
-        return new GeneratedMission("이 문장을 " + tone + " 말투로 읽어줘: " + sentence,
-                "감성", Map.of("sentence", sentence, "tone", tone));
     }
 
     private GeneratedMission acrostic(String word) {

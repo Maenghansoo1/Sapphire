@@ -29,7 +29,7 @@ import java.util.Set;
 @Service
 public class CalendarService {
 
-    private static final List<String> MEDIA = List.of("DRAW", "PHOTO", "TEXT", "VOICE");
+    private static final List<String> MEDIA = List.of("DRAW", "PHOTO", "TEXT");
 
     private final CalendarMapper calendarMapper;
     private final GroupMapper groupMapper;

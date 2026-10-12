@@ -1,10 +1,12 @@
 # ANDROID.md — iOS(SwiftUI) 앱을 Android 네이티브로 옮기는 계획
 
+> **음성 기능 제거 (2026-10-12):** 음성 미션·녹음·재생·파형·마이크 권한은 서비스에서 제거하기로 결정했다. 서버는 B0 에서 제거됐고, Android 코드는 A0, iOS 는 A5 항목 0 에서 삭제한다. 아래 문서의 음성 관련 내용(09 음성 화면, 13 음성 목록, `MediaRecorder`/`MediaPlayer`, `RECORD_AUDIO`)은 **제거됨 / 제거 예정**으로 읽는다.
+
 ## 6A 서버 제출·결과 연결 (2026-10-12)
 
-오늘 미션의 사진·그림·음성·글은 `POST /api/missions/{id}/submissions`로 업로드해요. 업로드 중에는 버튼을 잠그고, 실패하면 입력을 유지해 다시 시도할 수 있어요. 재시도에서 `ALREADY_SUBMITTED`가 오면 서버의 제출 상태를 다시 조회해요. 서버 응답의 지각 여부를 성공 안내와 결과 화면에 표시해요.
+오늘 미션의 사진·그림·글은(음성은 제거됨) `POST /api/missions/{id}/submissions`로 업로드해요. 업로드 중에는 버튼을 잠그고, 실패하면 입력을 유지해 다시 시도할 수 있어요. 재시도에서 `ALREADY_SUBMITTED`가 오면 서버의 제출 상태를 다시 조회해요. 서버 응답의 지각 여부를 성공 안내와 결과 화면에 표시해요.
 
-결과 화면은 진입하거나 앱으로 돌아올 때 `GET /api/missions/{id}/submissions` 피드를 불러와요. 이미지와 음성은 서버 파일 URL을 사용해요. 앱 안 임시 제출·로컬 파일 저장·제출 상태 합성은 제거했어요. 스티커(좋아요)·댓글은 7A 서버 연결 전까지 숨겨요. `DemoSeed`와 일부 로컬 기록·콕 로직은 테스트와 프리뷰를 위해 남아 있으며 제품 화면에서는 숨기거나 준비 중으로 안내해요.
+결과 화면은 진입하거나 앱으로 돌아올 때 `GET /api/missions/{id}/submissions` 피드를 불러와요. 이미지는 서버 파일 URL을 사용해요(음성은 제거됨). 앱 안 임시 제출·로컬 파일 저장·제출 상태 합성은 제거했어요. 스티커(좋아요)·댓글은 7A 서버 연결 전까지 숨겨요. `DemoSeed`와 일부 로컬 기록·콕 로직은 테스트와 프리뷰를 위해 남아 있으며 제품 화면에서는 숨기거나 준비 중으로 안내해요.
 
 아래 4A 및 초기 이식 단계의 임시 저장 설명은 당시 구현 기록이에요. 현재 제출과 결과의 데이터 출처는 서버예요.
 
@@ -27,7 +29,7 @@
 - iOS 의 모든 화면(A1~~A3, 비밀번호 찾기, 01~~17-5)을 Compose 로 1:1 이식
 - 디자인 토큰(색·글꼴·모서리·여백), 아이콘·캐릭터·로고 SVG, 공통 컴포넌트 이식
 - 임시 저장소 `DataStore` + `DemoSeed` 이식 (미션 생성 규칙, 체험 초대 코드 `K7Q2PX` / `LOVE22` / `FULL00` 포함)
-- 기기 기능: 카메라·앨범, 녹음·재생, 손그림, 공유·복사, 앱 안 웹 보기, 알림 권한·알림 눌림 처리
+- 기기 기능: 카메라·앨범, ~~녹음·재생~~(제거됨), 손그림, 공유·복사, 앱 안 웹 보기, 알림 권한·알림 눌림 처리
 
 ### 하지 않는 것 (iOS 도 아직 안 된 것)
 
@@ -102,7 +104,7 @@ android/app/src/main/java/com/sapphire/hawe/
   feature/
     auth/       ← Features/Auth (AuthFlow, Login, SignupAccount, SignupProfile, PasswordReset)
     groups/     ← Features/Groups (Start, Home, CreateGroup, JoinGroup, GroupInfo, GroupProfile)
-    mission/    ← Features/Mission (Mission, MissionPerform, Draw, Photo, Write, Voice)
+    mission/    ← Features/Mission (Mission, MissionPerform, Draw, Photo, Write, ~~Voice~~ 제거됨)
     results/    ← Features/Results (Results, ResultComponents, ResultFeed, SubmissionDetail)
     records/    ← Features/Records (RecordCalendar)
     mypage/     ← Features/MyPage (MyPage, NotificationSettings, ProfileEdit, UserInfo+ChangePassword, AppInfo+Licenses, Withdraw)
@@ -140,8 +142,8 @@ android/app/src/main/res/
 | `AVCaptureSession`/`AVCapturePhotoOutput` (07)                            | CameraX `Preview` + `ImageCapture`, `PreviewView`(FILL\_CENTER)                                                                                | 플래시(`flashMode`), 전·후면 전환, 3:4 크롭, 전면 카메라 좌우 반전, `CAMERA` 런타임 권한                                  |
 | `ImageRenderer` (사진 3:4 크롭, 그림 PNG)                                       | `Bitmap.createBitmap` + `android.graphics.Canvas` → `compress(JPEG/PNG)`                                                                       | EXIF 회전 보정 필요 (CameraX `ImageProxy.imageInfo.rotationDegrees`)                                    |
 | `PencilKit` `PKCanvasView` (06)                                           | Compose `Canvas` + `pointerInput` 로 획(Path) 목록 관리, 되돌리기/다시 실행 스택                                                                               | 펜/지우개(획 단위가 아니라 흰색 덧칠 or `BlendMode.Clear`), 굵기 3단계, 7색 — iOS `DrawingCanvasModel` 동작에 맞춤. 손가락 입력 |
-| `AVAudioRecorder` (09, 최대 30초, m4a/AAC)                                   | `MediaRecorder` (`MPEG_4` + `AAC`, `setMaxDuration(30_000)`)                                                                                   | 파형은 `getMaxAmplitude()` 를 주기적으로 읽어 0..1 로 정규화. `RECORD_AUDIO` 권한, 거부 시 설정 열기                      |
-| `AVAudioPlayer` (미리 듣기, 13 재생·이어 듣기)                                      | `MediaPlayer`                                                                                                                                  | 한 번에 하나만 재생, 화면 떠나면 정지. 파일 없는 목업은 길이만큼 '재생하는 척'(iOS 와 같음)                                         |
+| ~~`AVAudioRecorder` (09, 최대 30초, m4a/AAC)~~ 제거됨                                   | `MediaRecorder` (`MPEG_4` + `AAC`, `setMaxDuration(30_000)`)                                                                                   | 파형은 `getMaxAmplitude()` 를 주기적으로 읽어 0..1 로 정규화. `RECORD_AUDIO` 권한, 거부 시 설정 열기                      |
+| ~~`AVAudioPlayer` (미리 듣기, 13 재생·이어 듣기)~~ 제거됨                                      | `MediaPlayer`                                                                                                                                  | 한 번에 하나만 재생, 화면 떠나면 정지. 파일 없는 목업은 길이만큼 '재생하는 척'(iOS 와 같음)                                         |
 | `Timer` (녹음 진행, 05 카운트다운)                                                 | `LaunchedEffect` + `delay` 루프                                                                                                                  |                                                                                                   |
 | `openSettingsURLString`                                                   | `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` 인텐트                                                                                             |                                                                                                   |
 | `ShareLink` (초대 링크 공유)                                                    | `Intent.ACTION_SEND` + `createChooser`                                                                                                         |                                                                                                   |
@@ -153,7 +155,7 @@ android/app/src/main/res/
 | APNs 알림 눌림 → `PushCenter.pendingDestination`                              | 알림 `PendingIntent` extras(`type`, `group_id`, `submission_id`) → `MainActivity.onNewIntent`/`onCreate` 에서 파싱 → `PushCenter.pendingDestination` | 이동 규칙은 `MainFlowView.open()` 그대로: topic/poke/friend\_done → 05, comment → (내가 올렸으면) 05 → 10\~13   |
 | `UUID`, `Date`, `DateComponents`, `Calendar(Asia/Seoul)`                  | `java.util.UUID`, `Instant`/`ZonedDateTime`, `LocalTime`, `ZoneId.of("Asia/Seoul")`                                                            | 미션 창(`TodayMission.window`), 연속 참여일, 캘린더는 **반드시 서울 시간대**                                          |
 | `AvatarContent.photo(URL)` / `.image(UIImage)`                            | `AvatarContent.Photo(uri: Uri)` 하나로 통합                                                                                                         |                                                                                                   |
-| `Info.plist` 권한 문구                                                        | 권한 요청 전 안내는 iOS 문구 재사용, `AndroidManifest` 에 `CAMERA`, `RECORD_AUDIO`, `POST_NOTIFICATIONS`                                                     |                                                                                                   |
+| `Info.plist` 권한 문구                                                        | 권한 요청 전 안내는 iOS 문구 재사용, `AndroidManifest` 에 `CAMERA`, ~~`RECORD_AUDIO`~~(제거됨), `POST_NOTIFICATIONS`                                                     |                                                                                                   |
 | `UIUserInterfaceStyle: Light`, 세로 고정                                      | 테마 `Theme.Material3.Light.NoActionBar`, `android:screenOrientation="portrait"`                                                                 | 다크 모드 무시                                                                                          |
 
 
@@ -204,18 +206,18 @@ android/app/src/main/res/
 - 유형·주제·#번호, 다음 미션까지 카운트다운(초 단위 갱신, 마감 지나면 `refreshTodayMissions`), 멤버 완료 현황, 콕 찌르기(하루 1회, 토스트), 미제출 시 잠금 안내, 헤더의 캘린더·그룹 정보
 - 완료 기준: 제출 전/후 화면 차이, 콕 찌르기 중복 불가
 
-### 6단계 — 미션 수행 (06 그림 · 07 사진 · 08 글 · 09 음성) — **가장 위험한 단계**
+### 6단계 — 미션 수행 (06 그림 · 07 사진 · 08 글 · ~~09 음성~~ 제거됨) — **가장 위험한 단계**
 
 - 공통: `MissionTitle`, `MissionHeader`(닫기 시 작성 중이면 확인), 올리기 → `DataStore.submit` → 05 로 돌아와 "오늘의 미션을 올렸어요" 토스트
 - 06: Compose 그림판 (펜/지우개, 굵기 3, 7색, undo/redo) → PNG
 - 07: CameraX (플래시·전후면) + 앨범, 3:4 크롭 → JPEG. 권한 거부 화면
 - 08: 최대 300자, 글자 수 표시
-- 09: 녹음 최대 30초 자동 정지, 정지·다시·미리 듣기, 파형(막대 4·간격 4·높이 80, 녹음 구간 ink / 나머지 waveformIdle), 권한 거부 시 설정 열기 알림
-- 완료 기준: **실기기**에서 네 유형 모두 제출 → 결과 화면에 보임. 회전·백그라운드 전환 시 카메라/녹음 자원 해제 확인
+- ~~09: 녹음 최대 30초 자동 정지, 정지·다시·미리 듣기, 파형(막대 4·간격 4·높이 80, 녹음 구간 ink / 나머지 waveformIdle), 권한 거부 시 설정 열기 알림~~ — 음성 제거로 삭제(A0)
+- 완료 기준: **실기기**에서 네 유형(음성 제거 후 세 유형) 모두 제출 → 결과 화면에 보임. 회전·백그라운드 전환 시 카메라/녹음 자원 해제 확인
 
 ### 7단계 — 결과 · 상세 · 기록 (10~15)
 
-- 10 사진 세로 피드, 11 그림 2열 격자, 12 글 카드, 13 음성 목록 + 전체 이어 듣기, 아직 안 올린 멤버 '아직' 표시
+- 10 사진 세로 피드, 11 그림 2열 격자, 12 글 카드, ~~13 음성 목록 + 전체 이어 듣기~~(제거됨), 아직 안 올린 멤버 '아직' 표시
 - 14 작품 상세: 좋아요 토글(채운 하트), 댓글 목록·입력(키보드 위 고정), 내 댓글 삭제 확인. 10~13 과 상태 공유(iOS `ResultFeed` → 화면 범위 상태 홀더)
 - 15 캘린더: 월 이동, 기록 있는 날 유형 이름, 오늘 테두리, 날짜 선택 → 카드 → '모아보기'(내가 올린 날만 열림)
 - 완료 기준: 좋아요·댓글이 10~13 ↔ 14 에서 같이 반영

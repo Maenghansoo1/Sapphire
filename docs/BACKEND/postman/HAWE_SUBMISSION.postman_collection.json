@@ -2,7 +2,7 @@
   "info": {
     "name": "HA'WE - SUBMISSION API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "가입 → 그룹 생성 → 현재 미션 → 제출 → 피드 → 상세. 새 run 값을 지정하거나 기존 변수를 비웁니다. 5/5a/5b 중 현재 미션 틀에 맞는 요청 하나만 실행합니다. TEXT_ACROSTIC은 params.word에 맞는 3줄을 입력합니다."
+    "description": "가입 → 그룹 생성 → 현재 미션 → 제출 → 피드 → 상세. 새 run 값을 지정하거나 기존 변수를 비웁니다. 5/5a 중 현재 미션 틀에 맞는 요청 하나만 실행합니다(음성 제출은 음성 기능 제거로 삭제). TEXT_ACROSTIC은 params.word에 맞는 3줄을 입력합니다."
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
@@ -89,22 +89,6 @@
         "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "body": { "mode": "formdata", "formdata": [
           { "key": "text", "type": "text", "value": "오늘의 답" }
-        ] },
-        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
-      }
-    },
-    {
-      "name": "5b. 음성 제출 (음성 미션일 때, 파일 제출 대신 실행)",
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
-      ] } }],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-        "body": { "mode": "formdata", "formdata": [
-          { "key": "file", "type": "file", "src": "" },
-          { "key": "duration", "type": "text", "value": "9.4" },
-          { "key": "waveform", "type": "text", "value": "[0.25,0.42,0.67]" }
         ] },
         "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
       }
