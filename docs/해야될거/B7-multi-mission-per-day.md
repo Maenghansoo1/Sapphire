@@ -1,6 +1,6 @@
 # B7. 하루 여러 개 미션 개방 (백엔드)
 
-> 범위: 백엔드만. 앱(홈 카드·05 화면 다중 미션)은 A6. 알림 무관. **전제: B5·B6 커밋 후**(발행 풀·선택기·생성기 시그니처를 바꾸는 계획들이 먼저 끝나야 한다). 근거: `MISSIONS_API.md` §2 "그룹 설정 연동", §6·§6-1(틀 선택), §11-8,9,10,11,13, `CONTRACT_DECISIONS.md` §3-4(하루 여러 개 모양은 MVP 이후), §9.
+> 범위: 백엔드만. 앱(홈 카드·05 화면 다중 미션)은 A6. 알림 무관. **전제: B0(음성 제거)·B5 커밋 후**(발행 풀·선택기·생성기 시그니처를 바꾸는 계획들이 먼저 끝나야 한다). 근거: `MISSIONS_API.md` §2 "그룹 설정 연동", §6·§6-1(틀 선택), §11-8,9,10,11,13, `CONTRACT_DECISIONS.md` §3-4(하루 여러 개 모양은 MVP 이후), §9.
 >
 > **가정(README 결정 표 기본값 — 다르게 정하면 알려 달라)**: 상한 5개(`max-daily-count`), 슬롯 간 최소 간격 없음, **도장은 미션별(현재 달력 구현 유지)**, 피드 잠금은 미션별 유지, `submissionCountThisMonth` 는 "제출한 날 수".
 
@@ -54,7 +54,7 @@
 
 ## Edge Cases
 
-- N=5, 매체 4종: 슬롯 5가 슬롯 1과 같은 매체지만 **다른 틀**(매체에 틀이 2개 이상일 때). 매체에 틀이 1개뿐이면 중복 불가피 — 허용(테스트로 명시).
+- N=5, 매체 3종(B0 이후; SLIDER 가 풀에 있으면 4종): 슬롯 5가 슬롯 1과 같은 매체지만 **다른 틀**(매체에 틀이 2개 이상일 때). 매체에 틀이 1개뿐이면 중복 불가피 — 허용(테스트로 명시).
 - 풀에 매체가 1개뿐인 설정: 모든 슬롯이 그 매체, 틀이 순환.
 - 같은 날 슬롯 시각이 모두 같음 → 한 번의 `publishIfDue` 에서 N개 발행, 문장 중복 없음, 대상 지정 틀의 대상이 슬롯마다 독립(시드가 슬롯 포함).
 - 슬롯 3개 중 슬롯 2만 아직 발행 전(시각 미도래) → `missions[]` 에 2개, 슬롯 2는 시각 후에 추가.
@@ -87,4 +87,4 @@
 
 ## Potential Merge Conflicts
 
-`mission/*`(B5·B6·B8 과 겹침 — 순차), `GroupService`/`GroupSummaryResponse`, `PokeService`, `GroupMemberMapper`, `application.properties`, `docs/BACKEND/MISSIONS_API.md`.
+`mission/*`(B0·B5·B8·B9 과 겹침 — 순차), `GroupService`/`GroupSummaryResponse`, `PokeService`, `GroupMemberMapper`, `application.properties`, `docs/BACKEND/MISSIONS_API.md`.

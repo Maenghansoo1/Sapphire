@@ -108,4 +108,4 @@ DELETE /api/groups/{groupId}/members/me/profile         → 204 (기본 프로�
 
 ## Potential Merge Conflicts
 
-`GroupMapper`/`GroupMemberMapper`/`GroupService`(B2·B4 와 겹침 — 순차), `SubmissionMapper`/`SubmissionRow`/`CommentMapper`(B5·B6 과 겹침 — B5 시작 전 B1 커밋), `V1__initial_schema.sql`, `docs/BACKEND/*`. 앱 `GroupMember.groupProfile`(Android `GroupProfileScreen`)은 A3 에서 연결.
+`GroupMapper`/`GroupMemberMapper`/`GroupService`(B2·B4 와 겹침 — 순차), `SubmissionMapper`/`SubmissionRow`/`CommentMapper`(B5·B10 과 겹침 — B5 시작 전 B1 커밋), `V1__initial_schema.sql`, `docs/BACKEND/*`. 앱 `GroupMember.groupProfile`(Android `GroupProfileScreen`)은 A3 에서 연결.

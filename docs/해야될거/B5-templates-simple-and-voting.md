@@ -1,30 +1,30 @@
 # B5. 미션 틀 확장 ① — 단순 글 틀 + 집계(V) 틀 + 결과 API (백엔드)
 
-> 범위: 백엔드만. 앱 화면은 A4. 알림 무관. **전제: 7·8단계 + B1 커밋 후**(`SubmissionMapper` 의 작성자 표시 쿼리를 B1 이 바꾼다). 근거: `docs/BACKEND/MISSIONS_API.md` §1-2(코드표), §3(제출 규칙), §5(집계 결과), §6-1(틀 선택), §11. 이 계획의 대상 틀 6종: `TEXT_ONE_WORD`, `TEXT_REVIEW`, `TEXT_BALANCE`(V), `SLIDER_POSITION`(V), `SLIDER_TASTE`(V), `SLIDER_CONSENSUS`(V). 정답 맞히기(G) 틀은 B6.
+> 범위: 백엔드만. 앱 화면은 A4. 알림 무관. **전제: 7·8단계 + B0(음성 제거) + B1 커밋 후**(B0 이 음성 틀·오디오 제출 분기를 지운 상태가 기준이다. `SubmissionMapper` 의 작성자 표시 쿼리는 B1 이 바꾼다). 근거: `docs/BACKEND/MISSIONS_API.md` §1-2(코드표), §3(제출 규칙), §5(집계 결과), §6-1(틀 선택), §11. 이 계획의 대상 틀 6종: `TEXT_ONE_WORD`, `TEXT_REVIEW`, `TEXT_BALANCE`(V), `SLIDER_POSITION`(V), `SLIDER_TASTE`(V), `SLIDER_CONSENSUS`(V). 정답 맞히기(G) 유형은 음성 제거로 폐기되었다(B6 참고).
 
 ## Goal
 
 1. 위 6개 틀을 **제출**할 수 있다(검증·저장·응답).
 2. `GET /api/missions/{missionId}/result` — V 유형 4종(`TEXT_BALANCE`, `SLIDER_*`)의 집계 결과.
-3. 발행 풀(어떤 틀이 실제로 선택되는지)을 **설정으로 제어**한다. 기본값은 지금의 MVP 8종 그대로 → 앱(A4)이 새 틀을 그릴 수 있게 된 뒤에 설정으로 켠다(안 그러면 새 틀 미션을 받은 구 앱이 깨짐).
+3. 발행 풀(어떤 틀이 실제로 선택되는지)을 **설정으로 제어**한다. 기본값은 지금의 MVP 7종 그대로 → 앱(A4)이 새 틀을 그릴 수 있게 된 뒤에 설정으로 켠다(안 그러면 새 틀 미션을 받은 구 앱이 깨짐).
 4. 새 틀의 임시 문장 생성(`PlaceholderMissionGenerator`)을 추가한다(AI 연동은 B8).
 
 ## Findings
 
 - `MissionTemplate` enum 16종(1차 틀 전부)은 이미 정의돼 있고 `GET /mission-templates` 가 16종 전체를 돌려준다. 여기에 `paramsSchema`/`payloadSchema` 문자열이 있다 — **`TEXT_ONE_WORD` 의 payload 에 `caption: string(required)` 로 되어 있으나 MISSIONS_API §3-2 는 caption 을 선택으로 규정**한다 → 문서(§3-2) 기준으로 enum 문자열을 `optional` 로 고친다.
-- `MissionTemplateSelector`: `MVP_POOL` 상수(8종), `MEDIA = [PHOTO, VOICE, TEXT, DRAW]`, `select(groupId, date, slotNo, dailyMissionCount, yesterdayMedia)` 가 결정적 시드로 매체→틀을 고른다. `MissionPublisher.publishIfDue` 가 호출. 풀을 설정으로 받지 않는다.
-- `PlaceholderMissionGenerator.variants(template, withTarget)` 은 8종만 처리하고 나머지는 `IllegalArgumentException`.
+- `MissionTemplateSelector`: `MVP_POOL` 상수(**B0 이후 7종**), `MEDIA = [PHOTO, TEXT, DRAW]`(B0 이후), `select(groupId, date, slotNo, dailyMissionCount, yesterdayMedia)` 가 결정적 시드로 매체→틀을 고른다. `MissionPublisher.publishIfDue` 가 호출. 풀을 설정으로 받지 않는다.
+- `PlaceholderMissionGenerator.variants(template, withTarget)` 은 (B0 이후) 7종만 처리하고 나머지는 `IllegalArgumentException`.
 - `MissionProperties(defaultPublishTime, defaultDeadlineTime, maxDailyCount)` (`hawe.mission.*`).
-- `SubmissionService.submit`: 템플릿을 `image`(PHOTO_NOW, PHOTO_GALLERY, PHOTO_COLOR, DRAW_SKETCH, DRAW_A_TO_B)/`audio`(VOICE_LINE)/`text`(TEXT_FILL_BLANK, TEXT_ACROSTIC) 로 분기하고, 그 외 틀은 `invalid("지원하지 않는 미션 틀입니다")`. 요구하지 않는 필드(`fields`/`files` 키)는 `allowed` 세트로 거부, 중복 필드 거부, `caption` ≤200 코드포인트. 글 본문은 `answer_data` JSON `{"text": …}` 로 저장. 파일 저장 시 롤백 정리 패턴 있음.
+- `SubmissionService.submit`: 템플릿을 `image`(PHOTO_NOW, PHOTO_GALLERY, PHOTO_COLOR, DRAW_SKETCH, DRAW_A_TO_B)/`text`(TEXT_FILL_BLANK, TEXT_ACROSTIC) 로 분기(오디오 분기는 B0 에서 삭제됨)하고, 그 외 틀은 `invalid("지원하지 않는 미션 틀입니다")`. 요구하지 않는 필드(`fields`/`files` 키)는 `allowed` 세트로 거부, 중복 필드 거부, `caption` ≤200 코드포인트. 글 본문은 `answer_data` JSON `{"text": …}` 로 저장. 파일 저장 시 롤백 정리 패턴 있음.
 - `SubmissionInsertRow(missionId, userId, mediaUrl, caption, submittedAt, late, mediaType, answerData)` — `number_value`/`choice_value` 컬럼 대응 필드 없음. DB `submissions` 에는 `number_value tinyint unsigned`, `choice_value char(1)`, `answer_data` JSON(체크 제약), `answer_text`, `answer_aliases` 가 **이미 있다**(`V1`).
 - `SubmissionMapper.FIELDS`: `s.id … s.answer_data, s.submitted_at, s.is_late AS late` — number/choice 미선택. `SubmissionRow`·`SubmissionResponse(id, missionId, author, template, mediaUrl, mediaType, caption, text, duration, waveform, reactions, commentCount, submittedAt, isLate)` — number/choice/guess 필드 없음. `SubmissionResponse` 는 `@JsonInclude(NON_NULL)`.
-- `response(row)` 가 `answer_data` JSON 에서 `text`/`duration`/`waveform` 을 읽는다.
+- `response(row)` 가 `answer_data` JSON 에서 `text` 를 읽는다(`duration`/`waveform` 은 B0 에서 삭제됨).
 - 잠금 규칙 `requireSubmitted(missionId, userId)` → `FEED_LOCKED`(423). 멤버 확인 `requireMember`. `MissionErrorCode`: `MISSION_NOT_FOUND`, `MISSION_CLOSED` 뿐.
 - 달력(`CalendarMapper/CalendarService`)·활동 요약은 `missions.template` 의 매체 문자열을 앱에 내려준다. 새 매체 `SLIDER` 가 풀에 들어오면 `media: "SLIDER"` 가 내려가며 Android `mediaToType` 은 모르는 매체를 건너뛴다(현재 코드가 `mapNotNull`) — A4 에서 처리.
 
 ## Root Cause / Key Implementation Points
 
-1. **발행 풀 설정화**: `MissionProperties` 에 `List<MissionTemplate> enabledTemplates` 추가(`hawe.mission.enabled-templates`, **기본값 = 현재 MVP 8종**). `MissionTemplateSelector.select(…)` 가 풀을 파라미터로 받게 하고 `MissionPublisher` 가 `properties.enabledTemplates()` 를 넘긴다. 매체 순서 `MEDIA` 는 풀에 존재하는 매체만으로 구성(풀에 `SLIDER` 틀이 없으면 매체 4종 그대로 → **기본 설정에서 기존 선택 결과가 바뀌지 않아야 한다**, 회귀 테스트로 고정). 풀에 있는 틀 중 `phase() == 1` 만 허용. 풀이 비면 시작 시 예외(설정 오류).
+1. **발행 풀 설정화**: `MissionProperties` 에 `List<MissionTemplate> enabledTemplates` 추가(`hawe.mission.enabled-templates`, **기본값 = B0 이후 MVP 7종**). `MissionTemplateSelector.select(…)` 가 풀을 파라미터로 받게 하고 `MissionPublisher` 가 `properties.enabledTemplates()` 를 넘긴다. 매체 순서 `MEDIA` 는 풀에 존재하는 매체만으로 구성(풀에 `SLIDER` 틀이 없으면 매체 4종 그대로 → **기본 설정에서 기존 선택 결과가 바뀌지 않아야 한다**, 회귀 테스트로 고정). 풀에 있는 틀 중 `phase() == 1` 만 허용. 풀이 비면 시작 시 예외(설정 오류).
 2. **제출 검증 확장** (`SubmissionService.submit`): 틀 분류에 `scalar` 그룹을 추가하고 틀별 허용 필드/규칙을 `MISSIONS_API §3-2` 대로 구현.
 
    | 틀 | 필수 | 선택 | 저장 | 규칙 |
@@ -43,15 +43,15 @@
    - `SLIDER_CONSENSUS`: `average`=제출자들의 `number` 평균, 각 제출자 `diff = |guess - average|`(소수 첫째 자리), `ranking` 은 `diff` 오름차순(동률은 제출 시각→id), `winnerUserIds` 는 최소 diff 와 같은 모든 사용자(동률이면 복수). `guess` 가 저장되지 않은 이상 데이터는 건너뜀.
    - `totalCount` = 제출 수. 결과는 "현재까지의 제출 기준"(마감 후에도 제출 가능하므로 변할 수 있음).
 5. **임시 문장 생성기**: `PlaceholderMissionGenerator.variants` 에 6종 추가(틀마다 3개 이상, `params` 는 `MissionTemplate.paramsSchema` 키와 정확히 일치): `TEXT_ONE_WORD`(params 없음), `TEXT_REVIEW`(없음), `TEXT_BALANCE`(`optionA`,`optionB` 서로 다름), `SLIDER_POSITION`(`question,left,right`), `SLIDER_TASTE`(`topic,left,right`), `SLIDER_CONSENSUS`(`question,left,right`). `left ≠ right`, 각 ≤20자. 문구에 외모·몸·혐오 소재 금지(MISSIONS_API §8).
-6. **기본 설정에서 동작 불변**: 설정 기본값이 8종이면 발행·선택·API 응답은 이전과 동일해야 한다. 새 틀은 (a) 설정으로 켜거나 (b) 테스트에서 직접 `missions.template` 을 UPDATE 해서 검증.
+6. **기본 설정에서 동작 불변**: 설정 기본값이 (B0 이후) 7종이면 발행·선택·API 응답은 이전과 동일해야 한다. 새 틀은 (a) 설정으로 켜거나 (b) 테스트에서 직접 `missions.template` 을 UPDATE 해서 검증.
 
 ## Files / Functions to Change
 
 | 파일 | 변경 |
 |---|---|
-| `global/config/MissionProperties.java`, `application.properties` | `enabledTemplates`(기본 MVP 8종 이름 목록) |
+| `global/config/MissionProperties.java`, `application.properties` | `enabledTemplates`(기본 MVP 7종 이름 목록) |
 | `mission/domain/MissionTemplate.java` | `TEXT_ONE_WORD` payload 문자열 caption → optional |
-| `mission/domain/MissionTemplateSelector.java` | 풀 파라미터화(`select(…, pool)`), `MEDIA` 를 풀에서 도출(고정 순서 `PHOTO, VOICE, TEXT, DRAW, SLIDER` 중 풀에 있는 것만), 기본 결과 불변 |
+| `mission/domain/MissionTemplateSelector.java` | 풀 파라미터화(`select(…, pool)`), `MEDIA` 를 풀에서 도출(고정 순서 `PHOTO, TEXT, DRAW, SLIDER` 중 풀에 있는 것만), 기본 결과 불변 |
 | `mission/service/MissionPublisher.java` | 풀 전달 |
 | `mission/service/PlaceholderMissionGenerator.java` | 6종 변형 |
 | `submission/service/SubmissionService.java` | 제출 검증 확장(scalar 그룹), `response` 에 number/choice/guess |
@@ -68,7 +68,7 @@
 
 ## Constraints
 
-- 스키마 변경 없음(V1 불변). 기본 설정에서 기존 8종 동작·응답 불변. 2차 틀(R 유형)·정답 맞히기(B6)·AI(B8)는 건드리지 않는다.
+- 스키마 변경 없음(V1 불변). 기본 설정에서 기존 7종 동작·응답 불변. 2차 틀(R 유형)·AI(B8)·사진 적합도(B10)는 건드리지 않는다.
 - 새 틀의 파일 업로드 경로 변경 금지(새 틀은 파일 없음). 알림 없음. 도장/달력 계산 변경 금지(제출 기록 기반 그대로).
 - `SubmissionService.submit` 은 기존 틀의 동작을 보존하며 분기만 확장한다. 커밋/푸시·지침 파일 수정 금지.
 
@@ -77,7 +77,7 @@
 - 숫자: `"50.0"`, `"abc"`, `""`, `"-1"`, `"101"`, `" 5"` → 400. `TEXT_REVIEW` `number=0`/`6` → 400. `TEXT_BALANCE` `choice="a"`/`"C"`/없음 → 400. `SLIDER_CONSENSUS` `guess` 누락 → 400. 허용되지 않은 필드(예: `SLIDER_POSITION` 에 `guess`/`text`/`file`) → 400 `요구하지 않는 필드`. 같은 필드 중복 → 400.
 - `TEXT_ONE_WORD`: 이모지·결합 문자는 grapheme 단위로 20자 제한(기존 `graphemes()` 사용), caption 101자 → 400, 빈 caption 은 NULL 로 저장.
 - 결과: 제출자 1명뿐인 슬라이더(평균=본인, diff 0, 승자 본인); 제출 0명은 결과 요청자가 제출해야 열리므로 불가능; 동률 승자 복수; `average` 소수 처리(예: 평균 62.25 → 62.3, 비교는 반올림 전 값으로 하고 표시만 반올림); 마감 후 늦은 제출이 결과에 포함되는지(포함 — "현재까지"); V 아닌 틀 → 400 `RESULT_NOT_SUPPORTED`; 다른 그룹 멤버 403; 내가 미제출 423.
-- 기본 설정(8종)에서는 새 틀 미션이 발행되지 않는다 — 풀에 새 틀을 넣은 설정에서만 발행되고, `SLIDER` 매체가 순환에 들어간다. 어제 매체 제외 규칙(하루 1개)이 5매체에서도 동작하는지.
+- 기본 설정(7종)에서는 새 틀 미션이 발행되지 않는다 — 풀에 새 틀을 넣은 설정에서만 발행되고, `SLIDER` 매체가 순환에 들어간다. 어제 매체 제외 규칙(하루 1개)이 5매체에서도 동작하는지.
 - 달력/활동 요약에 `SLIDER` 매체 미션이 섞여도 서버 응답이 깨지지 않는다(앱이 모르는 매체는 앱 쪽에서 건너뜀).
 
 ## Regression Risks
@@ -102,4 +102,4 @@
 
 ## Potential Merge Conflicts
 
-`SubmissionService`/`SubmissionMapper`/`SubmissionRow`/`SubmissionResponse`(B1 후, **B6 와 순차**), `MissionTemplateSelector`/`MissionPublisher`/`PlaceholderMissionGenerator`(B7·B8 과 겹침), `MissionProperties`, `docs/BACKEND/MISSIONS_API.md`.
+`SubmissionService`/`SubmissionMapper`/`SubmissionRow`/`SubmissionResponse`(B0·B1 후), `MissionTemplateSelector`/`MissionPublisher`/`PlaceholderMissionGenerator`(B7·B8 과 겹침), `MissionProperties`, `docs/BACKEND/MISSIONS_API.md`.
