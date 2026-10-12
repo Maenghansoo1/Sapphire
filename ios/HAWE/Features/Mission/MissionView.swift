@@ -27,8 +27,7 @@ struct MissionView: View {
         VStack(spacing: 0) {
             HNavBar(group?.detail.name ?? "", leading: .back { dismiss() }) {
                 HStack(spacing: 16) {
-                    // 기록 API 가 생기면 15 캘린더(.calendar)로 보내요.
-                    headerButton(.calendar, label: "기록 캘린더") { toast = ComingSoon.message }
+                    headerButton(.calendar, label: "기록 캘린더") { path.append(.calendar(groupID: groupID)) }
                     headerButton(.more, label: "그룹 정보") { path.append(.groupInfo(groupID: groupID)) }
                 }
             }

@@ -665,7 +665,7 @@ PATCH /api/notifications/read-all      204
 
 ---
 
-## 9. Calendar · 활동 요약 — 상태: 백엔드·Android 반영됨 (2026-10-12, iOS는 서버 연결 계층이 없어 보류)
+## 9. Calendar · 활동 요약 — 상태: 반영됨 (2026-10-12, iOS는 Mac 빌드 확인 전)
 
 ### 9-1. 결정
 

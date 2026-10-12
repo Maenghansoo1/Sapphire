@@ -39,13 +39,14 @@ struct MyPageView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
     @Environment(DataStore.self) private var store
+    @Environment(Services.self) private var services
     @State private var openedLink: WebLink?
     @State private var confirmsLogout = false
     @State private var toast: String?
 
     private var account: MyAccount { session.account }
-    /// 활동 요약 — 서버 통계 API 가 생기면 다시 보여요.
-    private var activity: ActivityStats { store.stats }
+    /// 활동 요약 (`/api/me/stats`) — 아직 못 받았으면 nil 이고 숫자 대신 "-" 를 보여요.
+    private var activity: ActivityStats? { store.stats }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,7 +55,8 @@ struct MyPageView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     profile.padding(.top, 12)
-                    // 활동 요약(stats · byType)은 서버 통계 API 가 생기기 전까지 숨겨요.
+                    stats.padding(.top, 22)
+                    byType.padding(.top, 14)
                     menu.padding(.top, 18)
                 }
             }
@@ -86,6 +88,17 @@ struct MyPageView: View {
         }
         .animation(.easeOut(duration: 0.2), value: confirmsLogout)
         .hToast($toast)
+        .task { await loadStats() }
+    }
+
+    private func loadStats() async {
+        do {
+            let stats = try await services.calendar.stats()
+            if session.state == .signedIn { store.applyStats(stats) }
+        } catch is CancellationError {
+        } catch {
+            if store.stats == nil { toast = "활동 요약을 불러오지 못했어요" }
+        }
     }
 
     /// 원 76 · 캐릭터 60 + 이름 22 Bold + 이메일·로그인 방법 13 (줄 높이 1.45) + 프로필 편집
@@ -129,11 +142,11 @@ struct MyPageView: View {
     /// surface · 모서리 18 · 위아래 16, 세 칸 사이 세로 구분선(#E5E5EA)
     private var stats: some View {
         HStack(spacing: 0) {
-            statCell("\(activity.completedMissions)", "완료한 미션")
+            statCell(activity.map { "\($0.completedMissions)" } ?? "-", "완료한 미션")
             Rectangle().fill(.disabled).frame(width: 1)
-            statCell("\(activity.streakDays)일", "연속 참여")
+            statCell(activity.map { "\($0.streakDays)일" } ?? "-", "연속 참여")
             Rectangle().fill(.disabled).frame(width: 1)
-            statCell("\(activity.groupCount)개", "참여 그룹")
+            statCell(activity.map { "\($0.groupCount)개" } ?? "-", "참여 그룹")
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 16)
@@ -161,7 +174,7 @@ struct MyPageView: View {
                     Text(type.displayName)
                         .font(.caption12)
                         .foregroundStyle(.textSecondary)
-                    Text("\(activity.byType[type] ?? 0)")
+                    Text(activity.map { "\($0.byType[type] ?? 0)" } ?? "-")
                         .font(.plex(15, .bold))
                         .foregroundStyle(.ink)
                 }

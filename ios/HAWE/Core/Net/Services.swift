@@ -8,6 +8,7 @@ final class Services {
     @ObservationIgnored let groups: GroupRepository
     @ObservationIgnored let missions: MissionRepository
     @ObservationIgnored let submissions: SubmissionRepository
+    @ObservationIgnored let calendar: CalendarRepository
 
     init(baseURL: URL = AppConfig.apiBaseURL, tokens: TokenStore, onSessionExpired: @escaping @Sendable () -> Void = {}) {
         let api = APIClient(baseURL: baseURL, tokens: tokens, onSessionExpired: onSessionExpired)
@@ -15,6 +16,7 @@ final class Services {
         groups = GroupRepository(api: api)
         missions = MissionRepository(api: api)
         submissions = SubmissionRepository(api: api)
+        calendar = CalendarRepository(api: api)
     }
 
     /// #Preview 용 — 서버에 닿지 않아요.
