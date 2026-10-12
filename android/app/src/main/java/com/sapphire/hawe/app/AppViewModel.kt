@@ -10,6 +10,7 @@ import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.net.ApiClient
 import com.sapphire.hawe.core.net.AuthRepository
+import com.sapphire.hawe.core.net.CalendarRepository
 import com.sapphire.hawe.core.net.GroupRepository
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
@@ -29,6 +30,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val groups = GroupRepository(api)
     val missions = MissionRepository(api)
     val submissions = SubmissionRepository(api)
+    val calendar = CalendarRepository(api)
     val appSession: AppSession = AppSession(initialState = if (auth.hasSession) AppSession.State.RESTORING else AppSession.State.SIGNED_OUT,
         onCleared = { auth.clearSession(); dataStore.reset() })
     val push = PushCenter()

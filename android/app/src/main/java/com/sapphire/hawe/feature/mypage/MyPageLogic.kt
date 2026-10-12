@@ -8,9 +8,11 @@ fun accountLines(account: MyAccount): List<String> = buildList {
 }
 
 data class StatsDisplay(val completed: String, val streak: String, val groups: String)
-fun statsDisplay(stats: ActivityStats) = StatsDisplay(
+/** 서버에서 아직 못 받아왔으면(null) 숫자 대신 "-"를 보여줘요. */
+fun statsDisplay(stats: ActivityStats?) = if (stats == null) StatsDisplay("-", "-", "-") else StatsDisplay(
     stats.completedMissions.toString(), "${stats.streakDays}일", "${stats.groupCount}개")
 fun byTypeCount(stats: ActivityStats, type: MissionType) = stats.byType[type] ?: 0
+fun byTypeText(stats: ActivityStats?, type: MissionType) = stats?.let { byTypeCount(it, type).toString() } ?: "-"
 
 enum class NotificationKey { ALL, TOPIC, POKE, FRIEND_DONE, COMMENT }
 fun NotificationPrefs.with(key: NotificationKey, enabled: Boolean): NotificationPrefs = when (key) {

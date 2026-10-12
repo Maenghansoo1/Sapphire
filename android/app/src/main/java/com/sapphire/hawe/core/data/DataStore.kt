@@ -2,9 +2,9 @@ package com.sapphire.hawe.core.data
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.sapphire.hawe.core.HaweTime
 import com.sapphire.hawe.core.model.*
 import com.sapphire.hawe.core.net.CurrentMissionState
 import com.sapphire.hawe.core.net.LoadedGroup
@@ -15,6 +15,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.YearMonth
 import kotlin.random.Random
 
 sealed interface SubmissionContent {
@@ -70,6 +71,11 @@ class DataStore(
     val groups: List<StoredGroup> get() = _groups.toList()
     private var storedProfile by mutableStateOf(Profile.mockMine)
     val myProfile: Profile get() = storedProfile
+    // 달력: (그룹, 달) → 그 달 기록. 달력에서 연 지난 미션의 피드는 pastFeeds에 따로 둬요.
+    private val calendars = mutableStateMapOf<Pair<Long, YearMonth>, List<DayRecord>>()
+    private val pastFeeds = mutableStateMapOf<Long, List<Submission>>()
+    var stats by mutableStateOf<ActivityStats?>(null)
+        private set
 
     fun setMyProfile(profile: Profile) {
         storedProfile = profile
@@ -82,6 +88,7 @@ class DataStore(
 
     fun reset() {
         _groups.clear(); storedProfile = Profile.mockMine; groupsState = GroupsState.NOT_LOADED
+        calendars.clear(); pastFeeds.clear(); stats = null
         nextLocalGroupId = -1L; nextLocalMemberId = -1L
     }
 
@@ -121,18 +128,17 @@ class DataStore(
         if (it.missions.isNotEmpty()) it else it.copy(missionState = MissionState.FAILED)
     }
 
-    val stats: ActivityStats get() {
-        val mine = groups.flatMap { group -> group.missions.mapNotNull { mission ->
-            if (mission.serverSubmittedByMe) mission else null
-        } }
-        val days = mine.map { it.opensAt.atZone(HaweTime.SEOUL).toLocalDate() }.toSet()
-        var day = Instant.now(clock).atZone(HaweTime.SEOUL).toLocalDate()
-        if (day !in days) day = day.minusDays(1)
-        var streak = 0
-        while (day in days) { streak++; day = day.minusDays(1) }
-        return ActivityStats(mine.size, streak, groups.size,
-            mine.mapNotNull { it.type }.groupingBy { it }.eachCount())
+    fun applyStats(stats: ActivityStats) { this.stats = stats }
+
+    fun applyCalendar(groupID: Long, month: YearMonth, records: List<DayRecord>) {
+        calendars[groupID to month] = records.toList()
     }
+
+    /** 아직 불러오지 않은 달이면 null */
+    fun records(groupID: Long, month: YearMonth): List<DayRecord>? = calendars[groupID to month]
+
+    fun calendarRecord(groupID: Long, missionID: Long): DayRecord? = calendars.entries
+        .filter { it.key.first == groupID }.flatMap { it.value }.firstOrNull { it.missionID == missionID }
 
     fun group(id: Long): GroupDetail? = groups.firstOrNull { it.id == id }?.detail
 
@@ -194,7 +200,16 @@ class DataStore(
             }, mission.deadlineAt, mission.template, mission.spec)
     }
 
-    fun applyFeed(groupID: Long, missionID: Long, submissions: List<Submission>) = update(groupID) { group ->
+    fun applyFeed(groupID: Long, missionID: Long, submissions: List<Submission>) {
+        val isCurrent = groups.firstOrNull { it.id == groupID }?.missions?.lastOrNull()?.id == missionID
+        if (!isCurrent && calendarRecord(groupID, missionID) != null) {
+            pastFeeds[missionID] = submissions.toList()
+            return
+        }
+        applyCurrentFeed(groupID, missionID, submissions)
+    }
+
+    private fun applyCurrentFeed(groupID: Long, missionID: Long, submissions: List<Submission>) = update(groupID) { group ->
         val mission = group.missions.lastOrNull()?.takeIf { it.id == missionID } ?: return@update group
         group.copy(missions = listOf(mission.copy(submissions = submissions.toList(), feedLoaded = true)))
     }
@@ -219,7 +234,7 @@ class DataStore(
 
     fun result(groupID: Long, missionID: Long): MissionResult? {
         val stored = groups.firstOrNull { it.id == groupID } ?: return null
-        val mission = stored.missions.firstOrNull { it.id == missionID } ?: return null
+        val mission = stored.missions.firstOrNull { it.id == missionID } ?: return pastResult(stored, missionID)
         if (!mission.feedLoaded) return null
         val done = mission.submissions.mapNotNull { it.authorID }.toSet()
         return MissionResult(mission.id, stored.detail.name, mission.type ?: return null, mission.topic, mission.opensAt,
@@ -227,16 +242,13 @@ class DataStore(
             stored.detail.members.filter { it.id !in done }.map { it.displayed })
     }
 
-    fun records(groupID: Long): List<DayRecord> {
-        val stored = groups.firstOrNull { it.id == groupID } ?: return emptyList()
-        val today = Instant.now(clock).atZone(HaweTime.SEOUL).toLocalDate()
-        return stored.missions.mapNotNull { mission ->
-            val day = mission.opensAt.atZone(HaweTime.SEOUL).toLocalDate()
-            val mine = mission.serverSubmittedByMe
-            if (mission.type == null || mission.submissions.isEmpty() || (day >= today && !mine)) null else
-                DayRecord(mission.opensAt, mission.type, mission.topic, mission.submissions.size,
-                    stored.detail.members.size, mine, mission.id)
-        }
+    // 달력에서 연 지난 미션: 미션 정보는 달력 기록, 제출물은 pastFeeds에서 가져와요.
+    private fun pastResult(stored: StoredGroup, missionID: Long): MissionResult? {
+        val record = calendarRecord(stored.id, missionID) ?: return null
+        val submissions = pastFeeds[missionID] ?: return null
+        val done = submissions.mapNotNull { it.authorID }.toSet()
+        return MissionResult(missionID, stored.detail.name, record.type, record.topic, record.date,
+            record.memberCount, submissions, stored.detail.members.filter { it.id !in done }.map { it.displayed })
     }
 
     private fun update(groupID: Long, change: (StoredGroup) -> StoredGroup) {

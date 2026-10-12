@@ -1,0 +1,92 @@
+{
+  "info": {
+    "name": "HA'WE - CALENDAR API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "가입 → 그룹 생성 → 그룹 달력 → 활동 요약. 1~6을 순서대로 실행합니다. 그룹을 만들면 첫 미션이 바로 열리고, 아직 내지 않은 현재 미션이라 도장은 null입니다. 도장 GOOD/LATE를 보려면 SUBMISSION 모음으로 제출한 뒤 4를 다시 실행합니다. 다시 실행할 때 collection 변수 run을 비웁니다."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "run", "value": "" },
+    { "key": "token", "value": "" },
+    { "key": "groupId", "value": "" },
+    { "key": "month", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. 회원가입",
+      "event": [
+        { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+          "if (!pm.collectionVariables.get('run')) pm.collectionVariables.set('run', Date.now().toString(36));",
+          "pm.collectionVariables.set('month', new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7));"
+        ] } }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"email\":\"calendar_{{run}}@test.com\",\"password\":\"password1\",\"nickname\":\"달력테스터\",\"agreeTerms\":true,\"agreePrivacy\":true}" },
+        "url": "{{baseUrl}}/api/auth/register"
+      }
+    },
+    {
+      "name": "2. 로그인",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200) pm.collectionVariables.set('token', pm.response.json().accessToken);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"email\":\"calendar_{{run}}@test.com\",\"password\":\"password1\"}" },
+        "url": "{{baseUrl}}/api/auth/login"
+      }
+    },
+    {
+      "name": "3. 그룹 생성",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('groupId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"name\":\"달력 검증 그룹\",\"dailyMissionCount\":1,\"missionSlots\":[{\"slotNo\":1,\"publishTime\":\"00:00\"}]}" },
+        "url": "{{baseUrl}}/api/groups"
+      }
+    },
+    {
+      "name": "4. 그룹 달력 (이번 달)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('month', () => pm.expect(body.month).to.eql(pm.collectionVariables.get('month')));",
+        "pm.test('오늘 미션이 있음', () => pm.expect(body.days.length).to.be.above(0));",
+        "pm.test('미션 항목 모양', () => pm.expect(body.days[0].missions[0]).to.have.all.keys('missionId', 'media', 'content', 'submittedCount', 'memberCount', 'stamp'));"
+      ] } }],
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/calendar?month={{month}}" }
+    },
+    {
+      "name": "5. 활동 요약",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('그룹 수', () => pm.expect(body.groupCount).to.eql(1));",
+        "pm.test('유형 4개', () => pm.expect(body.byMedia).to.include.all.keys('DRAW', 'PHOTO', 'TEXT', 'VOICE'));"
+      ] } }],
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/me/stats" }
+    },
+    {
+      "name": "6. 잘못된 month (400)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('400 VALIDATION_ERROR', () => {",
+        "  pm.response.to.have.status(400);",
+        "  pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+        "});"
+      ] } }],
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/calendar?month=2026-13" }
+    }
+  ]
+}

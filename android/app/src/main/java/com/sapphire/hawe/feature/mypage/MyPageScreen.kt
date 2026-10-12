@@ -23,9 +23,11 @@ import com.sapphire.hawe.core.COMING_SOON
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.ActivityStats
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.net.CalendarRepository
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.*
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun rememberAppVersionName(): String {
@@ -37,7 +39,7 @@ fun rememberAppVersionName(): String {
 }
 
 @Composable
-fun MyPageScreen(session: AppSession, store: DataStore, onBack: () -> Unit,
+fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarRepository, onBack: () -> Unit,
     onProfileEdit: () -> Unit, onNotifications: () -> Unit, onUserInfo: () -> Unit,
     onAppInfo: () -> Unit, onWithdraw: () -> Unit) {
     val context = LocalContext.current
@@ -45,6 +47,16 @@ fun MyPageScreen(session: AppSession, store: DataStore, onBack: () -> Unit,
     val version = rememberAppVersionName()
     var confirmLogout by remember { mutableStateOf(false) }
     val toast = rememberHToastState()
+    LaunchedEffect(Unit) {
+        try {
+            val stats = calendar.stats()
+            if (session.state == AppSession.State.SIGNED_IN) store.applyStats(stats)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            if (store.stats == null) toast.show("활동 요약을 불러오지 못했어요")
+        }
+    }
+    val stats = store.stats
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = HLayout.screenPaddingCompact)) {
         HNavBar("마이페이지", leading = HNavLeading.BACK, onLeading = onBack)
@@ -68,6 +80,8 @@ fun MyPageScreen(session: AppSession, store: DataStore, onBack: () -> Unit,
                     }
                 }
             }
+            StatsCard(stats, Modifier.padding(top = 22.dp))
+            TypeCounts(stats, Modifier.padding(top = 14.dp))
             Column(Modifier.padding(top = 18.dp)) {
                 HListRow("알림 설정", height = 48.dp, onClick = onNotifications)
                 HListRow("유저 정보", height = 48.dp, onClick = onUserInfo)
@@ -91,7 +105,7 @@ fun MyPageScreen(session: AppSession, store: DataStore, onBack: () -> Unit,
 }
 
 @Composable
-private fun StatsCard(stats: ActivityStats, modifier: Modifier = Modifier) {
+private fun StatsCard(stats: ActivityStats?, modifier: Modifier = Modifier) {
     val display = statsDisplay(stats)
     Row(modifier.fillMaxWidth().height(IntrinsicSize.Min)
         .background(HColors.surface, RoundedCornerShape(18.dp)).padding(vertical = 16.dp),
@@ -116,7 +130,7 @@ private fun StatCell(value: String, label: String, modifier: Modifier) {
 }
 
 @Composable
-private fun TypeCounts(stats: ActivityStats, modifier: Modifier = Modifier) {
+private fun TypeCounts(stats: ActivityStats?, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MissionType.entries.forEach { type ->
             Column(Modifier.weight(1f).border(1.dp, HColors.line, RoundedCornerShape(HRadius.input))
@@ -124,7 +138,7 @@ private fun TypeCounts(stats: ActivityStats, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(type.displayName, style = HType.caption12, color = HColors.textSecondary,
                     maxLines = 1)
-                Text(byTypeCount(stats, type).toString(), style = HType.plex(15, FontWeight.Bold),
+                Text(byTypeText(stats, type), style = HType.plex(15, FontWeight.Bold),
                     color = HColors.ink, maxLines = 1)
             }
         }
