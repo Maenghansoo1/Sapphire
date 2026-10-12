@@ -1,4 +1,4 @@
-# HA'WE (하웨)
+# HA'WE (하위)
 
 그룹마다 매일 미션이 열리고, 내가 먼저 답해야 그룹원들의 답을 볼 수 있는 모바일 그룹 앱.
 프로젝트 소개는 `docs/FEATURE/PROJECT_OVERVIEW.md` 를 보세요.
