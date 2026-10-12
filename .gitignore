@@ -41,3 +41,12 @@ CLAUDE.md
 uploads/
 
 .agent/
+
+### ML ###
+ml/**/data/
+ml/**/.venv/
+ml/eval-data/
+ml/**/checkpoints/
+ml/**/__pycache__/
+ml/**/.pytest_cache/
+ml/**/runs/
