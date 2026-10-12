@@ -271,7 +271,7 @@ hawe.mission.max-daily-count=1
 | GET | `/submissions/{id}` | 게시물 상세 |
 
 ### GET /missions/{missionId}/submissions
-- 1차 구현: `page` 기본 0(음수는 0), `size` 기본 20(1~100으로 보정), 정렬 `submitted_at ASC, id ASC`. 항목은 §3-3의 공통 응답이다. `reactions: []`, `commentCount: 0`은 후속 단계에서 채운다.
+- `page` 기본 0(음수는 0), `size` 기본 20(1~100으로 보정), 정렬 `submitted_at ASC, id ASC`. 항목은 §3-3의 공통 응답이다. `reactions`는 스티커별 `{ stickerType, count, reactedByMe, userIds }` 배열이고 `commentCount`는 실제 댓글 수다. 반응이 없는 종류는 생략한다.
 - 내가 아직 미제출: **423** `FEED_LOCKED`
 - 제출 완료: 페이지네이션 봉투. 항목은 §3-3의 공통 제출 응답.
 ```json
@@ -287,7 +287,7 @@ hawe.mission.max-daily-count=1
 - 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423)
 
 ### GET /submissions/{id}
-- 1차 구현: §3-3의 공통 응답. 지난 미션도 같은 잠금 규칙을 적용한다.
+- §3-3의 공통 응답과 실제 반응·댓글 집계를 제공한다. 지난 미션도 같은 잠금 규칙을 적용한다.
 응답은 §3-3의 공통 `SubmissionResponse`와 같다.
 - 게시물이 속한 그룹의 멤버이면서 **해당 미션에 내가 제출했을 때만** 볼 수 있다 (잠금 규칙 동일).
 - 에러: `SUBMISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423)

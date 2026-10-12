@@ -12,14 +12,21 @@ import com.sapphire.hawe.group.service.GroupErrorCode;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.mission.service.MissionErrorCode;
+import com.sapphire.hawe.comment.dao.CommentMapper;
+import com.sapphire.hawe.comment.dao.CommentCountRow;
+import com.sapphire.hawe.reaction.dao.ReactionMapper;
+import com.sapphire.hawe.reaction.dao.ReactionRow;
+import com.sapphire.hawe.reaction.service.ReactionService;
 import com.sapphire.hawe.submission.dao.SubmissionInsertRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
 import com.sapphire.hawe.submission.dto.SubmissionResponse;
+import com.sapphire.hawe.submission.dto.ReactionSummary;
 import java.io.IOException;
 import java.text.BreakIterator;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,11 +46,13 @@ public class SubmissionService {
     private final SubmissionMapper submissions;
     private final FileStorage storage;
     private final ObjectMapper json;
+    private final ReactionMapper reactions;
+    private final CommentMapper comments;
 
     public SubmissionService(MissionMapper missions, GroupMemberMapper members, SubmissionMapper submissions,
-            FileStorage storage, ObjectMapper json) {
+            FileStorage storage, ObjectMapper json, ReactionMapper reactions, CommentMapper comments) {
         this.missions = missions; this.members = members; this.submissions = submissions;
-        this.storage = storage; this.json = json;
+        this.storage = storage; this.json = json; this.reactions = reactions; this.comments = comments;
     }
 
     @Transactional
@@ -125,7 +134,7 @@ public class SubmissionService {
             if (key != null) storage.delete(key);
             throw new BusinessException(SubmissionErrorCode.ALREADY_SUBMITTED);
         }
-        return response(submissions.findDetailById(row.getId()));
+        return response(submissions.findDetailById(row.getId()), List.of(), 0);
     }
 
     @Transactional(readOnly = true)
@@ -137,18 +146,37 @@ public class SubmissionService {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(100, size));
         long total = submissions.countByMissionId(missionId);
-        List<SubmissionResponse> content = submissions.findFeedByMissionId(missionId,
-                (long) safePage * safeSize, safeSize).stream().map(this::response).toList();
+        List<SubmissionRow> rows = submissions.findFeedByMissionId(missionId, (long) safePage * safeSize, safeSize);
+        List<SubmissionResponse> content = enrich(rows, userId);
         return PageResponse.of(content, safePage, safeSize, total);
     }
 
     @Transactional(readOnly = true)
     public SubmissionResponse detail(Long userId, Long submissionId) {
+        SubmissionRow row = requireAccessible(userId, submissionId);
+        return enrich(List.of(row), userId).getFirst();
+    }
+
+    public SubmissionRow requireAccessible(Long userId, Long submissionId) {
         SubmissionRow row = submissions.findDetailById(submissionId);
         if (row == null) throw new BusinessException(SubmissionErrorCode.SUBMISSION_NOT_FOUND);
         requireMember(row.getGroupId(), userId);
         requireSubmitted(row.getMissionId(), userId);
-        return response(row);
+        return row;
+    }
+
+    private List<SubmissionResponse> enrich(List<SubmissionRow> rows, Long userId) {
+        if (rows.isEmpty()) return List.of();
+        List<Long> ids = rows.stream().map(SubmissionRow::getId).toList();
+        Map<Long, List<ReactionRow>> bySubmission = new HashMap<>();
+        for (ReactionRow reaction : reactions.findBySubmissionIds(ids))
+            bySubmission.computeIfAbsent(reaction.getSubmissionId(), ignored -> new ArrayList<>()).add(reaction);
+        Map<Long, Integer> counts = new HashMap<>();
+        for (CommentCountRow count : comments.countBySubmissionIds(ids))
+            counts.put(count.getSubmissionId(), count.getCount());
+        return rows.stream().map(row -> response(row,
+                ReactionService.summarize(bySubmission.getOrDefault(row.getId(), List.of()), userId),
+                counts.getOrDefault(row.getId(), 0))).toList();
     }
 
     private void requireMember(Long groupId, Long userId) {
@@ -206,7 +234,7 @@ public class SubmissionService {
         catch (Exception e) { throw new BusinessException(SubmissionErrorCode.INVALID_SUBMISSION, "파형이 올바르지 않습니다"); }
     }
 
-    private SubmissionResponse response(SubmissionRow row) {
+    private SubmissionResponse response(SubmissionRow row, List<ReactionSummary> reactions, int commentCount) {
         if (row == null) throw new IllegalStateException("Inserted submission was not found");
         String text = null;
         Double duration = null;
@@ -230,7 +258,7 @@ public class SubmissionService {
         return new SubmissionResponse(row.getId(), row.getMissionId(),
                 new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(), null),
                 row.getTemplate(), row.getMediaUrl() == null ? null : storage.publicUrl(row.getMediaUrl()),
-                row.getMediaType(), row.getCaption(), text, duration, waveform, List.of(), 0,
+                row.getMediaType(), row.getCaption(), text, duration, waveform, reactions, commentCount,
                 SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
     }
 }

@@ -144,6 +144,7 @@ CREATE TABLE `reactions` (
   `user_id` bigint(20) NOT NULL,
   `sticker_type` varchar(50) NOT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_reactions_submission_user_sticker` (`submission_id`,`user_id`,`sticker_type`),
   KEY `fk_reactions_submission` (`submission_id`),
   KEY `fk_reactions_user` (`user_id`),
   CONSTRAINT `fk_reactions_submission` FOREIGN KEY (`submission_id`) REFERENCES `submissions` (`id`),

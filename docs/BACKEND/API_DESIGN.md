@@ -29,7 +29,7 @@
 | accessToken 만료 | 30분 | — |
 | refreshToken 만료 | 14일, refresh 시마다 회전(rotate) 발급 | — |
 | 그룹 초대 | 그룹별 6자리 코드(전체 유일, 만료 없음) | 미리보기와 정원 검사에 사용 |
-| 스티커 반응 | 토글 방식 (이미 누른 반응 다시 누르면 취소) | 무한정 중복 반응 방지 |
+| 스티커 반응 | `heart`, `laugh`, `wow`, `sad`, `fire` 5종, 종류별 토글 (이미 누른 반응 다시 누르면 취소) | 무한정 중복 반응 방지 |
 | 댓글 멘션 | 프론트가 `mentionedUserIds`를 명시적으로 전달 | 서버가 `@닉네임` 텍스트 파싱하는 것보다 안전 (닉네임 중복/특수문자 회피) |
 | 그룹장(owner) 탈퇴 | 후임 멤버 지정 후 나가기, 마지막 멤버라면 그룹 삭제 | 소유권을 한 명에게 유지 |
 
@@ -159,34 +159,41 @@
 |---|---|---|
 | GET | `/submissions/{id}/comments` | 댓글 목록 |
 | POST | `/submissions/{id}/comments` | 댓글 작성 |
+| DELETE | `/comments/{commentId}` | 내 댓글 삭제 |
 | POST | `/submissions/{id}/reactions` | 스티커 반응 (토글) |
 
 ### GET /submissions/{id}/comments
+`page` 기본 0, `size` 기본 20(최대 100). 작성 시각, id 오름차순.
 ```json
 { "content": [
-  { "id": 1, "userId": 3, "nickname": "잎사귀", "content": "...", "imageUrl": null,
-    "mentionedUserIds": [1], "createdAt": "..." }
+  { "id": 1, "author": { "userId": 3, "nickname": "잎사귀", "characterKey": "ipsagwi", "profileImageUrl": null },
+    "content": "...", "imageUrl": null, "mentionedUserIds": [1], "createdAt": "...", "mine": false }
 ], "page": 0, "size": 20, "totalPages": 1, "totalElements": 2 }
 ```
 
 ### POST /submissions/{id}/comments
+`multipart/form-data`: `content`(trim 후 1~300자), `mentionedUserIds`(반복 필드), `file`(선택, jpg/png/webp ≤ 10MB). 본문 또는 이미지가 필요하며 이미지만 있으면 `content`는 빈 문자열이다. 멘션은 같은 그룹의 멤버만 지정할 수 있다.
 ```json
-// Request
-{ "content": "@몽실이 이거 뭐야", "mentionedUserIds": [1], "imageUrl": null }
-
 // Response 201
-{ "id": 2, "userId": 3, "nickname": "잎사귀", "content": "@몽실이 이거 뭐야", "imageUrl": null,
-  "mentionedUserIds": [1], "createdAt": "..." }
+{ "id": 2, "author": { "userId": 3, "nickname": "잎사귀", "characterKey": "ipsagwi", "profileImageUrl": null },
+  "content": "@몽실이 이거 뭐야", "imageUrl": null, "mentionedUserIds": [1], "createdAt": "...", "mine": true }
 ```
+
+### DELETE /comments/{commentId}
+본인 댓글만 삭제할 수 있다. 응답 204. 첨부 이미지도 삭제한다.
 
 ### POST /submissions/{id}/reactions
 ```json
 // Request
 { "stickerType": "heart" }
 
-// Response 200 (토글 결과)
-{ "stickerType": "heart", "reacted": true, "count": 4 }
+// Response 200 (토글 후 이 제출의 전체 반응; 0개인 종류는 생략)
+{ "reactions": [
+  { "stickerType": "heart", "count": 2, "reactedByMe": true, "userIds": [1, 3] },
+  { "stickerType": "fire", "count": 1, "reactedByMe": false, "userIds": [5] }
+] }
 ```
+피드·상세의 `reactions`도 같은 배열이다. 종류 순서는 `heart`, `laugh`, `wow`, `sad`, `fire`이다. 피드·상세의 `commentCount`는 실제 댓글 수다. 작성·목록·반응은 모두 해당 미션에 제출한 그룹 멤버만 접근할 수 있다(403 `NOT_GROUP_MEMBER`, 423 `FEED_LOCKED`). 없는 제출은 404 `SUBMISSION_NOT_FOUND`, 없는 댓글은 404 `COMMENT_NOT_FOUND`, 남의 댓글 삭제는 403 `NOT_COMMENT_OWNER`이다. 잘못된 스티커·본문·멘션은 400 `VALIDATION_ERROR`, 파일 형식과 크기 오류는 각각 415 `UNSUPPORTED_FILE_TYPE`, 413 `FILE_TOO_LARGE`이다.
 
 ---
 

@@ -303,7 +303,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
                     nav.popBackStack()
                 }
             }
-            SubmissionDetailScreen(groupID, missionID, submissionID, store,
+            SubmissionDetailScreen(groupID, missionID, submissionID, store, submissions,
                 onBack = { nav.popBackStack() })
         }
         composable<MainRoute.MyPage> {

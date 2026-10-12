@@ -7,6 +7,11 @@ import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
+import com.sapphire.hawe.reaction.dao.ReactionMapper;
+import com.sapphire.hawe.comment.dao.CommentMapper;
+import com.sapphire.hawe.comment.dao.CommentCountRow;
+import com.sapphire.hawe.reaction.dao.ReactionRow;
+import java.util.List;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +33,10 @@ class SubmissionServiceTests {
     GroupMemberMapper members = mock(GroupMemberMapper.class);
     SubmissionMapper submissions = mock(SubmissionMapper.class);
     FileStorage storage = mock(FileStorage.class);
-    SubmissionService service = new SubmissionService(missions, members, submissions, storage, new ObjectMapper());
+    ReactionMapper reactions = mock(ReactionMapper.class);
+    CommentMapper comments = mock(CommentMapper.class);
+    SubmissionService service = new SubmissionService(missions, members, submissions, storage,
+            new ObjectMapper(), reactions, comments);
     MissionRow mission = new MissionRow();
 
     @BeforeEach void setUp() {
@@ -122,5 +130,36 @@ class SubmissionServiceTests {
                     sync -> sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
             verify(storage).delete("submissions/stored.jpg");
         } finally { TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test void feedBatchesReactionsAndCommentCounts() {
+        when(submissions.existsByMissionIdAndUserId(1L, 3L)).thenReturn(true);
+        SubmissionRow first = feedRow(10L);
+        SubmissionRow second = feedRow(11L);
+        when(submissions.findFeedByMissionId(1L, 0L, 20)).thenReturn(List.of(first, second));
+        when(submissions.countByMissionId(1L)).thenReturn(2L);
+        ReactionRow reaction = new ReactionRow();
+        reaction.setSubmissionId(10L); reaction.setUserId(3L); reaction.setStickerType("heart");
+        when(reactions.findBySubmissionIds(List.of(10L, 11L))).thenReturn(List.of(reaction));
+        CommentCountRow count = new CommentCountRow();
+        count.setSubmissionId(10L); count.setCount(2);
+        when(comments.countBySubmissionIds(List.of(10L, 11L))).thenReturn(List.of(count));
+
+        var page = service.feed(3L, 1L, 0, 20);
+
+        assertEquals(2, page.content().size());
+        assertEquals(2, page.content().getFirst().commentCount());
+        assertTrue(page.content().getFirst().reactions().getFirst().reactedByMe());
+        assertEquals(0, page.content().get(1).commentCount());
+        assertTrue(page.content().get(1).reactions().isEmpty());
+        verify(reactions, times(1)).findBySubmissionIds(List.of(10L, 11L));
+        verify(comments, times(1)).countBySubmissionIds(List.of(10L, 11L));
+    }
+
+    private static SubmissionRow feedRow(Long id) {
+        SubmissionRow row = new SubmissionRow();
+        row.setId(id); row.setMissionId(1L); row.setGroupId(2L); row.setUserId(3L);
+        row.setTemplate("TEXT_FILL_BLANK"); row.setSubmittedAt(LocalDateTime.now());
+        return row;
     }
 }

@@ -447,7 +447,7 @@ DELETE /api/me — 회원 탈퇴, 204
 
 ---
 
-## 6. Submissions · Feed — 상태: 반영됨 (1차: 반응·댓글 필드는 빈 값, 서명 URL 제외)
+## 6. Submissions · Feed — 상태: 반영됨 (반응·댓글 집계 포함, 서명 URL 제외)
 
 백엔드에 제출·피드·상세와 로컬 파일 저장·공개 서빙을 구현했다. `MISSIONS_API.md` §3·§4의 1차 계약을 따른다.
 
@@ -483,7 +483,7 @@ POST /api/missions/{missionId}/submissions   (multipart)
   "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
 ```
 - 설계의 `userId`·`nickname` 최상위 필드는 `author` 객체로 바꾼다. 상세(`GET /api/submissions/{id}`)도 같다.
-- 1차는 `reactions: []`, `commentCount: 0` 고정이다. 반응·댓글 데이터는 7단계에서 채운다.
+- 7단계 백엔드부터 `reactions`와 `commentCount`에 실제 데이터를 채운다. 데이터가 없으면 각각 빈 배열과 0이다.
 - 오류 코드에 `MISSION_CLOSED`(409) 추가. 나머지는 설계와 같다.
 
 ### 6-3. 수정 대상
@@ -502,7 +502,7 @@ POST /api/missions/{missionId}/submissions   (multipart)
 
 ---
 
-## 7. Reactions · Comments (미구현, 설계 기준) — 상태: 결정 완료 (반영 전)
+## 7. Reactions · Comments — 상태: 백엔드 반영됨 (앱은 7A, 알림은 9단계)
 
 ### 7-1. 결정
 
@@ -537,7 +537,7 @@ POST /api/missions/{missionId}/submissions   (multipart)
 
 ```text
 POST /api/submissions/{id}/comments   multipart/form-data
-  content          text, 1~300자 (이미지만 있으면 빈 값 허용 여부는 7-4)
+  content          text, trim 후 1~300자 (이미지만 있으면 빈 값 허용)
   mentionedUserIds 반복 필드 (같은 그룹 멤버만, 아니면 400)
   file             선택, 이미지 jpg/png/webp ≤ 10MB
 ```
@@ -564,7 +564,7 @@ POST /api/submissions/{id}/comments   multipart/form-data
 
 ### 7-4. 미결
 
-- 이미지만 있는 댓글(본문 없음) 허용 여부.
+- 이미지만 있는 댓글은 허용하며 `content`를 빈 문자열로 저장한다.
 - 댓글 작성 시 `comment`(작품 작성자)·`mention`(멘션된 멤버) 알림을 보낸다 (§8). 반응에는 알림이 없다.
 - 스티커 선택·멘션·이미지 댓글 UI 디자인은 Figma에 없음.
 

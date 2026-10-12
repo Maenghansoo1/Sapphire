@@ -1,0 +1,87 @@
+{
+  "info": {
+    "name": "HA'WE - Reactions and Comments API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Set token and an accessible submissionId first. The token holder must belong to the group and have submitted to the same mission. Set mentionedUserId to another member of that group."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "submissionId", "value": "" },
+    { "key": "commentId", "value": "" },
+    { "key": "mentionedUserId", "value": "" }
+  ],
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+  "item": [
+    {
+      "name": "1. Submission detail (initial totals)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/submissions/{{submissionId}}" }
+    },
+    {
+      "name": "2. Toggle heart on (200)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"stickerType\":\"heart\"}" },
+        "url": "{{baseUrl}}/api/submissions/{{submissionId}}/reactions"
+      }
+    },
+    {
+      "name": "3. Toggle heart off (200)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"stickerType\":\"heart\"}" },
+        "url": "{{baseUrl}}/api/submissions/{{submissionId}}/reactions"
+      }
+    },
+    {
+      "name": "4. Invalid sticker (400 VALIDATION_ERROR)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"stickerType\":\"unknown\"}" },
+        "url": "{{baseUrl}}/api/submissions/{{submissionId}}/reactions"
+      }
+    },
+    {
+      "name": "5. Create text comment with mention (201)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('commentId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "content", "value": "Great work!", "type": "text" },
+          { "key": "mentionedUserIds", "value": "{{mentionedUserId}}", "type": "text" }
+        ] },
+        "url": "{{baseUrl}}/api/submissions/{{submissionId}}/comments"
+      }
+    },
+    {
+      "name": "6. Create image-only comment (201; choose file)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('commentId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "file", "type": "file", "src": "" }
+        ] },
+        "url": "{{baseUrl}}/api/submissions/{{submissionId}}/comments"
+      }
+    },
+    {
+      "name": "7. List comments (200)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/submissions/{{submissionId}}/comments?page=0&size=20" }
+    },
+    {
+      "name": "8. Delete my comment (204)",
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/api/comments/{{commentId}}" }
+    },
+    {
+      "name": "9. Submission detail (updated totals)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/submissions/{{submissionId}}" }
+    }
+  ]
+}

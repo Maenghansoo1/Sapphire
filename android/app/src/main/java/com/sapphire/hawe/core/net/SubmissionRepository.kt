@@ -4,7 +4,10 @@ import com.sapphire.hawe.core.data.SubmissionContent
 import com.sapphire.hawe.core.model.AvatarContent
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.Profile
+import com.sapphire.hawe.core.model.Reaction
+import com.sapphire.hawe.core.model.Sticker
 import com.sapphire.hawe.core.model.Submission
+import com.sapphire.hawe.core.model.SubmissionComment
 import com.sapphire.hawe.designsystem.assets.ProfileCharacter
 import java.net.URI
 import java.time.OffsetDateTime
@@ -72,12 +75,50 @@ class SubmissionRepository(private val api: ApiClient) {
         return page.content.mapNotNull { it.toModel(myUserId) }
     }
 
+    /** 스티커 토글. 서버가 돌려주는 이 작품의 반응 전체로 화면을 다시 그려요. */
+    suspend fun toggleReaction(submissionId: Long, sticker: Sticker): List<Reaction> {
+        val response: ReactionsDto = api.post("/api/submissions/$submissionId/reactions",
+            ReactionRequestDto(sticker.key))
+        return response.reactions.toReactions()
+    }
+
+    suspend fun comments(submissionId: Long): List<SubmissionComment> {
+        val page: CommentPageDto = api.get("/api/submissions/$submissionId/comments?page=0&size=100")
+        return page.content.map { it.toModel() }
+    }
+
+    suspend fun addComment(submissionId: Long, content: String, mentionedUserIds: List<Long>,
+        image: ByteArray?, imageExtension: String = "jpg"): SubmissionComment {
+        val parts = buildList<ApiClient.MultipartPart> {
+            add(ApiClient.MultipartPart.Text("content", content))
+            mentionedUserIds.distinct().forEach { add(ApiClient.MultipartPart.Text("mentionedUserIds", it.toString())) }
+            if (image != null) {
+                val png = imageExtension.equals("png", ignoreCase = true)
+                add(ApiClient.MultipartPart.Bytes("file", if (png) "comment.png" else "comment.jpg",
+                    if (png) "image/png" else "image/jpeg", image))
+            }
+        }
+        val dto: CommentDto = api.postMultipart("/api/submissions/$submissionId/comments", parts)
+        return dto.toModel()
+    }
+
+    suspend fun deleteComment(commentId: Long) = api.delete("/api/comments/$commentId")
+
+    private fun List<ReactionDto>.toReactions(): List<Reaction> = mapNotNull { dto ->
+        Sticker.fromKey(dto.stickerType)?.let { Reaction(it, dto.count, dto.reactedByMe, dto.userIds) }
+    }
+
+    private fun CommentDto.toModel() = SubmissionComment(id,
+        Profile(AvatarContent.Character(ProfileCharacter.fromKey(author.characterKey)), author.nickname),
+        author.userId, content, imageUrl?.let { URI(api.absoluteUrl(it)) }, mentionedUserIds,
+        OffsetDateTime.parse(createdAt).toInstant(), mine)
+
     private fun SubmissionDto.toModel(myUserId: Long): Submission? {
         val type = templateType(template) ?: return null
         return Submission(id, Profile(AvatarContent.Character(ProfileCharacter.fromKey(author.characterKey)),
             author.nickname), author.userId == myUserId, type,
             OffsetDateTime.parse(submittedAt).toInstant(),
             mediaUrl?.let { URI(api.absoluteUrl(it)) }, text, duration, waveform.orEmpty(), isLate,
-            author.userId)
+            author.userId, reactions.orEmpty().toReactions(), commentCount)
     }
 }

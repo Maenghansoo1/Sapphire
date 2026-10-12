@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.Submission
+import com.sapphire.hawe.core.net.SubmissionRepository
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
 import com.sapphire.hawe.designsystem.components.HAvatar
@@ -35,7 +36,7 @@ import com.sapphire.hawe.designsystem.tokens.HType
 
 @Composable
 fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, store: DataStore,
-    onBack: () -> Unit) {
+    repository: SubmissionRepository, onBack: () -> Unit) {
     val result = store.result(groupID, missionID)
     val submission = result?.submissions?.find { it.id == submissionID }
     if (result == null || submission == null) {
@@ -49,7 +50,7 @@ fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, s
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer); player.release() }
     }
-    Column(Modifier.fillMaxSize().background(HColors.bg)) {
+    Column(Modifier.fillMaxSize().background(HColors.bg).imePadding()) {
         Column(Modifier.padding(horizontal = 20.dp)) {
             Box {
                 HNavBar(leading = HNavLeading.BACK, onLeading = onBack)
@@ -70,6 +71,9 @@ fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, s
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp)) {
             DetailArtwork(submission, result.type, player)
+            Spacer(Modifier.height(24.dp))
+            SubmissionSocial(submission.id, submission.reactions,
+                store.group(groupID)?.members.orEmpty(), repository)
         }
     }
 }

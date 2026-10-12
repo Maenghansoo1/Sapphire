@@ -1,24 +1,31 @@
-﻿# 백엔드 5단계: 콕·똥뿌리기 보고
+# 7단계 백엔드 구현 보고
 
-## 변경 파일과 동작
+## 변경 파일과 내용
 
-- `src/main/resources/db/migration/V1__initial_schema.sql`: `pokes.mission_id`의 NOT NULL/FK와 `(from_user_id, to_user_id, mission_id, type)` UNIQUE를 추가했습니다. V2는 변경하지 않았습니다.
-- `src/main/java/com/sapphire/hawe/poke/{domain,dao,dto,service}/`: 현재 미션(그룹의 최소 슬롯 번호에서 최신 발행 미션)을 찾아 기록하고, 해당 미션의 대상 제출 여부를 검사합니다. 종류별 중복은 사전 조회와 DB UNIQUE로 막으며 동시 삽입 충돌을 `ALREADY_POKED`로 반환합니다. 응답에 `missionId`를 포함합니다. 현재 미션이 없으면 `NO_OPEN_MISSION`입니다.
-- `src/main/java/com/sapphire/hawe/mission/{dto,service}/`: 현재·개별 미션 응답의 각 `members[]`에 요청자가 보낸 종류 `pokedByMe`를 한 번의 조회로 채웁니다. 순서는 `poke`, `fling`이며 본인 항목과 기록 없는 항목은 `[]`입니다.
-- `src/main/java/com/sapphire/hawe/group/service/GroupService.java`: 그룹 삭제 때 pokes를 missions보다 먼저 삭제해 새 FK와 충돌하지 않게 했습니다.
-- `src/test/java/com/sapphire/hawe/`의 poke·mission·group·time 관련 테스트: 서비스 검사 순서와 중복 충돌, 실 MariaDB의 FK/UNIQUE·미션별 조회, 인증/검증/응답/조회 MockMvc 흐름을 검증했습니다. `PokeControllerTests`를 새로 추가했습니다.
-- `docs/BACKEND/{API_DESIGN,BACKEND_DB,MISSIONS_API,CONTRACT_DECISIONS,CONTRACT_WORK_PLAN}.md`와 `docs/BACKEND/postman/HAWE_POKE.postman_collection.json`: 구현 계약, 스키마, 요청 예시와 5단계 상태를 반영했습니다.
+- `src/main/resources/db/migration/V1__initial_schema.sql`: 같은 제출·사용자·스티커 조합의 중복을 막는 유니크 키 추가.
+- `src/main/java/com/sapphire/hawe/reaction/`: 5종 스티커 토글 API, 종류별 집계와 사용자 ID 목록 구현.
+- `src/main/java/com/sapphire/hawe/comment/`: 댓글 작성·목록·본인 삭제 API, 멘션 검증과 중복 제거, 이미지 저장 및 트랜잭션 후 파일 정리 구현.
+- `src/main/java/com/sapphire/hawe/submission/service/SubmissionService.java`: 공통 접근 검사 추출, 피드 페이지 단위 반응·댓글 수 일괄 조회, 상세 집계 반영.
+- `src/test/java/com/sapphire/hawe/{reaction,comment}/` 및 `submission/service/SubmissionServiceTests.java`: 서비스·매퍼·MockMvc 회귀 테스트와 피드 일괄 조회 검증.
+- `docs/BACKEND/{API_DESIGN,BACKEND_DB,CONTRACT_DECISIONS,CONTRACT_WORK_PLAN,MISSIONS_API}.md`와 `docs/BACKEND/postman/HAWE_REACTION_COMMENT.postman_collection.json`: 실제 계약과 Postman 요청 갱신.
 
-## 검증 결과
+## 검증
 
-- Java 25 `mvnw.cmd clean test -q`: 통과. 테스트 108개, 실패 0, 오류 0, 건너뜀 0. 컴파일은 이 명령에 포함됩니다. 별도 lint/typecheck 명령은 이 Maven 프로젝트에 없습니다.
-- Postman 컬렉션 `ConvertFrom-Json`: 통과. 한글 대체 문자 없음.
-- `rg existsCurrentMissionSubmission src`: 잔여 사용처 없음.
-- `git diff --check`: 통과. LF/CRLF 변환 경고만 출력됐습니다. 최종 diff는 백엔드 코드·테스트·문서와 이 보고서로 한정했습니다. 이미 있던 `.agent/plan.md`, `.agent/review.md` 변경 및 Cordova node_modules의 미추적 파일은 건드리지 않았습니다.
-- 별도 실행 서버를 이용한 수동 HTTP 스모크는 미검증입니다. 동일 계약의 MockMvc 통합 테스트에서 인증, `poke`/`fling`, 중복 409, `pokedByMe`, 대상 제출 뒤 409를 검증했습니다.
+- Java 25, `mvnw.cmd clean test -q`: 통과. 45개 테스트 스위트, 테스트 145개, 실패·오류 0개.
+- 마지막 멘션 중복 제거 정리 후 `mvnw.cmd test -q -Dtest=CommentServiceTests,CommentControllerTests`: 통과, 5개 테스트.
+- `mvnw.cmd package -q -DskipTests`: 통과, `target/hawe-0.0.1-SNAPSHOT.jar` 생성. 컴파일과 패키징 확인.
+- Postman 컬렉션 JSON 파싱: 통과. `git diff --check -- docs/BACKEND src/main src/test`: 공백 오류 없음.
+- 별도 lint/typecheck 스크립트는 없다. Maven 컴파일이 Java 타입 검사를 수행했다.
+- 최종 변경 목록과 diff를 확인했다. 기존 `.agent/plan.md` 수정은 유지했고 편집하지 않았다. 커밋·푸시하지 않았다.
 
-## DB 재생성·남은 위험·가정
+## DB 처리 및 남은 위험
 
-- 계획에 따라 로컬 `hawe` 개발 DB를 백업한 뒤 재생성했습니다. 백업: `C:\Users\kimch\AppData\Local\Temp\hawe-before-pokes-20261012-153131.sql` (20,813바이트). 재생성 전 사용자 2명, 미션 2개, 제출 4개가 있었습니다. 새 DB에 Flyway V1/V2가 적용됐고 전체 테스트가 통과했습니다. 이전 개발 데이터가 필요하면 이 백업에서 복원해야 합니다.
-- 계획의 V1 직접 수정 결정을 따랐습니다. 이미 V1을 적용한 다른 DB는 이 변경과 checksum이 다르므로 그 환경의 별도 마이그레이션 또는 개발 DB 재생성이 필요합니다. 운영 DB에는 적용하지 않았습니다.
-- 알림/FCM/notifications 저장은 9단계, 앱 버튼과 상태 표시는 5A 범위이므로 이번 변경에 넣지 않았습니다. 관련 파일과 Android/iOS/Cordova는 변경하지 않았습니다.
+- 로컬 개발 DB `localhost:3306/hawe` 재생성 전 사용자·미션·제출·반응·댓글은 각각 0행이었다. 백업: `C:\Users\kimch\AppData\Local\Temp\hawe-before-reactions-20261012-175532.sql` (18,860바이트). 백업 후 로컬 DB를 재생성했고 Flyway V1·V2 적용 및 통합 테스트가 통과했다.
+- V1 체크섬이 바뀌었으므로 기존 V1을 적용한 다른 DB는 배포 전 별도 재생성 또는 마이그레이션 전략이 필요하다.
+- 그룹 삭제 시 댓글 이미지 파일이 남는 문제는 기존 그룹 삭제 흐름의 후속 과제로, 이번 범위에서 다루지 않았다.
+- Android·iOS 스티커·멘션·이미지 UI는 7A, 댓글·멘션 알림은 9단계 작업이다.
+- 현재 텍스트 병합 충돌은 없다. 병렬 작업이 `SubmissionService`, V1 스키마, 계약 문서를 수정하면 해당 diff와 V1 체크섬을 함께 검토해야 한다.
+
+## 가정과 계획 조정
+
+- 계획의 백엔드·문서 범위를 유지했다. 댓글의 같은 멘션 ID는 입력 순서대로 한 번만 검증·저장하도록 했다.

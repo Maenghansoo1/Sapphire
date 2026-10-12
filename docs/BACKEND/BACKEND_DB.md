@@ -151,6 +151,8 @@ erDiagram
 - `POKES.type` — `poke`(콕찌르기) / `fling`(똥뿌리기)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
 - `SUBMISSIONS.media_url` — 이미지·음성 파일 위치. 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
+- `COMMENTS.image_url` — 첨부 이미지의 저장 키. API에는 공개 파일 URL을 내려준다. 이미지만 있는 댓글은 `content = ''`로 저장한다.
+- `REACTIONS` — `(submission_id, user_id, sticker_type)` 유니크 키로 같은 멤버의 같은 스티커 중복을 막는다. 서로 다른 스티커는 각각 누를 수 있다.
 - `MISSIONS.template` / `MISSIONS.params` — 미션 틀(예: `TEXT_ACROSTIC`)과 그 빈칸 값(JSON). 틀 목록과 `params` 모양은 `docs/BACKEND/MISSIONS_API.md` §1이 기준
 - 제출 답은 **하이브리드 방식**으로 저장한다 (아래 "제출 답 저장 방식"). 집계하는 값은 컬럼(`number_value`, `choice_value`), 그 밖의 답은 JSON(`answer_data`)이다. 사진·그림·음성=`media_*`, 슬라이더·별점=`number_value`, 밸런스 게임=`choice_value`, 글=`answer_data.text`, 다수결 예측의 예측값=`answer_data.guess`. 쓰지 않는 컬럼은 NULL이며, 틀별 필수 여부는 DB가 아니라 서비스가 검증한다
 - `SUBMISSIONS.answer_text` / `answer_aliases` — 성대모사·소리 흉내 제출자가 적은 정답과 별칭(JSON 배열). 다른 멤버에게는 맞히거나 미션 마감 후에만 정답이 API 응답에 포함되고, 별칭은 내려주지 않는다. `SUBMISSION_GUESSES`는 다른 멤버의 정답 시도(원문, 정답 여부)를 쌓는다 (한 사람이 여러 번 시도할 수 있어 UNIQUE 없음)
