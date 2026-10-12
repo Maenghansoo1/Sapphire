@@ -21,7 +21,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
+    buildTypes {
+        getByName("debug") {
+            buildConfigField("String", "API_BASE_URL",
+                "\"${findProperty("haweApiBaseUrl") ?: "http://10.0.2.2:8080"}\"")
+        }
+        getByName("release") {
+            // Placeholder until the production API domain is chosen; override with -PhaweApiBaseUrl.
+            buildConfigField("String", "API_BASE_URL",
+                "\"${findProperty("haweApiBaseUrl") ?: "https://api.hawe.app"}\"")
+        }
+    }
 }
 
 dependencies {
@@ -37,10 +48,14 @@ dependencies {
     implementation(libs.browser)
     implementation(libs.coil.compose)
     implementation(libs.serialization.json)
+    implementation(libs.okhttp)
+    implementation(libs.coroutines.android)
     implementation(libs.camera.core)
     implementation(libs.camera.camera2)
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.coroutines.test)
 }

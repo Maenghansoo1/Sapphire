@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>마이페이지</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .screen { padding-bottom: 24px; }
+  .profile { display: flex; align-items: center; gap: 16px; padding-top: 12px; }
+  .profile-ring { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 76px; height: 76px; border-radius: 50%; background: var(--color-surface); }
+  .profile-text { display: flex; flex: 1 0 0; flex-direction: column; gap: 4px; min-width: 0; }
+  .stats { display: flex; margin-top: 22px; padding: 16px 0; border-radius: 18px; background: var(--color-surface); white-space: nowrap; }
+  .stat { display: flex; flex: 1 0 0; flex-direction: column; align-items: center; gap: 4px; }
+  .stat + .stat { border-left: 1px solid var(--color-disabled); }
+  .stat b { font-size: 20px; font-weight: 700; }
+  .stat span { font-size: 12px; color: var(--color-text-secondary); }
+  .by-type { display: flex; gap: 8px; margin-top: 14px; white-space: nowrap; }
+  .by-type > div { display: flex; flex: 1 0 0; flex-direction: column; align-items: center; gap: 2px; padding: 10px 0; border: 1px solid var(--color-line); border-radius: 14px; }
+  .by-type span { font-size: 12px; color: var(--color-text-secondary); }
+  .by-type b { font-size: 15px; font-weight: 700; }
+  .menu { margin-top: 18px; }
+  .menu .list-row { height: 48px; }
+  .menu .list-row:last-child { border-bottom: 0; }
+  .version { font-size: 12px; color: var(--color-text-secondary); text-align: center; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="04-home.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">마이페이지</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <section class="profile">
+    <div class="profile-ring"><span class="ic s-60"><img src="../img/ui/chars/mongsil.svg" alt=""></span></div>
+    <div class="profile-text">
+      <p class="fw-7" style="font-size: 22px;">하늘</p>
+      <p class="c-2" style="font-size: 13px; line-height: 1.45;">sky@email.com<br>카카오 로그인</p>
+    </div>
+    <a class="pill h-36" href="17-2-user-info.html">프로필 편집</a>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><b>142</b><span>완료한 미션</span></div>
+    <div class="stat"><b>12일</b><span>연속 참여</span></div>
+    <div class="stat"><b>3개</b><span>참여 그룹</span></div>
+  </section>
+
+  <section class="by-type">
+    <div><span>그림</span><b>38</b></div>
+    <div><span>사진</span><b>41</b></div>
+    <div><span>글</span><b>35</b></div>
+    <div><span>음성</span><b>28</b></div>
+  </section>
+
+  <nav class="menu">
+    <a class="list-row" href="17-1-notifications.html">알림 설정<span class="list-row-trail"><span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="17-2-user-info.html">유저 정보<span class="list-row-trail"><span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="17-3-app-info.html">앱 정보<span class="list-row-trail"><span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="#">이용약관<span class="list-row-trail"><span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row" href="#">개인정보 처리방침<span class="list-row-trail"><span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+    <a class="list-row is-danger" href="#logout">로그아웃</a>
+    <a class="list-row is-danger" href="17-5-withdraw.html">회원 탈퇴</a>
+  </nav>
+
+  <div class="spacer"></div>
+  <p class="version">버전 1.0.0</p>
+</main>
+
+<!-- 17-4 로그아웃 확인 (17-mypage.html#logout) -->
+<div class="dim" id="logout" role="dialog" aria-modal="true" aria-labelledby="logout-title">
+  <div class="alert">
+    <p class="alert-title" id="logout-title">로그아웃할까요?</p>
+    <p class="alert-body">다시 로그인하면 그룹과 기록은<br>그대로 남아 있어요.</p>
+    <div class="btn-row">
+      <a class="btn btn-gray" href="#">취소</a>
+      <a class="btn btn-danger" href="a1-login.html">로그아웃</a>
+    </div>
+  </div>
+</div>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>회원가입 · 프로필</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .screen { padding-bottom: 36px; }
+  .body { display: flex; flex-direction: column; gap: 18px; padding-top: 8px; }
+  .title { display: flex; flex-direction: column; gap: 6px; }
+  .title h1 { font-size: 26px; font-weight: 700; }
+  .title p { font-size: 15px; color: var(--color-text-secondary); }
+  .preview { display: flex; align-items: center; gap: 16px; }
+  .preview-ring { display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 50%; background: var(--color-surface); }
+  .preview-text { display: flex; flex-direction: column; gap: 4px; white-space: nowrap; }
+  .grid { display: flex; flex-wrap: wrap; gap: 12px 26px; }
+  .opt { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--color-text-secondary); }
+  .ring { display: flex; align-items: center; justify-content: center; width: 66px; height: 66px; border-radius: 50%; background: var(--color-surface); }
+  .opt.is-selected { font-weight: 700; color: var(--color-ink); }
+  .opt.is-selected .ring { border: 2.5px solid var(--color-ink); background: var(--color-bg); }
+  .ring.is-photo { border: 2px dashed var(--color-muted); }
+  .hint { display: flex; justify-content: space-between; font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main class="screen px-24">
+  <header class="hdr">
+    <a class="hdr-btn" href="a2-signup-account.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <div class="hdr-right fw-6 c-2" style="font-size: 14px;">2 / 2</div>
+  </header>
+
+  <form class="body" id="profile" action="01-start.html">
+    <div class="title">
+      <h1>어떻게 불러드릴까요?</h1>
+      <p>캐릭터를 고르고 이름을 정해주세요.</p>
+    </div>
+
+    <div class="preview" id="preview">
+      <div class="preview-ring"><span class="ic s-70"><img src="../img/ui/chars/mongsil.svg" alt=""></span></div>
+      <div class="preview-text">
+        <span class="c-2" style="font-size: 13px;">선택한 캐릭터</span>
+        <span class="fw-7" style="font-size: 20px;" data-char-name>몽실이</span>
+      </div>
+    </div>
+
+    <div class="grid" data-select data-char-grid="#preview">
+      <button class="opt is-selected" type="button" data-option data-name="몽실이"><span class="ring"><span class="ic s-50"><img src="../img/ui/chars/mongsil.svg" alt=""></span></span>몽실이</button>
+      <button class="opt" type="button" data-option data-name="곰돌이"><span class="ring"><span class="ic s-50"><img src="../img/ui/chars/bear.svg" alt=""></span></span>곰돌이</button>
+      <button class="opt" type="button" data-option data-name="꽃님"><span class="ring"><span class="ic s-50"><img src="../img/ui/chars/flower.svg" alt=""></span></span>꽃님</button>
+      <button class="opt" type="button" data-option data-name="잎사귀"><span class="ring"><span class="ic s-50"><img src="../img/ui/chars/leaf.svg" alt=""></span></span>잎사귀</button>
+      <button class="opt" type="button" data-option data-name="물방울"><span class="ring"><span class="ic s-50"><img src="../img/ui/chars/drop.svg" alt=""></span></span>물방울</button>
+      <button class="opt" type="button" data-option data-name="필름이"><span class="ring"><span class="ic s-50"><img src="../img/ui/chars/film.svg" alt=""></span></span>필름이</button>
+      <button class="opt" type="button" data-option data-name="감자"><span class="ring"><span class="ic s-50"><img src="../img/ui/chars/potato.svg" alt=""></span></span>감자</button>
+      <button class="opt" type="button" data-option><span class="ring is-photo"><span class="ic s-22"><img src="../img/ui/icons/image.svg" alt=""></span></span>내 사진</button>
+    </div>
+
+    <label class="field">
+      <span class="field-label">닉네임</span>
+      <input class="input" type="text" placeholder="하늘" maxlength="10" data-count="#nick-count">
+      <span class="hint"><span>캐릭터와 이름은 나중에 바꿀 수 있어요</span><span id="nick-count">0 / 10</span></span>
+    </label>
+  </form>
+
+  <div class="spacer"></div>
+  <button class="btn btn-primary" type="submit" form="profile">시작하기</button>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>

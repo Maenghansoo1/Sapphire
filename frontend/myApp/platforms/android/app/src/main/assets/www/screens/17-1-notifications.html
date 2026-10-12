@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>알림 설정</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .master { flex-direction: row; align-items: center; justify-content: space-between; margin-top: 8px; padding: 14px 16px; cursor: pointer; }
+  .txt { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+  .opt { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--color-line); font-size: 15px; cursor: pointer; }
+  .opt small { font-size: 12px; color: var(--color-text-secondary); }
+  .note { padding-top: 16px; font-size: 12px; color: var(--color-text-secondary); }
+  .items.is-off { opacity: .4; pointer-events: none; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="17-mypage.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">알림 설정</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <label class="soft master">
+    <span class="txt">
+      <span class="fw-7" style="font-size: 16px;">전체 알림</span>
+      <span class="c-2" style="font-size: 12px;">끄면 모든 푸시 알림이 오지 않아요</span>
+    </span>
+    <input class="tgl" type="checkbox" id="master" checked>
+  </label>
+
+  <div class="items" id="items">
+    <p class="group-label">미션</p>
+    <label class="opt">
+      <span class="txt"><span>오늘의 주제 도착</span><small>그룹마다 정한 시간에 알려드려요</small></span>
+      <input class="tgl" type="checkbox" checked>
+    </label>
+
+    <p class="group-label">친구 활동</p>
+    <label class="opt"><span>콕 찌르기</span><input class="tgl" type="checkbox" checked></label>
+    <label class="opt"><span>친구가 미션을 완료했을 때</span><input class="tgl" type="checkbox"></label>
+    <label class="opt"><span>내 작품에 댓글</span><input class="tgl" type="checkbox" checked></label>
+  </div>
+
+  <p class="note">그룹별 알림은 각 그룹의 '그룹 정보'에서 따로 끌 수 있어요.</p>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+<script>
+  document.getElementById('master').addEventListener('change', function () {
+    document.getElementById('items').classList.toggle('is-off', !this.checked);
+  });
+</script>
+</body>
+</html>

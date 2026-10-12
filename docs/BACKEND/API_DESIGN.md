@@ -14,8 +14,9 @@
   ```json
   { "code": "GROUP_NOT_FOUND", "message": "그룹을 찾을 수 없습니다" }
   ```
+- **공통 에러 코드**: `404 NOT_FOUND`, `400 VALIDATION_ERROR`(경로·쿼리 타입 오류, 필수 파라미터 누락 포함), `405 METHOD_NOT_ALLOWED`, `413 FILE_TOO_LARGE`, `500 INTERNAL_ERROR`
 - **필드명**: JSON은 camelCase (DB는 snake_case, DAO 매핑 시 변환)
-- **시각 표현**: ISO-8601 문자열 (예: `2026-09-28T15:41:48`)
+- **시각 표현**: 오프셋을 붙인 ISO-8601 (예: `2026-09-28T09:00:00+09:00`). 서버 시간대는 Asia/Seoul 고정. 날짜는 `yyyy-MM-dd`, 슬롯 시각은 `HH:mm`
 - **페이지네이션**: 모든 목록 API는 `page`(0-base) / `size` 쿼리 파라미터의 offset/limit 방식
 - **로그아웃 API 없음**: 인증 토큰이 stateless이므로, 클라이언트가 저장된 토큰을 삭제하는 것으로 로그아웃 처리
 
@@ -41,26 +42,40 @@
 | POST | `/auth/register` | ✗ | 회원가입 |
 | POST | `/auth/login` | ✗ | 로그인 |
 | POST | `/auth/refresh` | ✗ | accessToken 재발급 |
+| GET | `/me` | ✓ | 내 계정 정보 |
 
 ### POST /auth/register
 ```json
 // Request
-{ "loginId": "hawe_user", "password": "pw1234", "nickname": "몽실이", "email": "a@b.com" }
+{ "email": "a@b.com", "password": "abcd1234", "nickname": "몽실이", "agreeTerms": true, "agreePrivacy": true }
 
 // Response 201
-{ "id": 1, "loginId": "hawe_user", "nickname": "몽실이" }
+{ "id": 1, "email": "a@b.com", "nickname": "몽실이" }
 ```
-에러: `LOGIN_ID_TAKEN` (409)
+이메일은 앞뒤 공백 제거·소문자 변환 후 저장한다. 이메일 형식·최대 255자, 비밀번호 8~100자(영문·숫자 포함), 닉네임 앞뒤 공백 제거 후 2~10자, 필수 약관 동의 2개를 검증한다. 동의 시각은 서버에 저장한다.
+
+에러: `EMAIL_TAKEN` (409), `VALIDATION_ERROR` (400)
 
 ### POST /auth/login
 ```json
 // Request
-{ "loginId": "hawe_user", "password": "pw1234" }
+{ "email": "a@b.com", "password": "abcd1234" }
 
 // Response 200
 { "accessToken": "...", "refreshToken": "..." }
 ```
 에러: `INVALID_CREDENTIALS` (401)
+
+이메일은 앞뒤 공백 제거·소문자 변환 후 조회한다. 형식이 틀린 이메일과 존재하지 않는 이메일은 모두 `INVALID_CREDENTIALS`로 처리한다.
+
+### GET /me
+```json
+// Response 200
+{ "id": 1, "email": "a@b.com", "nickname": "몽실이", "characterKey": "gomdol", "profileImageUrl": null, "createdAt": "2026-09-28T09:00:00+09:00" }
+```
+캐릭터가 선택되지 않았으면 `characterKey`는 `null`이다. 에러: `INVALID_TOKEN` (401).
+
+`PATCH /me/password`는 2차 범위이며 아직 구현되지 않았다.
 
 ### POST /auth/refresh
 ```json

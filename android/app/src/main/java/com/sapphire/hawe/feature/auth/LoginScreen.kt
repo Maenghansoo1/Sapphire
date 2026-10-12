@@ -22,31 +22,47 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.R
 import com.sapphire.hawe.core.AppSession
+import com.sapphire.hawe.core.COMING_SOON
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.LoginProvider
+import com.sapphire.hawe.core.net.AuthRepository
+import com.sapphire.hawe.core.net.toUserMessage
 import com.sapphire.hawe.designsystem.brand.HLogoLockup
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.*
-import java.time.Instant
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(session: AppSession, store: DataStore, onSignup: () -> Unit,
-    onReset: (String) -> Unit, onSocial: (LoginProvider) -> Unit) {
+fun LoginScreen(session: AppSession, store: DataStore, auth: AuthRepository, onSignup: () -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val focus = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+    val toast = rememberHToastState()
+    var loading by remember { mutableStateOf(false) }
     val bottomPadding = ctaBottomPadding()
     val login = {
-        // TODO: 서버 연결 시 실제 로그인 검증
-        accountForLogin(email, session.account, Instant.now())?.let {
-            session.account = it
-            store.reset()
-            store.setMyProfile(it.profile)
+        if (!loading && email.isNotBlank() && password.isNotEmpty()) {
+            loading = true
+            scope.launch {
+                try {
+                    val account = auth.login(email, password)
+                    store.reset()
+                    store.setMyProfile(account.profile)
+                    focus.clearFocus()
+                    session.signIn(account)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    toast.show(e.toUserMessage())
+                } finally {
+                    loading = false
+                }
+            }
         }
-        focus.clearFocus()
-        session.signIn()
     }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(HColors.bg).imePadding().verticalScroll(rememberScrollState())
         .padding(horizontal = HLayout.screenPadding).padding(top = HLayout.introTopInset,
             bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(32.dp)) {
@@ -60,7 +76,7 @@ fun LoginScreen(session: AppSession, store: DataStore, onSignup: () -> Unit,
             HTextField(password, { password = it }, "비밀번호", isSecure = true,
                 capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false,
                 imeAction = ImeAction.Done, onImeAction = login)
-            HButton("로그인", onClick = login)
+            HButton("로그인", enabled = !loading && email.isNotBlank() && password.isNotEmpty(), onClick = login)
             Row(Modifier.fillMaxWidth().heightIn(min = HLayout.minTouch), horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("회원가입", Modifier.clickable(onClick = onSignup),
@@ -68,7 +84,7 @@ fun LoginScreen(session: AppSession, store: DataStore, onSignup: () -> Unit,
                 Spacer(Modifier.width(16.dp))
                 Text("|", style = HType.plex(14), color = HColors.controlOff)
                 Spacer(Modifier.width(16.dp))
-                Text("비밀번호 찾기", Modifier.clickable { onReset(email) },
+                Text("비밀번호 찾기", Modifier.clickable { toast.show(COMING_SOON) },
                     style = HType.plex(14), color = HColors.textSecondary)
             }
         }
@@ -78,10 +94,12 @@ fun LoginScreen(session: AppSession, store: DataStore, onSignup: () -> Unit,
             Box(Modifier.weight(1f).height(1.dp).background(HColors.line))
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SocialLoginButton(LoginProvider.APPLE, onClick = { onSocial(LoginProvider.APPLE) })
-            SocialLoginButton(LoginProvider.KAKAO, onClick = { onSocial(LoginProvider.KAKAO) })
-            SocialLoginButton(LoginProvider.GOOGLE, onClick = { onSocial(LoginProvider.GOOGLE) })
+            SocialLoginButton(LoginProvider.APPLE, onClick = { toast.show(COMING_SOON) })
+            SocialLoginButton(LoginProvider.KAKAO, onClick = { toast.show(COMING_SOON) })
+            SocialLoginButton(LoginProvider.GOOGLE, onClick = { toast.show(COMING_SOON) })
         }
+    }
+    HToastHost(toast)
     }
 }
 

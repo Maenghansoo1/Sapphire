@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>결과 공개 · 그림</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .hdr-title { font-size: 15px; font-weight: 600; }
+  .title { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 18px; }
+  .title h1 { font-size: 22px; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; }
+  .item { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .frame { display: flex; align-items: center; justify-content: center; height: 165px; border: 1px solid var(--color-line); border-radius: 18px; }
+  .meta { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; white-space: nowrap; }
+  .who { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="04-home.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">10월 10일 · 그림</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <div class="title">
+    <h1>요즘 제일 웃겼던 순간</h1>
+    <p class="c-2" style="font-size: 13px;">5명 모두 완료 · 그림을 눌러 댓글을 남겨보세요</p>
+  </div>
+
+  <section class="grid">
+    <a class="item" href="14-detail-drawing.html">
+      <span class="frame"><span class="ic" style="--s: 130px;"><img src="../img/ui/draw/sample-haneul.svg" alt="과대표 하늘의 그림"></span></span>
+      <span class="meta">
+        <span class="who"><span class="avatar a-26"><span class="ic"><img src="../img/ui/chars/bear.svg" alt=""></span></span>과대표 하늘</span>
+        <span class="c-2" style="font-size: 12px;">댓글 2</span>
+      </span>
+    </a>
+    <a class="item" href="14-detail-drawing.html">
+      <span class="frame"><span class="ic" style="--s: 130px;"><img src="../img/ui/draw/sample-minjun.svg" alt="민준의 그림"></span></span>
+      <span class="meta">
+        <span class="who"><span class="avatar a-26"><span class="ic"><img src="../img/ui/chars/potato.svg" alt=""></span></span>민준</span>
+        <span class="c-2" style="font-size: 12px;">댓글 4</span>
+      </span>
+    </a>
+    <a class="item" href="14-detail-drawing.html">
+      <span class="frame"><span class="ic" style="--s: 130px;"><img src="../img/ui/draw/sample-jiwoo.svg" alt="지우의 그림"></span></span>
+      <span class="meta">
+        <span class="who"><span class="avatar a-26"><span class="ic"><img src="../img/ui/chars/flower.svg" alt=""></span></span>지우</span>
+        <span class="c-2" style="font-size: 12px;">댓글 1</span>
+      </span>
+    </a>
+    <a class="item" href="14-detail-drawing.html">
+      <span class="frame"><span class="ic" style="--s: 130px;"><img src="../img/ui/draw/sample-seoyeon.svg" alt="서연의 그림"></span></span>
+      <span class="meta">
+        <span class="who"><span class="avatar a-26"><span class="ic"><img src="../img/ui/chars/drop.svg" alt=""></span></span>서연</span>
+        <span class="c-2" style="font-size: 12px;">댓글 3</span>
+      </span>
+    </a>
+    <a class="item" href="14-detail-drawing.html">
+      <span class="frame"><span class="ic" style="--s: 130px;"><img src="../img/ui/draw/sample-hyunwoo.svg" alt="현우의 그림"></span></span>
+      <span class="meta">
+        <span class="who"><span class="avatar a-26"><span class="ic"><img src="../img/ui/chars/film.svg" alt=""></span></span>현우</span>
+        <span class="c-2" style="font-size: 12px;">댓글 0</span>
+      </span>
+    </a>
+  </section>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>

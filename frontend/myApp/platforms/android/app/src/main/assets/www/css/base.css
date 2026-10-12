@@ -1,0 +1,16 @@
+/* HA'WE shared base styles */
+body {
+  margin: 0;
+  font-family: 'Gowun Dodum', -apple-system, sans-serif;
+  background: #F3EAD8;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+a {
+  text-decoration: none;
+  color: inherit;
+}
+* {
+  -webkit-tap-highlight-color: transparent;
+}

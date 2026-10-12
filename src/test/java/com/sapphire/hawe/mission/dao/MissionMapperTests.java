@@ -45,9 +45,9 @@ class MissionMapperTests {
     }
 
     private Long insertUser() {
-        String loginId = "mission-test-" + UUID.randomUUID();
-        jdbc.update("INSERT INTO users (nickname, login_id, password_hash) VALUES ('Test', ?, 'unused')", loginId);
-        return jdbc.queryForObject("SELECT id FROM users WHERE login_id = ?", Long.class, loginId);
+        String email = "mission-test-" + UUID.randomUUID() + "@test.com";
+        jdbc.update("INSERT INTO users (nickname, email, password_hash, terms_agreed_at, privacy_agreed_at) VALUES ('Test', ?, 'unused', NOW(), NOW())", email);
+        return jdbc.queryForObject("SELECT id FROM users WHERE email = ?", Long.class, email);
     }
 
     private Long insertGroup(Long ownerId) {

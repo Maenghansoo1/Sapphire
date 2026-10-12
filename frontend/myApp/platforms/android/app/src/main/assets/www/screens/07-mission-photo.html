@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>미션 수행 · 사진</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .screen { gap: 16px; padding-bottom: 40px; }
+  .mission-title { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+  .preview {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    height: 466px; overflow: hidden; border-radius: 24px; background: var(--color-surface-strong);
+    font-size: 14px; color: var(--color-text-secondary);
+  }
+  .preview img.shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .controls { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+  .ctl { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border: 1px solid var(--color-border); border-radius: 14px; cursor: pointer; }
+  .ctl.round { border-radius: 26px; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="05-group-mission.html" data-back aria-label="닫기"><span class="ic s-22"><img src="../img/ui/icons/close.svg" alt=""></span></a>
+    <div class="hdr-right"><button type="button" aria-label="플래시"><span class="ic s-22"><img src="../img/ui/icons/flash.svg" alt=""></span></button></div>
+  </header>
+
+  <div class="mission-title">
+    <span class="fw-6 c-2" style="font-size: 13px;">오늘의 사진</span>
+    <span class="fw-7" style="font-size: 20px;">지금 창밖으로 보이는 풍경</span>
+  </div>
+
+  <div class="preview" id="preview">
+    <span class="ic s-34"><img src="../img/ui/icons/camera-tertiary.svg" alt=""></span>
+    [카메라 미리보기 · 3:4]
+  </div>
+
+  <div class="spacer"></div>
+  <div class="controls">
+    <label class="ctl" aria-label="앨범에서 고르기">
+      <span class="ic s-22"><img src="../img/ui/icons/image.svg" alt=""></span>
+      <input class="sr-only" type="file" accept="image/*" id="album">
+    </label>
+    <a href="10-result-photo.html" aria-label="촬영"><span class="ic" style="--s: 84px;"><img src="../img/ui/controls/shutter.svg" alt=""></span></a>
+    <button class="ctl round" type="button" aria-label="카메라 전환"><span class="ic s-22"><img src="../img/ui/icons/flip.svg" alt=""></span></button>
+  </div>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+<script>
+  // 앨범에서 고른 사진을 미리보기에 띄워요 (카메라 플러그인 연결 전 목업)
+  document.getElementById('album').addEventListener('change', function () {
+    if (!this.files[0]) return;
+    var img = document.createElement('img');
+    img.className = 'shot';
+    img.src = URL.createObjectURL(this.files[0]);
+    document.getElementById('preview').appendChild(img);
+  });
+</script>
+</body>
+</html>

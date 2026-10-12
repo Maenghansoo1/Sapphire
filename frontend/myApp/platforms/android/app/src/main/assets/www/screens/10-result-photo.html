@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>결과 공개 · 사진</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .hdr-title { font-size: 15px; font-weight: 600; }
+  .title { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 18px; }
+  .title h1 { font-size: 22px; font-weight: 700; }
+  .feed { display: flex; flex-direction: column; gap: 24px; }
+  .post { display: flex; flex-direction: column; gap: 10px; }
+  .post-hd { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+  .photo { display: flex; align-items: center; justify-content: center; height: 260px; border-radius: 20px; background: var(--color-surface-strong); font-size: 14px; color: var(--color-text-secondary); }
+  .acts { display: flex; gap: 18px; }
+  .act { display: flex; align-items: center; gap: 6px; height: 40px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="05-group-mission.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">10월 11일 · 사진</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <div class="title">
+    <h1>지금 창밖으로 보이는 풍경</h1>
+    <p class="c-2" style="font-size: 13px;">5명 모두 완료 · 사진을 눌러 댓글을 남겨보세요</p>
+  </div>
+
+  <section class="feed">
+    <article class="post">
+      <div class="post-hd">
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/potato.svg" alt=""></span></span>
+        <span class="fw-6" style="font-size: 15px;">민준</span>
+        <span class="c-2" style="font-size: 13px;">오전 9:12</span>
+      </div>
+      <a class="photo" href="14-detail-photo.html">[민준의 사진]</a>
+      <div class="acts">
+        <button class="act" type="button"><span class="ic s-20"><img src="../img/ui/icons/heart.svg" alt=""></span>3</button>
+        <a class="act" href="14-detail-photo.html"><span class="ic s-20"><img src="../img/ui/icons/comment.svg" alt=""></span>2</a>
+      </div>
+    </article>
+    <article class="post">
+      <div class="post-hd">
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/flower.svg" alt=""></span></span>
+        <span class="fw-6" style="font-size: 15px;">지우</span>
+        <span class="c-2" style="font-size: 13px;">오전 11:40</span>
+      </div>
+      <a class="photo" href="14-detail-photo.html">[지우의 사진]</a>
+      <div class="acts">
+        <button class="act" type="button"><span class="ic s-20"><img src="../img/ui/icons/heart.svg" alt=""></span>4</button>
+        <a class="act" href="14-detail-photo.html"><span class="ic s-20"><img src="../img/ui/icons/comment.svg" alt=""></span>1</a>
+      </div>
+    </article>
+    <article class="post">
+      <div class="post-hd">
+        <span class="avatar a-34"><span class="ic"><img src="../img/ui/chars/drop.svg" alt=""></span></span>
+        <span class="fw-6" style="font-size: 15px;">서연</span>
+        <span class="c-2" style="font-size: 13px;">오후 2:05</span>
+      </div>
+      <a class="photo" href="14-detail-photo.html">[서연의 사진]</a>
+      <div class="acts">
+        <button class="act" type="button"><span class="ic s-20"><img src="../img/ui/icons/heart.svg" alt=""></span>2</button>
+        <a class="act" href="14-detail-photo.html"><span class="ic s-20"><img src="../img/ui/icons/comment.svg" alt=""></span>0</a>
+      </div>
+    </article>
+  </section>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>

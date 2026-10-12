@@ -73,7 +73,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"usera_{{run}}\", \"password\": \"password1\", \"nickname\": \"nicka\", \"email\": \"a_{{run}}@test.com\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"nicka\",\"email\":\"a_{{run}}@test.com\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -125,7 +125,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"usera_{{run}}\", \"password\": \"password1\"}",
+              "raw": "{\"password\":\"password1\",\"email\":\"a_{{run}}@test.com\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -171,7 +171,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"userb_{{run}}\", \"password\": \"password1\", \"nickname\": \"nickb\", \"email\": \"b_{{run}}@test.com\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"nickb\",\"email\":\"b_{{run}}@test.com\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -214,7 +214,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"userb_{{run}}\", \"password\": \"password1\"}",
+              "raw": "{\"password\":\"password1\",\"email\":\"b_{{run}}@test.com\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -393,7 +393,7 @@
                   "const j = pm.response.json();",
                   "pm.test(\"empty missions, count 2\", () => { pm.expect(j.missions).to.eql([]); pm.expect(j.dailyMissionCount).to.eql(2); });",
                   "pm.test(\"date is YYYY-MM-DD\", () => pm.expect(j.date).to.match(/^\\d{4}-\\d{2}-\\d{2}$/));",
-                  "pm.test(\"nextPublishAt = today 09:00 (earliest unpublished slot)\", () => pm.expect(j.nextPublishAt).to.match(new RegExp(\"^\" + j.date + \"T09:00(:00)?$\")));"
+                  "pm.test(\"nextPublishAt = today 09:00 (earliest unpublished slot)\", () => pm.expect(j.nextPublishAt).to.match(new RegExp(\"^\" + j.date + \"T09:00(:00)?\\\\+09:00$\")));"
                 ]
               }
             }
@@ -579,7 +579,7 @@
                   "  \"-- Run this in the hawe DB, then run folder 3.\",",
                   "  \"INSERT INTO missions (group_id, content, category, template, params, slot_no, published_at, deadline_at, mission_date) VALUES\",",
                   "  \"(\" + g + \", '\\\"퇴근길\\\"로 삼행시 지어줘', '감성', 'TEXT_ACROSTIC', '{\\\"word\\\":\\\"퇴근길\\\"}', 1, NOW(), NOW() + INTERVAL 3 HOUR, CURDATE()),\",",
-                  "  \"(\" + g + \", '[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다', '유머', 'TEXT_FILL_BLANK', JSON_OBJECT('sentence', '[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다', 'targetUserId', (SELECT id FROM users WHERE login_id = 'userb_\" + run + \"')), 2, NOW(), NOW() + INTERVAL 3 HOUR, CURDATE());\"",
+                  "  \"(\" + g + \", '[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다', '유머', 'TEXT_FILL_BLANK', JSON_OBJECT('sentence', '[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다', 'targetUserId', (SELECT id FROM users WHERE email = 'b_\" + run + \"@test.com')), 2, NOW(), NOW() + INTERVAL 3 HOUR, CURDATE());\"",
                   "].join(\"\\n\");",
                   "console.log(sql);",
                   "pm.test(\"SQL printed to Postman Console (View > Show Postman Console)\", () => pm.expect(sql).to.be.a(\"string\"));"
@@ -807,7 +807,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const id = pm.collectionVariables.get(\"missionId1\"), run = pm.collectionVariables.get(\"run\");",
-                  "const sql = \"-- Make user A a submitter of mission 1, then run folder 4.\\nINSERT INTO submissions (mission_id, user_id, answer_data) VALUES (\" + id + \", (SELECT id FROM users WHERE login_id = 'usera_\" + run + \"'), '{\\\"text\\\":\\\"abc\\\"}');\";",
+                  "const sql = \"-- Make user A a submitter of mission 1, then run folder 4.\\nINSERT INTO submissions (mission_id, user_id, answer_data) VALUES (\" + id + \", (SELECT id FROM users WHERE email = 'a_\" + run + \"@test.com'), '{\\\"text\\\":\\\"abc\\\"}');\";",
                   "console.log(sql);",
                   "pm.test(\"SQL printed to Postman Console\", () => pm.expect(sql).to.be.a(\"string\"));"
                 ]

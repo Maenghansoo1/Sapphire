@@ -45,7 +45,8 @@ import java.util.UUID
 
 @Composable
 fun CharacterPicker(selection: AvatarContent, onSelect: (AvatarContent) -> Unit,
-    cellSize: Dp = 66.dp, characterSize: Dp = 50.dp, columnSpacing: Dp = 26.dp, rowSpacing: Dp = 12.dp) {
+    cellSize: Dp = 66.dp, characterSize: Dp = 50.dp, columnSpacing: Dp = 26.dp, rowSpacing: Dp = 12.dp,
+    showPhotoCell: Boolean = true) {
     val context = LocalContext.current
     var lastPhoto by remember { mutableStateOf<AvatarContent.Photo?>(selection as? AvatarContent.Photo) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -64,10 +65,11 @@ fun CharacterPicker(selection: AvatarContent, onSelect: (AvatarContent) -> Unit,
     BoxWithConstraints {
     val spacing = minOf(columnSpacing, ((maxWidth - cellSize * 4) / 3).coerceAtLeast(0.dp))
     Column(verticalArrangement = Arrangement.spacedBy(rowSpacing)) {
-        (choices + listOf(lastPhoto ?: AvatarContent.Character(ProfileCharacter.DEFAULT))).chunked(4).forEachIndexed { rowIndex, row ->
+        (choices + if (showPhotoCell) listOf(lastPhoto ?: AvatarContent.Character(ProfileCharacter.DEFAULT)) else emptyList())
+            .chunked(4).forEachIndexed { rowIndex, row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                 row.forEachIndexed { columnIndex, choice ->
-                    val photoCell = rowIndex == 1 && columnIndex == 3
+                    val photoCell = showPhotoCell && rowIndex == 1 && columnIndex == 3
                     val selected = if (photoCell) selection.isPhoto else selection == choice
                     Column(Modifier.weight(1f).clickable {
                         if (photoCell) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))

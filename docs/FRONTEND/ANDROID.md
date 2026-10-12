@@ -48,7 +48,7 @@
 | SDK     | minSdk 26 / target·compile 35, JDK 17                                                                                                                                      | 26 부터 `java.time` 기본 지원 (iOS 의 `Calendar`/`DateComponents` 대체). 이전 시도와 같음    |
 | 패키지     | `com.sapphire.hawe` (iOS 번들 ID 와 같음)                                                                                                                                       |                                                                              |
 | 화면 이동   | 단일 Activity + Navigation Compose (2.8+, `@Serializable` 타입 안전 라우트)                                                                                                         | `MainRoute` enum 을 그대로 sealed 라우트로 옮길 수 있음                                   |
-| 상태      | `AppSession`, `DataStore` 를 Compose 상태(`mutableStateOf`/`mutableStateListOf`)를 가진 일반 클래스로 만들고 `CompositionLocal` 로 주입. Activity 범위 ViewModel 하나가 둘을 들고 있어 화면 회전·구성 변경에도 유지 | iOS `@Observable` + `.environment()` 와 1:1. 앱을 끄면 사라지는 것도 iOS 와 같음 (영속화 안 함) |
+| 상태      | `AppSession`, `DataStore` 를 Compose 상태(`mutableStateOf`/`mutableStateListOf`)를 가진 일반 클래스로 만들고 `CompositionLocal` 로 주입. Activity 범위 ViewModel 하나가 둘을 들고 있어 화면 회전·구성 변경에도 유지 | iOS `@Observable` + `.environment()` 와 1:1. 인증 토큰은 암호화 저장하고, 그룹·미션 목업 상태는 영속화하지 않음 |
 | 이미지 로딩  | Coil 3 (`AsyncImage`)                                                                                                                                                      | 내 사진·제출 사진(로컬 파일 Uri) 표시                                                     |
 | 카메라     | CameraX (`camera-camera2`, `camera-lifecycle`, `camera-view`)                                                                                                              | AVCaptureSession 대체                                                          |
 | 웹 보기    | `androidx.browser` Custom Tabs                                                                                                                                             | SFSafariViewController 대체                                                    |
@@ -56,7 +56,9 @@
 | 위치      | 저장소 루트 `android/` (iOS 의 `ios/` 와 나란히)                                                                                                                                     |                                                                              |
 
 
-DI 라이브러리(Hilt 등)·Room·Retrofit 은 넣지 않아요. 서버 연결 단계에서 다시 정해요.
+서버 연결(2A)부터 OkHttp(+kotlinx-serialization)를 사용해요. Retrofit·Hilt·Room은 쓰지 않아요.
+
+인증 토큰은 Android Keystore AES-GCM 키로 암호화해 SharedPreferences에 저장해요. 앱 시작 시 저장된 토큰으로 `/api/me`를 호출해 세션을 복구해요. `BuildConfig.API_BASE_URL` 기본값은 debug 에뮬레이터용 `http://10.0.2.2:8080`, release 임시 주소 `https://api.hawe.app`예요. 빌드 시 `-PhaweApiBaseUrl=...`로 바꿀 수 있어요. 평문 HTTP는 debug 빌드에서만 허용해요.
 
 ---
 

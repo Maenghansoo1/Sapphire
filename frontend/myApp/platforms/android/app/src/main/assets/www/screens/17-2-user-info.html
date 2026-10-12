@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>유저 정보</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fredoka:wght@600&display=swap">
+<link rel="stylesheet" href="../css/hawe.css">
+<style>
+  .screen { padding-bottom: 24px; }
+  .group-label { padding-top: 26px; }
+  .group-label.first { padding-top: 14px; }
+  .list-row { height: 56px; }
+  .list-row .value { color: var(--color-text-strong); white-space: nowrap; }
+  .hint { font-size: 12px; line-height: 1.5; color: var(--color-text-secondary); }
+  .login { display: flex; align-items: center; gap: 12px; height: 56px; border-bottom: 1px solid var(--color-line); font-size: 15px; }
+  .login > .name { flex: 1 0 0; min-width: 0; }
+  .brand { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 16px; }
+  .brand.kakao { background: #fee500; }
+  .brand.apple { background: var(--color-ink); }
+  .brand.google { background: #fff; border: 1px solid var(--color-border); }
+  .password { height: 60px; }
+  .password .txt { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main class="screen">
+  <header class="hdr">
+    <a class="hdr-btn" href="17-mypage.html" data-back aria-label="뒤로"><span class="ic"><img src="../img/ui/icons/chevron-left.svg" alt=""></span></a>
+    <span class="hdr-title">유저 정보</span>
+    <div class="hdr-right"></div>
+  </header>
+
+  <p class="group-label first">기본 정보</p>
+  <a class="list-row" href="a3-signup-profile.html">닉네임<span class="list-row-trail">하늘<span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span></span></a>
+  <div class="list-row">이메일<span class="value">sky@email.com</span></div>
+  <div class="list-row">가입일<span class="value">2026년 6월 2일</span></div>
+
+  <p class="group-label">로그인 연결</p>
+  <p class="hint">여러 방법을 연결해 두면 어떤 방법으로든 같은 계정에 로그인할 수 있어요.</p>
+  <div class="login">
+    <span class="brand kakao"><span class="ic s-16"><img src="../img/ui/social/kakao-16.svg" alt=""></span></span>
+    <span class="name">카카오</span>
+    <span class="fw-6 nowrap" style="font-size: 13px;">연결됨</span>
+  </div>
+  <div class="login">
+    <span class="brand apple"><span class="ic s-16"><img src="../img/ui/social/apple-16.svg" alt=""></span></span>
+    <span class="name">Apple</span>
+    <button class="pill" type="button">연결하기</button>
+  </div>
+  <div class="login">
+    <span class="brand google"><span class="ic s-16"><img src="../img/ui/social/google-16.svg" alt=""></span></span>
+    <span class="name">Google</span>
+    <button class="pill" type="button">연결하기</button>
+  </div>
+
+  <p class="group-label">보안</p>
+  <a class="list-row password" href="#">
+    <span class="txt"><span>비밀번호 변경</span><span class="c-2" style="font-size: 12px;">이메일로 가입한 계정만 사용할 수 있어요</span></span>
+    <span class="ic s-16"><img src="../img/ui/controls/chevron-right-16.svg" alt=""></span>
+  </a>
+</main>
+<script src="../cordova.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/hawe.js"></script>
+</body>
+</html>

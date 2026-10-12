@@ -104,7 +104,7 @@
 | 스케줄·푸시 | 미션 발행은 스케줄러(EventBridge), 푸시는 SNS | 설계 |
 | 추후 | 회고 추천(Qdrant 벡터 검색, 과거 비슷한 감정의 글 찾기) | MVP 제외 |
 
-- 로그인은 아이디/비밀번호 **자체 가입**이다 (소셜 로그인은 MVP 제외). 액세스 토큰 30분, 리프레시 토큰 14일.
+- 로그인은 이메일/비밀번호 **자체 가입**이다 (소셜 로그인은 MVP 제외). 액세스 토큰 30분, 리프레시 토큰 14일.
 - 코드 구조는 기능별 패키지(`auth`, `group`, `mission` …) 안에 controller → service → dao → domain/dto 계층을 둔다. 에러는 기능별 에러 코드 enum을 `BusinessException`으로 던져 전역 핸들러가 `{code, message}`로 응답한다.
 - API는 REST(`/api/...`), JSON은 camelCase, 목록은 `{content, page, size, totalPages, totalElements}` 봉투를 쓴다.
 

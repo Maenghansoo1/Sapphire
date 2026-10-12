@@ -1,6 +1,6 @@
 package com.sapphire.hawe.poke.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
-public record PokeResponse(Long id, Long toUserId, String type, LocalDateTime sentAt) {
+public record PokeResponse(Long id, Long toUserId, String type, OffsetDateTime sentAt) {
 }

@@ -4,6 +4,7 @@ import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.auth.domain.User;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
+import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -19,7 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
@@ -59,9 +60,9 @@ class MissionServiceTests {
         var response = service.getTodayMissions(7L, 11L);
 
         assertEquals(3, response.dailyMissionCount());
-        assertEquals(LocalDate.now(), response.date());
+        assertEquals(SeoulTime.today(), response.date());
         assertTrue(response.missions().isEmpty());
-        assertEquals(LocalDate.now().atTime(9, 0), response.nextPublishAt());
+        assertEquals(SeoulTime.toOffset(SeoulTime.today().atTime(9, 0)), response.nextPublishAt());
     }
 
     @Test
@@ -72,7 +73,7 @@ class MissionServiceTests {
 
         var response = service.getTodayMissions(7L, 11L);
 
-        assertEquals(LocalDate.now().atTime(14, 0), response.nextPublishAt());
+        assertEquals(SeoulTime.toOffset(SeoulTime.today().atTime(14, 0)), response.nextPublishAt());
         assertEquals(1, response.missions().size());
         assertEquals("PHOTO", response.missions().getFirst().media());
     }
@@ -96,7 +97,7 @@ class MissionServiceTests {
 
         var response = service.getTodayMissions(7L, 11L);
 
-        assertEquals(LocalDate.now().atTime(9, 0), response.nextPublishAt());
+        assertEquals(SeoulTime.toOffset(SeoulTime.today().atTime(9, 0)), response.nextPublishAt());
         assertEquals(3, response.missions().getFirst().slotNo());
     }
 
@@ -114,6 +115,8 @@ class MissionServiceTests {
     @Test
     void singleMissionResolvesTargetAndPreservesOtherParams() {
         MissionRow row = row(10L, 11L, 1, "{\"sentence\":\"hello\",\"targetUserId\":3}");
+        row.setPublishedAt(LocalDateTime.of(2026, 9, 28, 9, 0));
+        row.setDeadlineAt(LocalDateTime.of(2026, 9, 28, 23, 0));
         when(missions.findById(10L, 7L)).thenReturn(row);
         when(members.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
         User target = new User();
@@ -126,6 +129,8 @@ class MissionServiceTests {
         assertEquals(Map.of("userId", 3L, "nickname", "잎사귀"), response.params().get("target"));
         assertFalse(response.params().containsKey("targetUserId"));
         assertEquals(10L, response.missionId());
+        assertEquals(SeoulTime.toOffset(row.getPublishedAt()), response.publishedAt());
+        assertEquals(SeoulTime.toOffset(row.getDeadlineAt()), response.deadlineAt());
     }
 
     @Test

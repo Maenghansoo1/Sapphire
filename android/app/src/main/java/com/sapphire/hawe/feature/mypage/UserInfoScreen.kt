@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.R
 import com.sapphire.hawe.core.AppSession
+import com.sapphire.hawe.core.COMING_SOON
 import com.sapphire.hawe.core.model.LoginProvider
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
@@ -32,12 +33,13 @@ import com.sapphire.hawe.feature.groups.dotDate
 fun UserInfoScreen(session: AppSession, onBack: () -> Unit, onProfileEdit: () -> Unit,
     onChangePassword: () -> Unit) {
     val account = session.account
-    var unlink by remember { mutableStateOf<LoginProvider?>(null) }
+    val toast = rememberHToastState()
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = HLayout.screenPaddingCompact)) {
         HNavBar("유저 정보", leading = HNavLeading.BACK, onLeading = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             SectionTitle("기본 정보", 14.dp)
-            HListRow("닉네임", value = account.profile.nickname, height = 56.dp, onClick = onProfileEdit)
+            HListRow("닉네임", value = account.profile.nickname, height = 56.dp, onClick = { toast.show(COMING_SOON) })
             InfoRow("이메일", account.email?.takeIf { it.isNotBlank() } ?: "없음")
             InfoRow("가입일", dotDate(account.joinedAt))
             SectionTitle("로그인 연결", 26.dp)
@@ -46,12 +48,12 @@ fun UserInfoScreen(session: AppSession, onBack: () -> Unit, onProfileEdit: () ->
                 color = HColors.textSecondary)
             listOf(LoginProvider.KAKAO, LoginProvider.APPLE, LoginProvider.GOOGLE).forEach { provider ->
                 ProviderRow(provider, providerRowState(account, provider),
-                    onLink = { session.account = session.account.linking(provider) },
-                    onUnlink = { unlink = provider })
+                    onLink = { toast.show(COMING_SOON) },
+                    onUnlink = { toast.show(COMING_SOON) })
             }
             SectionTitle("보안", 26.dp)
             Row(Modifier.fillMaxWidth().height(60.dp)
-                .clickable(enabled = account.canChangePassword, onClick = onChangePassword),
+                .clickable(enabled = account.canChangePassword) { toast.show(COMING_SOON) },
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("비밀번호 변경", style = HType.plex(15),
@@ -64,12 +66,7 @@ fun UserInfoScreen(session: AppSession, onBack: () -> Unit, onProfileEdit: () ->
             Spacer(Modifier.fillMaxWidth().height(1.dp).background(HColors.line))
         }
     }
-    unlink?.let { provider ->
-        HAlert("${provider.displayName} 연결을 해제할까요?", "해제하면 이 방법으로는 로그인할 수 없어요.",
-            "연결 해제", onCancel = { unlink = null }, onConfirm = {
-                session.account = session.account.unlinking(provider)
-                unlink = null
-            })
+    HToastHost(toast)
     }
 }
 

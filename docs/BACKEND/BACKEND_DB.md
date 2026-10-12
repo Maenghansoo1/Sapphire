@@ -34,11 +34,12 @@ erDiagram
 
   USERS {
     bigint id PK
-    string nickname
-    string login_id UK
+    string email UK
     string password_hash
-    string email
+    string nickname
     bigint character_id FK
+    datetime terms_agreed_at
+    datetime privacy_agreed_at
     datetime created_at
   }
   GROUPS {
@@ -142,7 +143,7 @@ erDiagram
 ```
 
 **비고**
-- `USERS` 인증 방식 — 소셜 로그인 대신 **자체 로그인**(`login_id` + `password_hash`) 사용. `email`은 부가 정보로 저장
+- `USERS` 인증 방식 — 소셜 로그인 대신 **이메일/비밀번호 자체 로그인**(`email` + `password_hash`) 사용. 필수 약관 동의 시각을 저장
 - `POKES.type` — `poke`(콕찌르기) / `fling`(똥뿌리기)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
 - `SUBMISSIONS.media_url` — 이미지·음성 파일 위치. 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
@@ -287,9 +288,10 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 ## 3. API 엔드포인트
 
 ### 인증
-- `POST /api/auth/register` — 회원가입 (`loginId`, `password`, `nickname`, `email`)
-- `POST /api/auth/login` — 로그인 (`loginId`, `password`) → JWT 발급
+- `POST /api/auth/register` — 회원가입 (`email`, `password`, `nickname`, `agreeTerms`, `agreePrivacy`)
+- `POST /api/auth/login` — 로그인 (`email`, `password`) → JWT 발급
 - `POST /api/auth/refresh` — 토큰 갱신
+- `GET /api/me` — 내 계정 정보
 
 ### 그룹
 - `GET /api/groups` — 내 그룹 목록 (오늘 제출 여부 포함)

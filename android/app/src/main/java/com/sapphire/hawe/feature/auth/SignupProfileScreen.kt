@@ -12,19 +12,29 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.net.ApiException
+import com.sapphire.hawe.core.net.AuthRepository
+import com.sapphire.hawe.core.net.toUserMessage
 import com.sapphire.hawe.core.model.*
 import com.sapphire.hawe.designsystem.assets.ProfileCharacter
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.HCtaScaffold
 import com.sapphire.hawe.designsystem.tokens.*
-import java.time.Instant
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SignupProfileScreen(provider: LoginProvider, email: String?, session: AppSession, store: DataStore,
-    onBack: () -> Unit) {
+    password: String, agreeTerms: Boolean, agreePrivacy: Boolean, auth: AuthRepository, onBack: () -> Unit) {
     var avatar by remember { mutableStateOf<AvatarContent>(AvatarContent.Character(ProfileCharacter.MONGSIL)) }
     var nickname by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+    val toast = rememberHToastState()
+    var loading by remember { mutableStateOf(false) }
+    var registered by rememberSaveable { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
     Column {
         Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
             HNavBar(leading = HNavLeading.BACK, onLeading = onBack,
@@ -43,20 +53,37 @@ fun SignupProfileScreen(provider: LoginProvider, email: String?, session: AppSes
                         Text(avatar.choiceName, style = HType.plex(20, FontWeight.Bold), color = HColors.ink)
                     }
                 }
-                CharacterPicker(avatar, { avatar = it })
+                CharacterPicker(avatar, { avatar = it }, showPhotoCell = false)
                 HTextField(nickname, { nickname = it }, "닉네임을 입력해 주세요", label = "닉네임",
                     helper = "캐릭터와 이름은 나중에 바꿀 수 있어요", maxLength = 10, imeAction = ImeAction.Done)
             }
         }, cta = {
-            HButton("시작하기", enabled = nickname.trim().length in 2..10) {
-                val profile = Profile(avatar, nickname.trim())
-                // TODO: 간편 로그인 이메일은 서버 연결 시 각 SDK에서 받아와요.
-                session.account = MyAccount(profile, email, Instant.now(), provider, setOf(provider))
-                store.reset()
-                store.setMyProfile(profile)
-                focus.clearFocus()
-                session.signIn()
+            HButton("시작하기", enabled = !loading && nickname.trim().length in 2..10) {
+                val character = (avatar as? AvatarContent.Character)?.character ?: return@HButton
+                if (loading) return@HButton
+                loading = true
+                scope.launch {
+                    try {
+                        val account = auth.signUp(email.orEmpty(), password, nickname, character,
+                            agreeTerms, agreePrivacy, registered, { registered = true })
+                        store.reset()
+                        store.setMyProfile(account.profile)
+                        focus.clearFocus()
+                        session.signIn(account)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        toast.show(e.toUserMessage())
+                        if (e is ApiException && e.code == "EMAIL_TAKEN") {
+                            delay(1600)
+                            onBack()
+                        }
+                    } finally {
+                        loading = false
+                    }
+                }
             }
         })
+    }
+    HToastHost(toast)
     }
 }

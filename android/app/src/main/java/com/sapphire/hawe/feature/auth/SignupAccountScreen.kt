@@ -25,7 +25,7 @@ import com.sapphire.hawe.designsystem.tokens.*
 @Composable
 fun SignupAccountScreen(password: String, onPasswordChange: (String) -> Unit,
     confirm: String, onConfirmChange: (String) -> Unit,
-    onBack: () -> Unit, onNext: (String) -> Unit) {
+    onBack: () -> Unit, onNext: (String, Boolean, Boolean) -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
     var service by rememberSaveable { mutableStateOf(false) }
     var privacy by rememberSaveable { mutableStateOf(false) }
@@ -60,7 +60,7 @@ fun SignupAccountScreen(password: String, onPasswordChange: (String) -> Unit,
                     }
                 }
             }
-        }, cta = { HButton("다음", enabled = state.canProceed) { onNext(email.trim()) } })
+        }, cta = { HButton("다음", enabled = state.canProceed) { onNext(email.trim(), service, privacy) } })
     }
 }
 

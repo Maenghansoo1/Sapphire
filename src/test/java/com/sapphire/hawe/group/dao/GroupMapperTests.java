@@ -86,10 +86,10 @@ class GroupMapperTests {
     }
 
     private Long insertUser() {
-        String loginId = "test-" + UUID.randomUUID();
-        jdbc.update("INSERT INTO users (nickname, login_id, password_hash) VALUES (?, ?, ?)",
-                "Test", loginId, "unused");
-        return jdbc.queryForObject("SELECT id FROM users WHERE login_id = ?", Long.class, loginId);
+        String email = "test-" + UUID.randomUUID() + "@test.com";
+        jdbc.update("INSERT INTO users (nickname, email, password_hash, terms_agreed_at, privacy_agreed_at) VALUES (?, ?, ?, NOW(), NOW())",
+                "Test", email, "unused");
+        return jdbc.queryForObject("SELECT id FROM users WHERE email = ?", Long.class, email);
     }
 
     private Long insertGroup(Long ownerId) {

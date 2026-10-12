@@ -2,7 +2,7 @@
   "info": {
     "name": "HA'WE - AUTH API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "AUTH API(register/login/refresh) 통합 테스트. 서버(http://localhost:8080) 필요. 폴더 1~4를 순서대로 Collection Runner로 실행. 1-1을 실행할 때마다 run 값이 새로 만들어져 새 계정이 생성되므로 반복 실행해도 됩니다."
+    "description": "AUTH API(register/login/refresh/GET me) 통합 테스트. 서버(http://localhost:8080) 필요. 폴더 1~4를 순서대로 Collection Runner로 실행. 1-1을 실행할 때마다 run 값이 새로 만들어져 새 계정이 생성되므로 반복 실행해도 됩니다."
   },
   "variable": [
     {
@@ -37,7 +37,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"auth_{{run}}\", \"password\": \"password1\", \"nickname\": \"authnick\", \"email\": \"auth_{{run}}@test.com\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"authnick\",\"email\":\"auth_{{run}}@test.com\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -62,7 +62,7 @@
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
                   "const j = pm.response.json();",
-                  "pm.test(\"id/loginId/nickname returned\", () => { pm.expect(j.id).to.be.a(\"number\"); pm.expect(j.loginId).to.eql(\"auth_\" + pm.collectionVariables.get(\"run\")); pm.expect(j.nickname).to.eql(\"authnick\"); });",
+                  "pm.test(\"id/email/nickname returned\", () => { pm.expect(j.id).to.be.a(\"number\"); pm.expect(j.email).to.eql(\"auth_\" + pm.collectionVariables.get(\"run\") + \"@test.com\"); pm.expect(j.nickname).to.eql(\"authnick\"); });",
                   "pm.test(\"password is never returned\", () => { const s = pm.response.text(); pm.expect(s).to.not.include(\"password\"); pm.expect(s).to.not.include(\"passwordHash\"); });"
                 ]
               }
@@ -70,7 +70,7 @@
           ]
         },
         {
-          "name": "1-2 같은 아이디 → 409",
+          "name": "1-2 같은 이메일(대소문자) → 409",
           "request": {
             "method": "POST",
             "header": [
@@ -92,7 +92,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"auth_{{run}}\", \"password\": \"password1\", \"nickname\": \"authnick\", \"email\": \"other_{{run}}@test.com\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"authnick\",\"email\":\"AUTH_{{run}}@TEST.COM\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -107,14 +107,14 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
-                  "pm.test(\"LOGIN_ID_TAKEN\", () => pm.expect(pm.response.json().code).to.eql(\"LOGIN_ID_TAKEN\"));"
+                  "pm.test(\"EMAIL_TAKEN\", () => pm.expect(pm.response.json().code).to.eql(\"EMAIL_TAKEN\"));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "1-3 아이디 3자 → 400",
+          "name": "1-3 닉네임 11자 → 400",
           "request": {
             "method": "POST",
             "header": [
@@ -136,7 +136,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"abc\", \"password\": \"password1\", \"nickname\": \"authnick\", \"email\": \"auth_{{run}}@test.com\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"가나다라마바사아자차카\",\"email\":\"auth_{{run}}@test.com\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -180,7 +180,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"short_{{run}}\", \"password\": \"pass123\", \"nickname\": \"authnick\", \"email\": \"auth_{{run}}@test.com\"}",
+              "raw": "{\"password\":\"pass123\",\"nickname\":\"authnick\",\"email\":\"auth_{{run}}@test.com\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -224,7 +224,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"mail_{{run}}\", \"password\": \"password1\", \"nickname\": \"authnick\", \"email\": \"not-an-email\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"authnick\",\"email\":\"not-an-email\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -268,7 +268,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"nick_{{run}}\", \"password\": \"password1\", \"nickname\": \"\", \"email\": \"auth_{{run}}@test.com\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"\",\"email\":\"auth_{{run}}@test.com\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -290,7 +290,7 @@
           ]
         },
         {
-          "name": "1-7 필드 누락(loginId 없음) → 400",
+          "name": "1-7 필드 누락(email 없음) → 400",
           "request": {
             "method": "POST",
             "header": [
@@ -312,7 +312,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"password\": \"password1\", \"nickname\": \"n\", \"email\": \"x@test.com\"}",
+              "raw": "{\"password\":\"password1\",\"nickname\":\"authnick\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -356,7 +356,183 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": ",
+              "raw": "{\"email\":",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-9 개인정보 동의 거부 → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"auth_{{run}}@test.com\",\"password\":\"password1\",\"nickname\":\"authnick\",\"agreeTerms\":true,\"agreePrivacy\":false}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-10 닉네임 1자 → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"auth_{{run}}@test.com\",\"password\":\"password1\",\"nickname\":\"가\",\"agreeTerms\":true,\"agreePrivacy\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-11 숫자 없는 비밀번호 → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"auth_{{run}}@test.com\",\"password\":\"abcdefgh\",\"nickname\":\"authnick\",\"agreeTerms\":true,\"agreePrivacy\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1-12 영문 없는 비밀번호 → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"auth_{{run}}@test.com\",\"password\":\"12345678\",\"nickname\":\"authnick\",\"agreeTerms\":true,\"agreePrivacy\":true}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -405,7 +581,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"auth_{{run}}\", \"password\": \"password1\"}",
+              "raw": "{\"password\":\"password1\",\"email\":\"AUTH_{{run}}@TEST.COM\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -452,7 +628,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"auth_{{run}}\", \"password\": \"wrongpass1\"}",
+              "raw": "{\"password\":\"wrongpass1\",\"email\":\"AUTH_{{run}}@TEST.COM\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -474,7 +650,7 @@
           ]
         },
         {
-          "name": "2-3 없는 아이디 → 401 (같은 코드)",
+          "name": "2-3 없는 이메일 → 401 (같은 코드)",
           "request": {
             "method": "POST",
             "header": [
@@ -496,7 +672,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"nobody_{{run}}\", \"password\": \"password1\"}",
+              "raw": "{\"password\":\"password1\",\"email\":\"nobody_{{run}}@test.com\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -541,7 +717,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"loginId\": \"auth_{{run}}\", \"password\": \"\"}",
+              "raw": "{\"password\":\"\",\"email\":\"AUTH_{{run}}@TEST.COM\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -563,7 +739,7 @@
           ]
         },
         {
-          "name": "2-5 loginId 누락 → 400",
+          "name": "2-5 email 누락 → 400",
           "request": {
             "method": "POST",
             "header": [
@@ -605,12 +781,121 @@
               }
             }
           ]
+        },
+        {
+          "name": "2-6 형식이 틀린 이메일 → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"invalid\",\"password\":\"password1\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CREDENTIALS\"));",
+                  "pm.test(\"same message as wrong password (no account enumeration)\", () => pm.expect(pm.response.json().message).to.eql(\"아이디 또는 비밀번호가 올바르지 않습니다\"));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
       "name": "3. Access 토큰 사용 (GET /api/groups)",
       "item": [
+        {
+          "name": "3-0 GET /me → 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"me fields\", () => { pm.expect(j.email).to.eql(\"auth_\" + pm.collectionVariables.get(\"run\") + \"@test.com\"); pm.expect(j.nickname).to.eql(\"authnick\"); pm.expect(j.characterKey).to.eql(null); pm.expect(j.profileImageUrl).to.eql(null); pm.expect(j.createdAt).to.match(/\\+09:00$/); });",
+                  "pm.test(\"no sensitive fields\", () => { const s = pm.response.text(); pm.expect(s).to.not.include(\"passwordHash\"); pm.expect(s).to.not.include(\"agreeTerms\"); pm.expect(s).to.not.include(\"termsAgreedAt\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-0a GET /me 토큰 없음 → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "3-1 access 토큰 → 200",
           "request": {

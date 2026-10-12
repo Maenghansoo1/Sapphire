@@ -1,6 +1,7 @@
 package com.sapphire.hawe.poke.service;
 
 import com.sapphire.hawe.global.exception.BusinessException;
+import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.service.GroupErrorCode;
@@ -11,7 +12,6 @@ import com.sapphire.hawe.poke.dto.PokeResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 
 @Service
 public class PokeService {
@@ -51,9 +51,10 @@ public class PokeService {
         poke.setToUserId(targetId);
         poke.setGroupId(groupId);
         poke.setType(request.type());
-        poke.setSentAt(LocalDateTime.now().withNano(0));
+        poke.setSentAt(SeoulTime.now().withNano(0));
         pokeMapper.insert(poke);
 
-        return new PokeResponse(poke.getId(), poke.getToUserId(), poke.getType(), poke.getSentAt());
+        return new PokeResponse(poke.getId(), poke.getToUserId(), poke.getType(),
+                SeoulTime.toOffset(poke.getSentAt()));
     }
 }

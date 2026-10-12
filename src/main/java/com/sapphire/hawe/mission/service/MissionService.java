@@ -4,6 +4,7 @@ import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.auth.domain.User;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
+import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -65,11 +66,10 @@ public class MissionService {
         requireMember(groupId, userId);
         List<MissionRow> rows = missionMapper.findTodayByGroupId(groupId, userId);
         List<MissionResponse> missions = rows.stream().map(this::toResponse).toList();
-        // The SQL uses CURDATE(); aligning the JVM and database time zones remains an open decision.
-        LocalDate date = LocalDate.now();
+        LocalDate date = SeoulTime.today();
         LocalDateTime nextPublishAt = nextPublishAt(date, group.getDailyMissionCount(), rows,
                 slotMapper.findByGroupId(groupId));
-        return new TodayMissionsResponse(date, group.getDailyMissionCount(), nextPublishAt, missions);
+        return new TodayMissionsResponse(date, group.getDailyMissionCount(), SeoulTime.toOffset(nextPublishAt), missions);
     }
 
     public MissionResponse getMission(Long userId, Long missionId) {
@@ -105,7 +105,7 @@ public class MissionService {
         }
         return new MissionResponse(row.getId(), row.getGroupId(), row.getSlotNo(), row.getContent(),
                 row.getCategory(), row.getTemplate(), media, resolveParams(row.getParams()),
-                row.getPublishedAt(), row.getDeadlineAt(), row.isSubmittedByMe());
+                SeoulTime.toOffset(row.getPublishedAt()), SeoulTime.toOffset(row.getDeadlineAt()), row.isSubmittedByMe());
     }
 
     private Map<String, Object> resolveParams(String json) {
