@@ -4,16 +4,17 @@ import com.sapphire.hawe.global.dto.PageResponse;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.config.MissionProperties;
-import com.sapphire.hawe.global.security.JwtTokenProvider;
-import com.sapphire.hawe.global.security.TokenErrorCode;
+import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
 import com.sapphire.hawe.group.dao.GroupMemberRow;
+import com.sapphire.hawe.group.dao.GroupMemberPreviewRow;
 import com.sapphire.hawe.group.dao.GroupSummaryRow;
 import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.group.domain.GroupMember;
 import com.sapphire.hawe.group.domain.GroupMissionSlot;
+import com.sapphire.hawe.group.domain.GroupCreatedEvent;
 import com.sapphire.hawe.group.dto.GroupCreateRequest;
 import com.sapphire.hawe.group.dto.GroupMemberResponse;
 import com.sapphire.hawe.group.dto.GroupResponse;
@@ -21,15 +22,21 @@ import com.sapphire.hawe.group.dto.GroupSettingsUpdateRequest;
 import com.sapphire.hawe.group.dto.GroupSummaryResponse;
 import com.sapphire.hawe.group.dto.MissionSlotRequest;
 import com.sapphire.hawe.group.dto.MissionSlotResponse;
-import com.sapphire.hawe.group.dto.InviteResponse;
+import com.sapphire.hawe.group.dto.InvitePreviewResponse;
+import com.sapphire.hawe.group.dto.MemberProfileResponse;
 import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.JoinResponse;
+import com.sapphire.hawe.mission.dto.TodayMissionSummary;
+import com.sapphire.hawe.mission.service.MissionService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
@@ -50,15 +57,21 @@ public class GroupService {
     private final GroupMemberMapper groupMemberMapper;
     private final GroupMissionSlotMapper slotMapper;
     private final MissionProperties missionProperties;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final MissionService missionService;
+    private final ApplicationEventPublisher events;
+    private final String inviteBaseUrl;
 
     public GroupService(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper,
-            GroupMissionSlotMapper slotMapper, MissionProperties missionProperties, JwtTokenProvider jwtTokenProvider) {
+            GroupMissionSlotMapper slotMapper, MissionProperties missionProperties,
+            @Value("${hawe.invite.base-url:https://hawe.app/invite}") String inviteBaseUrl,
+            MissionService missionService, ApplicationEventPublisher events) {
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.slotMapper = slotMapper;
         this.missionProperties = missionProperties;
-        this.jwtTokenProvider = jwtTokenProvider;
+        this.missionService = missionService;
+        this.events = events;
+        this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
     public PageResponse<GroupSummaryResponse> listMyGroups(Long userId, int page, int size) {
@@ -67,23 +80,53 @@ public class GroupService {
         List<GroupSummaryRow> rows = groupMapper.findSummariesByUserId(userId, (long) safePage * safeSize, safeSize);
         long total = groupMapper.countByUserId(userId);
 
-        List<GroupSummaryResponse> content = rows.stream()
-                .map(row -> new GroupSummaryResponse(row.getId(), row.getName(), row.isSubmittedToday()))
-                .toList();
+        Map<Long, List<MemberProfileResponse>> membersByGroup = new HashMap<>();
+        Map<Long, TodayMissionSummary> missionsByGroup = Map.of();
+        if (!rows.isEmpty()) {
+            List<Long> groupIds = rows.stream().map(GroupSummaryRow::getId).toList();
+            missionsByGroup = missionService.summarizeCurrent(groupIds, userId);
+            for (GroupMemberPreviewRow member : groupMapper.findMemberPreviewsByGroupIds(groupIds)) {
+                membersByGroup.computeIfAbsent(member.getGroupId(), ignored -> new ArrayList<>())
+                        .add(toMemberProfile(member));
+            }
+        }
+        Map<Long, TodayMissionSummary> currentMissions = missionsByGroup;
+        List<GroupSummaryResponse> content = rows.stream().map(row -> {
+            List<MemberProfileResponse> members = membersByGroup.getOrDefault(row.getId(), List.of());
+            int maxMembers = "COUPLE".equals(row.getRelationType()) ? 2 : 6;
+            TodayMissionSummary todayMission = currentMissions.get(row.getId());
+            return new GroupSummaryResponse(row.getId(), row.getName(), row.getRelationType(),
+                    members.size(), maxMembers, members, row.getStartDate(),
+                    todayMission != null && todayMission.submittedByMe(), todayMission);
+        }).toList();
         return PageResponse.of(content, safePage, safeSize, total);
     }
 
     @Transactional
     public GroupResponse createGroup(Long userId, GroupCreateRequest request) {
+        validateName(request.name());
         String relationType = request.relationType() == null ? "CASUAL" : request.relationType();
         int dailyMissionCount = request.dailyMissionCount() == null ? 1 : request.dailyMissionCount();
         validateSettings(relationType, dailyMissionCount, request.missionSlots());
+        validateStartDate(relationType, request.startDate());
         Group group = new Group();
         group.setName(request.name());
         group.setOwnerId(userId);
         group.setRelationType(relationType);
         group.setDailyMissionCount(dailyMissionCount);
-        groupMapper.insert(group);
+        group.setStartDate(request.startDate());
+        boolean inserted = false;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            group.setInviteCode(InviteCodeGenerator.generate());
+            try {
+                groupMapper.insert(group);
+                inserted = true;
+                break;
+            } catch (DuplicateKeyException e) {
+                if (attempt == 4) throw e;
+            }
+        }
+        if (!inserted) throw new IllegalStateException("Unable to create a unique invite code");
 
         GroupMember owner = new GroupMember();
         owner.setGroupId(group.getId());
@@ -95,7 +138,9 @@ public class GroupService {
             insertSlots(group.getId(), request.missionSlots());
         }
 
-        return toGroupResponse(group);
+        GroupResponse response = toGroupResponse(requireGroup(group.getId()));
+        events.publishEvent(new GroupCreatedEvent(group.getId()));
+        return response;
     }
 
     public GroupResponse getGroup(Long userId, Long groupId) {
@@ -106,7 +151,8 @@ public class GroupService {
 
     @Transactional
     public GroupResponse updateSettings(Long userId, Long groupId, GroupSettingsUpdateRequest request) {
-        Group group = requireGroup(groupId);
+        Group group = groupMapper.findByIdForUpdate(groupId);
+        if (group == null) throw new BusinessException(GroupErrorCode.GROUP_NOT_FOUND);
         requireOwner(group, userId);
 
         String relationType = request.relationType() == null ? group.getRelationType() : request.relationType();
@@ -114,11 +160,19 @@ public class GroupService {
         int dailyMissionCount = request.dailyMissionCount() == null
                 ? group.getDailyMissionCount() : request.dailyMissionCount();
         validateSettings(relationType, dailyMissionCount, request.missionSlots());
+        if (request.name() != null) validateName(request.name());
+        LocalDate startDate = request.startDate() == null ? group.getStartDate() : request.startDate();
+        if (!"COUPLE".equals(relationType)) startDate = null;
+        if (request.startDate() != null) validateStartDate(relationType, request.startDate());
+        if (groupMemberMapper.countByGroupId(groupId) > ("COUPLE".equals(relationType) ? 2 : 6)) {
+            throw new BusinessException(GroupErrorCode.GROUP_FULL);
+        }
 
         if (request.name() != null) {
             group.setName(request.name());
         }
         group.setRelationType(relationType);
+        group.setStartDate(startDate);
         group.setDailyMissionCount(dailyMissionCount);
         groupMapper.update(group);
         if (request.missionSlots() != null) {
@@ -127,7 +181,7 @@ public class GroupService {
         } else if (dailyMissionCount < previousDailyMissionCount) {
             slotMapper.deleteByGroupIdAndSlotNoGreaterThan(groupId, dailyMissionCount);
         }
-        return toGroupResponse(group);
+        return toGroupResponse(requireGroup(groupId));
     }
 
     public PageResponse<GroupMemberResponse> listMembers(Long userId, Long groupId, int page, int size) {
@@ -140,29 +194,25 @@ public class GroupService {
         long total = groupMemberMapper.countByGroupId(groupId);
 
         List<GroupMemberResponse> content = rows.stream()
-                .map(row -> new GroupMemberResponse(row.getUserId(), row.getNickname(), row.getRole(),
+                .map(row -> new GroupMemberResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(), null, row.getRole(),
                         row.getSubmissionCountThisMonth(), row.isStampedToday()))
                 .toList();
         return PageResponse.of(content, safePage, safeSize, total);
     }
 
-    public InviteResponse createInvite(Long userId, Long groupId) {
-        Group group = requireGroup(groupId);
-        requireOwner(group, userId);
-        String token = jwtTokenProvider.createInviteToken(groupId);
-        return new InviteResponse("hawe://join?token=" + token);
+    public InvitePreviewResponse previewInvite(Long userId, String rawCode) {
+        Group group = findInviteGroup(rawCode, false);
+        checkJoinable(group, userId);
+        List<MemberProfileResponse> members = memberProfiles(group.getId());
+        return new InvitePreviewResponse(group.getId(), group.getName(), group.getRelationType(),
+                members.size(), group.maxMembers(), members);
     }
 
     @Transactional
-    public JoinResponse joinByInvite(Long userId, JoinRequest request) {
-        Long groupId = validateInviteToken(request.token());
-        Group group = groupMapper.findById(groupId);
-        if (group == null) {
-            throw new BusinessException(GroupErrorCode.INVALID_INVITE_TOKEN);
-        }
-        if (groupMemberMapper.existsByGroupIdAndUserId(groupId, userId)) {
-            throw new BusinessException(GroupErrorCode.ALREADY_MEMBER);
-        }
+    public JoinResponse join(Long userId, JoinRequest request) {
+        Group group = findInviteGroup(request.code(), true);
+        Long groupId = group.getId();
+        checkJoinable(group, userId);
 
         GroupMember member = new GroupMember();
         member.setGroupId(groupId);
@@ -178,27 +228,69 @@ public class GroupService {
     }
 
     @Transactional
-    public void leaveGroup(Long userId, Long groupId) {
-        requireGroup(groupId);
+    public void leaveGroup(Long userId, Long groupId, Long successorUserId) {
+        Group group = groupMapper.findByIdForUpdate(groupId);
+        if (group == null) throw new BusinessException(GroupErrorCode.GROUP_NOT_FOUND);
         GroupMember membership = groupMemberMapper.findByGroupIdAndUserId(groupId, userId);
         if (membership == null) {
             throw new BusinessException(GroupErrorCode.NOT_GROUP_MEMBER);
         }
-        if (GroupMember.ROLE_OWNER.equals(membership.getRole())) {
-            throw new BusinessException(GroupErrorCode.OWNER_CANNOT_LEAVE);
+        if (!GroupMember.ROLE_OWNER.equals(membership.getRole())) {
+            groupMemberMapper.deleteByGroupIdAndUserId(groupId, userId);
+            return;
         }
+        if (groupMemberMapper.countByGroupId(groupId) == 1) {
+            deleteGroupCascade(groupId);
+            return;
+        }
+        if (successorUserId == null) throw new BusinessException(GroupErrorCode.SUCCESSOR_REQUIRED);
+        if (successorUserId.equals(userId)
+                || !groupMemberMapper.existsByGroupIdAndUserId(groupId, successorUserId)) {
+            throw new BusinessException(GroupErrorCode.INVALID_SUCCESSOR);
+        }
+        group.setOwnerId(successorUserId);
+        groupMapper.update(group);
+        groupMemberMapper.updateRole(groupId, successorUserId, GroupMember.ROLE_OWNER);
         groupMemberMapper.deleteByGroupIdAndUserId(groupId, userId);
     }
 
-    private Long validateInviteToken(String token) {
-        try {
-            return jwtTokenProvider.validateInviteTokenAndGetGroupId(token);
-        } catch (BusinessException e) {
-            if (e.errorCode() == TokenErrorCode.TOKEN_EXPIRED) {
-                throw new BusinessException(GroupErrorCode.INVITE_EXPIRED);
-            }
-            throw new BusinessException(GroupErrorCode.INVALID_INVITE_TOKEN);
+    private Group findInviteGroup(String rawCode, boolean lock) {
+        String code = InviteCodeGenerator.normalize(rawCode);
+        if (code == null) throw new BusinessException(GroupErrorCode.INVITE_NOT_FOUND);
+        Group group = lock ? groupMapper.findByInviteCodeForUpdate(code) : groupMapper.findByInviteCode(code);
+        if (group == null) throw new BusinessException(GroupErrorCode.INVITE_NOT_FOUND);
+        return group;
+    }
+
+    private void checkJoinable(Group group, Long userId) {
+        if (groupMemberMapper.existsByGroupIdAndUserId(group.getId(), userId)) {
+            throw new BusinessException(GroupErrorCode.ALREADY_MEMBER);
         }
+        if (groupMemberMapper.countByGroupId(group.getId()) >= group.maxMembers()) {
+            throw new BusinessException(GroupErrorCode.GROUP_FULL);
+        }
+    }
+
+    private List<MemberProfileResponse> memberProfiles(Long groupId) {
+        return groupMapper.findMemberPreviewsByGroupIds(List.of(groupId)).stream()
+                .map(this::toMemberProfile).toList();
+    }
+
+    private MemberProfileResponse toMemberProfile(GroupMemberPreviewRow row) {
+        return new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(), null);
+    }
+
+    private void deleteGroupCascade(Long groupId) {
+        groupMapper.deleteCommentMentionsByGroupId(groupId);
+        groupMapper.deleteCommentsByGroupId(groupId);
+        groupMapper.deleteReactionsByGroupId(groupId);
+        groupMapper.deleteSubmissionGuessesByGroupId(groupId);
+        groupMapper.deleteSubmissionsByGroupId(groupId);
+        groupMapper.deleteMissionsByGroupId(groupId);
+        groupMapper.deletePokesByGroupId(groupId);
+        slotMapper.deleteByGroupId(groupId);
+        groupMemberMapper.deleteByGroupId(groupId);
+        groupMapper.deleteById(groupId);
     }
 
     private Group requireGroup(Long groupId) {
@@ -246,7 +338,22 @@ public class GroupService {
                     deadline.format(TIME_FORMAT), customized));
         }
         return new GroupResponse(group.getId(), group.getName(), group.getOwnerId(),
-                group.getRelationType(), group.getDailyMissionCount(), slots);
+                group.getRelationType(), SeoulTime.toOffset(group.getCreatedAt()),
+                (int) groupMemberMapper.countByGroupId(group.getId()), group.maxMembers(),
+                group.getInviteCode(), inviteBaseUrl + "/" + group.getInviteCode(), group.getStartDate(),
+                group.getDailyMissionCount(), slots, groupMapper.countMissionsByGroupId(group.getId()));
+    }
+
+    private void validateStartDate(String relationType, LocalDate startDate) {
+        if (startDate != null && (!"COUPLE".equals(relationType) || startDate.isAfter(SeoulTime.today()))) {
+            throw new BusinessException(CommonErrorCode.VALIDATION_ERROR);
+        }
+    }
+
+    private void validateName(String name) {
+        if (name == null || name.isEmpty() || name.length() > 16) {
+            throw new BusinessException(CommonErrorCode.VALIDATION_ERROR);
+        }
     }
 
     private void validateSettings(String relationType, int dailyMissionCount, List<MissionSlotRequest> slots) {

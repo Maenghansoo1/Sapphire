@@ -50,10 +50,10 @@ class PokeMapperTests {
         submit(insertMission(groupId, "CURDATE()"), submitterId);
         submit(insertMission(otherGroupId, "CURDATE() - INTERVAL 1 DAY"), otherUserId);
 
-        assertTrue(pokes.existsTodaySubmission(groupId, submitterId));
-        assertFalse(pokes.existsTodaySubmission(groupId, otherUserId));
-        assertFalse(pokes.existsTodaySubmission(otherGroupId, submitterId));
-        assertFalse(pokes.existsTodaySubmission(otherGroupId, otherUserId));
+        assertTrue(pokes.existsCurrentMissionSubmission(groupId, submitterId));
+        assertFalse(pokes.existsCurrentMissionSubmission(groupId, otherUserId));
+        assertFalse(pokes.existsCurrentMissionSubmission(otherGroupId, submitterId));
+        assertTrue(pokes.existsCurrentMissionSubmission(otherGroupId, otherUserId));
     }
 
     private Long insertUser() {
@@ -64,7 +64,8 @@ class PokeMapperTests {
     }
 
     private Long insertGroup(Long ownerId) {
-        jdbc.update("INSERT INTO `groups` (name, owner_id) VALUES ('Test group', ?)", ownerId);
+        jdbc.update("INSERT INTO `groups` (name, owner_id, invite_code) VALUES ('Test group', ?, ?)",
+                ownerId, UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase());
         return jdbc.queryForObject("SELECT MAX(id) FROM `groups` WHERE owner_id = ?", Long.class, ownerId);
     }
 

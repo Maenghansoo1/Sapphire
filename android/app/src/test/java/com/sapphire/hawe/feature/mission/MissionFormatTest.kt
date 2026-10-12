@@ -38,7 +38,7 @@ class MissionFormatTest {
     }
 
     @Test fun memberAndNoticeCopy() {
-        val mine = MissionMember(UUID.randomUUID(), Profile.mockMine, isMe = true)
+        val mine = MissionMember(1L, Profile.mockMine, isMe = true)
         assertEquals("하늘 (나)", memberDisplayName(mine))
         assertEquals("하늘", memberDisplayName(mine.copy(isMe = false)))
         assertEquals("내 미션을 올리면 친구들의 그림이 열려요.", lockNoticeText(MissionType.DRAW))

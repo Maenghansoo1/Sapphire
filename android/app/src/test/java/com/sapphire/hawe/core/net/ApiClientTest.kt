@@ -15,6 +15,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ApiClientTest {
+    @Test fun deleteAcceptsEmptyBodyAndRefreshes() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(error("TOKEN_EXPIRED"))
+            server.enqueue(MockResponse().setBody("""{"accessToken":"new","refreshToken":"next"}"""))
+            server.enqueue(MockResponse().setResponseCode(204))
+            val tokens = InMemoryTokenStore().apply { save("old", "refresh") }
+            ApiClient(server.url("/").toString(), tokens).delete("/api/groups/2/members/me")
+            assertEquals("DELETE", server.takeRequest().method)
+            assertEquals("/api/auth/refresh", server.takeRequest().path)
+            val retried = server.takeRequest()
+            assertEquals("DELETE", retried.method)
+            assertEquals("Bearer new", retried.getHeader("Authorization"))
+        }
+    }
     private val me = """{"id":1,"email":"a@b.com","nickname":"Ada","createdAt":"2026-09-28T09:00:00+09:00","extra":true}"""
     private fun error(code: String) = MockResponse().setResponseCode(401)
         .setBody("""{"code":"$code","message":"failure"}""")

@@ -23,6 +23,20 @@ enum class Relationship(val value: String, val displayName: String, val decorPhr
     RIVAL("rival", "웬수", "번개가", Color(0xFFE8590C)),
     SOSO("soso", "그저그런사이", "말줄임표가", Color(0xFF8E8E93));
     val maxMembers: Int get() = if (this == LOVER) 2 else 6
+    val serverValue: String get() = when (this) {
+        LOVER -> "COUPLE"
+        SOSO -> "CASUAL"
+        else -> name
+    }
+    companion object {
+        fun fromServer(value: String?): Relationship = when (value) {
+            "COUPLE" -> LOVER
+            "FAMILY" -> FAMILY
+            "FRIEND" -> FRIEND
+            "RIVAL" -> RIVAL
+            else -> SOSO
+        }
+    }
 }
 
 @Composable

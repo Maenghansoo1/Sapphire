@@ -95,7 +95,7 @@ class PokeServiceTests {
         when(groupMapper.findById(11L)).thenReturn(group(11L));
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
-        when(pokeMapper.existsTodaySubmission(11L, 8L)).thenReturn(true);
+        when(pokeMapper.existsCurrentMissionSubmission(11L, 8L)).thenReturn(true);
 
         assertFailsWith(PokeErrorCode.TARGET_ALREADY_SUBMITTED, new PokeRequest(8L, "poke"));
     }

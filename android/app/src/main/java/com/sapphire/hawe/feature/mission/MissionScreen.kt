@@ -39,7 +39,7 @@ import java.util.UUID
 import kotlinx.coroutines.delay
 
 @Composable
-fun MissionScreen(id: UUID, store: DataStore, onBack: () -> Unit, onGroupInfo: () -> Unit,
+fun MissionScreen(id: Long, store: DataStore, onBack: () -> Unit, onGroupInfo: () -> Unit,
     submittedSignal: Boolean = false, onSubmittedHandled: () -> Unit = {},
     onPerform: (MissionType?) -> Unit = {}, onResults: () -> Unit = {}, onCalendar: () -> Unit = {}) {
     val mission = store.todayMission(id)

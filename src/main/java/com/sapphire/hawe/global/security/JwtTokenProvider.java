@@ -23,7 +23,6 @@ public class JwtTokenProvider {
     private static final String CLAIM_NICKNAME = "nickname";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
-    private static final String TYPE_INVITE = "invite";
 
     private final SecretKey key;
     private final JwtProperties properties;
@@ -55,24 +54,6 @@ public class JwtTokenProvider {
     public Long validateAndGetUserId(String token) {
         Claims claims = parseClaims(token);
         if (!TYPE_ACCESS.equals(claims.get(CLAIM_TYPE))) {
-            throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
-        }
-        return parseId(claims);
-    }
-
-    /** Group invite link token; subject is a groupId, not a userId. */
-    public String createInviteToken(Long groupId) {
-        return createToken(groupId, Map.of(CLAIM_TYPE, TYPE_INVITE), properties.inviteTokenValiditySeconds());
-    }
-
-    /**
-     * Validates the token is well-formed, unexpired, and actually an invite token.
-     * Throws the same {@link TokenErrorCode} as the other validate methods; callers that need
-     * group-specific error codes (INVALID_INVITE_TOKEN/INVITE_EXPIRED) should translate it.
-     */
-    public Long validateInviteTokenAndGetGroupId(String token) {
-        Claims claims = parseClaims(token);
-        if (!TYPE_INVITE.equals(claims.get(CLAIM_TYPE))) {
             throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
         }
         return parseId(claims);

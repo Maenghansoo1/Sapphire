@@ -63,7 +63,6 @@ class GroupMapperTests {
 
         var summaries = groups.findSummariesByUserId(userId, 0L, 20);
         assertEquals(1, summaries.size());
-        assertTrue(summaries.getFirst().isSubmittedToday());
 
         var memberRows = members.findMembersByGroupId(groupId, 0L, 20);
         assertEquals(1, memberRows.size());
@@ -98,6 +97,7 @@ class GroupMapperTests {
         group.setName("Test group");
         group.setRelationType("CASUAL");
         group.setDailyMissionCount(1);
+        group.setInviteCode(UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase());
         groups.insert(group);
         return group.getId();
     }

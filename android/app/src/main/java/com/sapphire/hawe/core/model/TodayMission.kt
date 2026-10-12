@@ -4,7 +4,7 @@ import java.time.Instant
 import java.util.UUID
 
 data class MissionMember(
-    val id: UUID, val profile: Profile, val isMe: Boolean = false,
+    val id: Long, val profile: Profile, val isMe: Boolean = false,
     val isDone: Boolean = false, val pokedToday: Boolean = false,
 )
 

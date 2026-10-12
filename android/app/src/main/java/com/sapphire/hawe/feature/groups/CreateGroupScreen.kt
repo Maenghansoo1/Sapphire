@@ -23,6 +23,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.HaweTime
+import com.sapphire.hawe.core.AppSession
+import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.net.GroupRepository
+import com.sapphire.hawe.core.net.toUserMessage
 import com.sapphire.hawe.core.model.AvatarContent
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
@@ -34,17 +38,22 @@ import com.sapphire.hawe.designsystem.tokens.*
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CreateGroupScreen(onBack: () -> Unit, onCreated: (String, Relationship, LocalDate?) -> Unit) {
+fun CreateGroupScreen(groups: GroupRepository, store: DataStore, session: AppSession,
+    onBack: () -> Unit, onCreated: (Long) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var relationship by rememberSaveable { mutableStateOf(Relationship.FRIEND) }
     var selectedDate by rememberSaveable { mutableStateOf(Instant.now().atZone(HaweTime.SEOUL).toLocalDate()) }
     var showDate by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val toast = rememberHToastState()
     val state = CreateGroupState(name, relationship, selectedDate)
-    Column(Modifier.background(HColors.bg)) {
+    Box(Modifier.fillMaxSize().background(HColors.bg)) { Column {
         Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
             HNavBar(leading = HNavLeading.BACK, onLeading = onBack)
         }
@@ -104,10 +113,24 @@ fun CreateGroupScreen(onBack: () -> Unit, onCreated: (String, Relationship, Loca
             }
         }, cta = {
             HButton("그룹 만들고 초대 코드 받기", enabled = state.canCreate && !submitted) {
-                if (!submitted) { submitted = true; onCreated(name.trim(), relationship, state.startDateForCreation) }
+                if (!submitted) {
+                    submitted = true
+                    scope.launch {
+                        try {
+                            val detail = groups.create(name.trim(), relationship, state.startDateForCreation,
+                                session.account.userId, session.account.profile)
+                            store.applyServerGroup(detail)
+                            onCreated(detail.id)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            toast.show(e.toUserMessage())
+                            submitted = false
+                        }
+                    }
+                }
             }
         })
-    }
+    }; HToastHost(toast) }
     if (showDate) StartDateSheet(selectedDate, onDismiss = { showDate = false }, onConfirm = {
         selectedDate = it; showDate = false
     })

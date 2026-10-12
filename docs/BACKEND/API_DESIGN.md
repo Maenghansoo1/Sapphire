@@ -28,10 +28,10 @@
 | accessToken/refreshToken | Stateless (서명 검증만, DB 미저장) | MVP 단순화. 로그아웃 강제 무효화는 지원 안 함 |
 | accessToken 만료 | 30분 | — |
 | refreshToken 만료 | 14일, refresh 시마다 회전(rotate) 발급 | — |
-| 그룹 초대 | Stateless 토큰(그룹ID를 서명해서 링크에 담음), 만료 7일 | DB 테이블 불필요, 구현 단순 |
+| 그룹 초대 | 그룹별 6자리 코드(전체 유일, 만료 없음) | 미리보기와 정원 검사에 사용 |
 | 스티커 반응 | 토글 방식 (이미 누른 반응 다시 누르면 취소) | 무한정 중복 반응 방지 |
 | 댓글 멘션 | 프론트가 `mentionedUserIds`를 명시적으로 전달 | 서버가 `@닉네임` 텍스트 파싱하는 것보다 안전 (닉네임 중복/특수문자 회피) |
-| 그룹장(owner) 탈퇴 | 일단 금지 (`OWNER_CANNOT_LEAVE`) | 소유권 이전 정책 미정 — 추후 별도 설계 필요 |
+| 그룹장(owner) 탈퇴 | 후임 멤버 지정 후 나가기, 마지막 멤버라면 그룹 삭제 | 소유권을 한 명에게 유지 |
 
 ---
 
@@ -89,82 +89,61 @@
 
 ---
 
-## 2. Group — `/api/groups`
+## 2. Group — /api/groups, /api/invites
+
+모든 엔드포인트는 로그인 필요. 초대 코드는 그룹별 6자리이며 만료되지 않는다. 문자 집합은 ABCDEFGHJKLMNPQRSTUVWXYZ23456789이고, 입력 앞뒤 공백과 소문자는 정규화한다. 코드 재발급은 2차 범위(미구현)이다.
 
 | Method | Path | 설명 |
 |---|---|---|
-| GET | `/groups` | 내 그룹 목록 |
-| POST | `/groups` | 그룹 생성 |
-| GET | `/groups/{groupId}` | 그룹 상세 |
-| PATCH | `/groups/{groupId}/settings` | 그룹 설정 변경 (owner만) |
-| GET | `/groups/{groupId}/members` | 멤버 목록 |
-| POST | `/groups/{groupId}/invite` | 초대 링크 발급 (owner만) |
-| POST | `/groups/join` | 초대 토큰으로 가입 |
-| DELETE | `/groups/{groupId}/members/me` | 그룹 나가기 |
+| GET | /groups | 내 그룹 목록, 내가 참여한 순서 |
+| POST | /groups | 그룹 생성 |
+| GET | /groups/{groupId} | 그룹 상세(멤버만) |
+| PATCH | /groups/{groupId}/settings | 그룹 설정 변경(그룹장만) |
+| GET | /groups/{groupId}/members | 멤버 목록 |
+| GET | /invites/{code} | 참여 전 미리보기 |
+| POST | /groups/join | 코드로 가입 |
+| DELETE | /groups/{groupId}/members/me | 나가기 |
 
 ### GET /groups
-```json
-// Response 200
-{ "content": [ { "id": 1, "name": "우리집", "submittedToday": false } ], "page": 0, "size": 20, "totalPages": 1, "totalElements": 3 }
-```
+
+응답의 각 그룹은 id, name, relationType, memberCount, maxMembers, members, startDate, submittedToday, todayMission을 가진다. members의 각 항목은 userId, nickname, characterKey, profileImageUrl(null)이다. 목록은 내가 참여한 순서, 멤버는 그룹 참여 순서로 정렬한다. todayMission은 현재 미션의 `{missionId, media, content, submittedCount, submittedByMe}` 요약이며 미발행이면 null이다. submittedToday는 `todayMission.submittedByMe`와 같고 미발행이면 false다.
 
 ### POST /groups
-```json
-// Request
-{ "name": "우리집", "relationType": "FAMILY", "dailyMissionCount": 1 }   // relationType(생략 시 CASUAL), dailyMissionCount, missionSlots 모두 선택 (생략 시 하루 1개, 설정 파일의 기본 시각)
 
-// Response 201
-{ "id": 1, "name": "우리집", "ownerId": 1, "relationType": "FAMILY", "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
-```
+요청 예시: {"name":"우리 둘","relationType":"COUPLE","startDate":"2026-06-02"}. 201 응답은 상세와 같은 형태다. name은 trim 후 1~16자. relationType 생략 시 CASUAL. startDate는 COUPLE에서만 허용하며 서울 기준 미래 날짜는 400 VALIDATION_ERROR. dailyMissionCount와 missionSlots는 기존 선택 필드로 유지한다.
 
 ### GET /groups/{groupId}
-```json
-{ "id": 1, "name": "우리집", "ownerId": 1, "relationType": "FAMILY", "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
-```
-에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403)
+
+응답 예시:
+
+    {"id":1,"name":"우리 둘","ownerId":1,"relationType":"COUPLE",
+     "createdAt":"2026-06-02T10:00:00+09:00","memberCount":2,"maxMembers":2,
+     "inviteCode":"K7Q2PX","inviteUrl":"https://hawe.app/invite/K7Q2PX",
+     "startDate":"2026-06-02","dailyMissionCount":1,
+     "missionSlots":[{"slotNo":1,"publishTime":"09:00","deadlineTime":"23:00","custom":false}],
+     "missionCount":0}
+
+에러: 404 GROUP_NOT_FOUND, 403 NOT_GROUP_MEMBER. 초대 URL 도메인은 임시 설정이다.
 
 ### PATCH /groups/{groupId}/settings
-`name`/`relationType`/`dailyMissionCount`/`missionSlots` 중 일부만 보내도 됨 (부분 수정).
-발행·마감 시각은 그룹이 아니라 슬롯이 가진다. `missionSlots`로 슬롯별 시각을 지정하고, 지정하지 않은 슬롯/시각은 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다. 하루 미션 수, 슬롯 규칙, 검증은 `docs/BACKEND/MISSIONS_API.md` §2 "그룹 설정 연동" 참고.
-```json
-// Request (예시: 이름만 변경)
-{ "name": "새 이름" }
 
-// Response 200 — 변경된 전체 그룹 정보
-{ "id": 1, "name": "새 이름", "ownerId": 1, "relationType": "FAMILY", "dailyMissionCount": 1, "missionSlots": [ { "slotNo": 1, "publishTime": "09:00", "deadlineTime": "23:00", "custom": false } ] }
-```
-에러: `NOT_GROUP_OWNER` (403)
+부분 수정: name, relationType, startDate, dailyMissionCount, missionSlots. 응답은 상세와 같다. name은 trim 후 1~16자이며 빈 이름은 400. startDate는 결과 관계가 COUPLE일 때만 보낼 수 있다. 다른 관계로 바꾸면 저장된 날짜는 지운다. 새 관계의 정원보다 현재 인원이 많으면 409 GROUP_FULL. missionSlots는 전체 교체이며 기존 기본 시각 규칙을 따른다. 에러: 403 NOT_GROUP_OWNER.
 
 ### GET /groups/{groupId}/members
-```json
-{ "content": [
-  { "userId": 1, "nickname": "몽실이", "role": "owner", "submissionCountThisMonth": 12, "stampedToday": true }
-], "page": 0, "size": 20, "totalPages": 1, "totalElements": 4 }
-```
 
-### POST /groups/{groupId}/invite
-```json
-// Response 200
-{ "inviteUrl": "hawe://join?token=<서명된 JWT, exp=7일>" }
-```
-에러: `NOT_GROUP_OWNER` (403)
+멤버 응답은 userId, nickname, characterKey, profileImageUrl(null), role, submissionCountThisMonth, stampedToday를 가진다. 그룹 내 프로필과 hasGroupProfile은 2차 범위다.
+
+### GET /invites/{code}
+
+응답은 groupId, name, relationType, memberCount, maxMembers, members(각 userId, nickname, characterKey, profileImageUrl)를 가진다. 형식 오류·없는 코드는 404 INVITE_NOT_FOUND. 이미 멤버면 409 ALREADY_MEMBER, 정원이 차면 409 GROUP_FULL.
 
 ### POST /groups/join
-```json
-// Request
-{ "token": "..." }
 
-// Response 200
-{ "groupId": 1, "name": "우리집" }
-```
-에러: `INVALID_INVITE_TOKEN` (400), `INVITE_EXPIRED` (400), `ALREADY_MEMBER` (409)
+요청: {"code":"K7Q2PX"}. 200 응답: {"groupId":1,"name":"우리 둘"}. 미리보기와 같은 오류를 반환하며, 마지막 자리 동시 가입은 그룹 행 잠금으로 직렬화한다.
 
 ### DELETE /groups/{groupId}/members/me
-Response 204.
-에러: `OWNER_CANNOT_LEAVE` (409)
 
----
-
+일반 멤버는 204. 그룹장에게 다른 멤버가 있으면 successorUserId 쿼리 인자로 같은 그룹의 다른 사용자 ID가 필수다. 누락은 409 SUCCESSOR_REQUIRED, 잘못된 후임자는 400 INVALID_SUCCESSOR. 마지막 멤버가 나가면 그룹과 의존 데이터를 삭제한다. 멤버가 아니면 403 NOT_GROUP_MEMBER.
 ## 3. Mission & Submission
 
 미션/제출 API는 미션 템플릿(틀) 구조를 도입하면서 별도 문서로 분리했다. 이 문서에서는 다루지 않는다.

@@ -1,11 +1,14 @@
 package com.sapphire.hawe.group.dao;
 
+import java.time.LocalDate;
+
 /** Read-model projection for {@code GET /groups}; not a table-backed entity. */
 public class GroupSummaryRow {
 
     private Long id;
     private String name;
-    private boolean submittedToday;
+    private String relationType;
+    private LocalDate startDate;
 
     public Long getId() {
         return id;
@@ -23,11 +26,20 @@ public class GroupSummaryRow {
         this.name = name;
     }
 
-    public boolean isSubmittedToday() {
-        return submittedToday;
+    public String getRelationType() {
+        return relationType;
     }
 
-    public void setSubmittedToday(boolean submittedToday) {
-        this.submittedToday = submittedToday;
+    public void setRelationType(String relationType) {
+        this.relationType = relationType;
     }
+
+    public LocalDate getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
 }

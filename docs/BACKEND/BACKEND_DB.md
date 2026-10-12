@@ -46,8 +46,10 @@ erDiagram
     bigint id PK
     string name
     bigint owner_id FK
+    string invite_code UK
     string relation_type
     int daily_mission_count
+    date start_date
     datetime created_at
   }
   GROUP_MISSION_SLOTS {
@@ -163,6 +165,8 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 근거: `docs/BACKEND/MISSIONS_API.md` §2 (그룹 설정 연동), §9. 현재 상태는 `V1__initial_schema.sql`, `V2__unique_group_members.sql`이다.
 
 **`groups`**
+
+현재 1차 Group 계약에서 `invite_code CHAR(6) NOT NULL UNIQUE`(전체 그룹 유일)와 `start_date DATE NULL`(COUPLE 전용)를 추가했다. 기존 개발 DB는 통합 V1 마이그레이션에 맞춰 재초기화한다.
 
 | 컬럼 | 변경 | 타입 | NULL | 설명 |
 |---|---|---|---|---|
@@ -295,11 +299,12 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ### 그룹
 - `GET /api/groups` — 내 그룹 목록 (오늘 제출 여부 포함)
-- `POST /api/groups` — 그룹 생성 (`name`, 선택: `relationType`, `dailyMissionCount`, `missionSlots`)
+- `POST /api/groups` — 그룹 생성 (`name`, 선택: `relationType`, COUPLE의 `startDate`, `dailyMissionCount`, `missionSlots`)
 - `GET /api/groups/{groupId}/members` — 멤버 목록 + 이번 달 제출 횟수
-- `PATCH /api/groups/{groupId}/settings` — 그룹명/그룹 관계(`relationType`)/하루 미션 수(`dailyMissionCount`)/슬롯별 시각(`missionSlots`) 변경
-- `POST /api/groups/{groupId}/invite` — 초대 링크 발급
-- `DELETE /api/groups/{groupId}/members/me` — 그룹 나가기
+- `PATCH /api/groups/{groupId}/settings` — 그룹명/관계(`relationType`)/COUPLE 시작일(`startDate`)/하루 미션 수/슬롯별 시각 변경
+- `GET /api/invites/{code}` — 6자리 코드로 그룹 미리보기
+- `POST /api/groups/join` — 코드로 그룹 참여
+- `DELETE /api/groups/{groupId}/members/me` — 그룹 나가기(그룹장은 `successorUserId` 지정, 마지막 멤버는 그룹 삭제)
 
 ### 미션 & 제출 (상세 명세: `docs/BACKEND/MISSIONS_API.md`)
 - `GET /api/groups/{groupId}/missions/today` — 오늘 열린 미션 목록(슬롯 순서, 틀 `template` + 빈칸 `params` 포함) + 내 제출 여부 + 다음 발행 예정 시각

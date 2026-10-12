@@ -2,7 +2,7 @@
   "info": {
     "name": "HA'WE - GROUP API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "GROUP API 통합 테스트. 폴더 0~4를 순서대로 Collection Runner로 실행. 서버(http://localhost:8080) 필요. Access token은 30분 후 만료되며 만료 전에 자동 재발급됩니다. 0번 폴더를 다시 실행하면 새 계정이 생성됩니다."
+    "description": "GROUP API 통합 테스트. 폴더 0~5를 순서대로 Collection Runner로 실행. 서버(http://localhost:8080) 필요. Access token은 30분 후 만료되며 만료 전에 자동 재발급됩니다. 0번 폴더를 다시 실행하면 새 계정이 생성됩니다."
   },
   "variable": [
     {
@@ -96,7 +96,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"userIdA\", pm.response.json().id);"
                 ]
               }
             }
@@ -185,7 +186,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"userIdB\", pm.response.json().id);"
                 ]
               }
             }
@@ -274,7 +276,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"userIdC\", pm.response.json().id);"
                 ]
               }
             }
@@ -373,8 +376,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
-                  "pm.test(\"fields\", () => { const j = pm.response.json(); pm.expect(j.name).to.eql(\"우리집\"); pm.expect(j.relationType).to.eql(\"CASUAL\"); pm.expect(j.dailyMissionCount).to.eql(1); pm.expect(j.missionSlots).to.eql([{slotNo: 1, publishTime: \"09:00\", deadlineTime: \"23:00\", custom: false}]); });",
-                  "pm.collectionVariables.set(\"groupId\", pm.response.json().id);"
+                  "pm.test(\"group fields\", () => { const j = pm.response.json(); pm.expect(j.name).to.eql(\"우리집\"); pm.expect(j.memberCount).to.eql(1); pm.expect(j.maxMembers).to.eql(6); pm.expect(j.inviteCode).to.match(/^[A-HJ-NP-Z2-9]{6}$/); pm.expect(j.inviteUrl).to.eql(\"https://hawe.app/invite/\" + j.inviteCode); pm.expect(j.createdAt).to.match(/\\+09:00$/); pm.expect(j.missionCount).to.eql(0); });",
+                  "pm.collectionVariables.set(\"groupId\", pm.response.json().id);",
+                  "pm.collectionVariables.set(\"inviteCode\", pm.response.json().inviteCode);",
+                  "pm.collectionVariables.set(\"inviteCodeLower\", pm.response.json().inviteCode.toLowerCase());"
                 ]
               }
             }
@@ -408,7 +413,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"1 group, not submitted\", () => { const j = pm.response.json(); pm.expect(j.totalElements).to.eql(1); pm.expect(j.content[0].submittedToday).to.eql(false); });"
+                  "pm.test(\"1 group, not submitted\", () => { const j = pm.response.json(); pm.expect(j.totalElements).to.eql(1); pm.expect(j.content[0].submittedToday).to.eql(false); });",
+                  "pm.test(\"todayMission summary field\", () => pm.expect(pm.response.json().content[0]).to.have.property(\"todayMission\"));"
                 ]
               }
             }
@@ -486,25 +492,24 @@
           ]
         },
         {
-          "name": "1-5 초대 링크 발급 (A)",
+          "name": "1-5 Preview with lowercase code (B)",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tokenA}}"
+                "value": "Bearer {{tokenB}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/groups/{{groupId}}/invite",
+              "raw": "{{baseUrl}}/api/invites/{{inviteCodeLower}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "groups",
-                "{{groupId}}",
-                "invite"
+                "invites",
+                "{{inviteCodeLower}}"
               ]
             }
           },
@@ -515,15 +520,14 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"deep link\", () => pm.expect(pm.response.json().inviteUrl).to.match(/^hawe:\\/\\/join\\?token=.+/));",
-                  "pm.collectionVariables.set(\"inviteToken\", pm.response.json().inviteUrl.split(\"token=\")[1]);"
+                  "pm.test(\"preview\", () => { const j = pm.response.json(); pm.expect(j.groupId).to.eql(Number(pm.collectionVariables.get(\"groupId\"))); pm.expect(j.memberCount).to.eql(1); pm.expect(j.maxMembers).to.eql(6); pm.expect(j.members).to.have.length(1); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "1-6 초대로 가입 (B)",
+          "name": "1-6 Join with code (B)",
           "request": {
             "method": "POST",
             "header": [
@@ -549,7 +553,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"token\":\"{{inviteToken}}\"}",
+              "raw": "{\"code\":\"{{inviteCode}}\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -656,7 +660,7 @@
           ]
         },
         {
-          "name": "1-9 설정 변경: 마감만 (A)",
+          "name": "1-9 설정 수정: 1번 슬롯 마감",
           "request": {
             "method": "PATCH",
             "header": [
@@ -683,7 +687,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"dailyMissionCount\": 2, \"missionSlots\": [{\"slotNo\": 2, \"deadlineTime\": \"22:30\"}]}",
+              "raw": "{\"missionSlots\": [{\"slotNo\": 1, \"deadlineTime\": \"22:30\"}]}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -698,7 +702,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"slot deadline changed, name kept\", () => { const j = pm.response.json(); pm.expect(j.dailyMissionCount).to.eql(2); pm.expect(j.missionSlots[1].deadlineTime).to.eql(\"22:30\"); pm.expect(j.missionSlots[1].custom).to.eql(true); pm.expect(j.name).to.eql(\"새 이름\"); });"
+                  "pm.test(\"slot deadline changed, name kept\", () => { const j = pm.response.json(); pm.expect(j.dailyMissionCount).to.eql(1); pm.expect(j.missionSlots[0].deadlineTime).to.eql(\"22:30\"); pm.expect(j.missionSlots[0].custom).to.eql(true); pm.expect(j.name).to.eql(\"새 이름\"); });"
                 ]
               }
             }
@@ -775,7 +779,7 @@
           ]
         }
       ],
-      "description": "순서대로 실행해야 합니다 (앞 요청이 groupId/inviteToken을 저장)."
+      "description": "순서대로 실행해야 합니다 (앞 요청이 groupId/inviteCode을 저장)."
     },
     {
       "name": "2. 실패 케이스",
@@ -998,25 +1002,24 @@
           ]
         },
         {
-          "name": "2-7 비owner 초대 발급 (B)",
+          "name": "2-7 Invalid preview code (C)",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tokenB}}"
+                "value": "Bearer {{tokenC}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/groups/{{groupId}}/invite",
+              "raw": "{{baseUrl}}/api/invites/ABC",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "groups",
-                "{{groupId}}",
-                "invite"
+                "invites",
+                "ABC"
               ]
             }
           },
@@ -1026,8 +1029,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
-                  "pm.test(\"code NOT_GROUP_OWNER\", () => pm.expect(pm.response.json().code).to.eql(\"NOT_GROUP_OWNER\"));"
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code INVITE_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"INVITE_NOT_FOUND\"));"
                 ]
               }
             }
@@ -1060,7 +1063,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"token\":\"{{inviteToken}}\"}",
+              "raw": "{\"code\":\"{{inviteCode}}\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1107,7 +1110,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"token\":\"{{inviteToken}}\"}",
+              "raw": "{\"code\":\"{{inviteCode}}\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1129,7 +1132,7 @@
           ]
         },
         {
-          "name": "2-10 owner 탈퇴 (A)",
+          "name": "2-10 Owner needs successor (A)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1159,7 +1162,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
-                  "pm.test(\"code OWNER_CANNOT_LEAVE\", () => pm.expect(pm.response.json().code).to.eql(\"OWNER_CANNOT_LEAVE\"));"
+                  "pm.test(\"code SUCCESSOR_REQUIRED\", () => pm.expect(pm.response.json().code).to.eql(\"SUCCESSOR_REQUIRED\"));"
                 ]
               }
             }
@@ -1240,7 +1243,7 @@
           ]
         },
         {
-          "name": "2-13 변조 초대 토큰 (C)",
+          "name": "2-13 Invalid join code (C)",
           "request": {
             "method": "POST",
             "header": [
@@ -1266,7 +1269,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"token\":\"abc\"}",
+              "raw": "{\"code\":\"ABC\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1280,15 +1283,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
-                  "pm.test(\"code INVALID_INVITE_TOKEN\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INVITE_TOKEN\"));"
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code INVITE_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"INVITE_NOT_FOUND\"));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "2-14 access 토큰을 초대 토큰으로 사용 (C)",
+          "name": "2-14 Access token is not a code (C)",
           "request": {
             "method": "POST",
             "header": [
@@ -1314,7 +1317,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"token\":\"{{tokenB}}\"}",
+              "raw": "{\"code\":\"{{tokenB}}\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1328,15 +1331,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
-                  "pm.test(\"code INVALID_INVITE_TOKEN\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INVITE_TOKEN\"));"
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code INVITE_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"INVITE_NOT_FOUND\"));"
                 ]
               }
             }
           ]
         }
       ],
-      "description": "1번 폴더 이후에 실행 (B가 1-10에서 탈퇴한 상태를 전제)."
+      "description": "Run after folder 1; A remains owner and B rejoins before successor checks."
     },
     {
       "name": "3. 입력값 검증",
@@ -1389,7 +1392,7 @@
           ]
         },
         {
-          "name": "3-2 이름 101자",
+          "name": "3-2 Name 17 characters",
           "request": {
             "method": "POST",
             "header": [
@@ -1414,7 +1417,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"name\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+              "raw": "{\"name\":\"abcdefghijklmnopq\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1577,6 +1580,53 @@
           ]
         },
         {
+          "name": "3-5b dailyMissionCount 범위 위반 (2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"x\", \"dailyMissionCount\": 2}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "3-6 깨진 JSON",
           "request": {
             "method": "POST",
@@ -1624,7 +1674,7 @@
           ]
         },
         {
-          "name": "3-7 join 토큰 공백",
+          "name": "3-7 Blank join code",
           "request": {
             "method": "POST",
             "header": [
@@ -1650,7 +1700,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"token\":\"\"}",
+              "raw": "{\"code\":\"\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1763,6 +1813,198 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-10 Blank patch name",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-11 Name 17 characters in patch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"abcdefghijklmnopq\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-12 Start date on FAMILY",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Wrong date\",\"relationType\":\"FAMILY\",\"startDate\":\"2025-01-01\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3-13 Future start date",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Future\",\"relationType\":\"COUPLE\",\"startDate\":\"9999-01-01\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
                 ]
               }
             }
@@ -2152,6 +2394,556 @@
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
                   "pm.test(\"empty\", () => pm.expect(pm.response.json().content.length).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Capacity and successor flow",
+      "item": [
+        {
+          "name": "5-1 Create couple (A)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Our first day\",\"relationType\":\"COUPLE\",\"startDate\":\"2025-01-01\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"coupleId\", pm.response.json().id);",
+                  "pm.collectionVariables.set(\"coupleCode\", pm.response.json().inviteCode);",
+                  "pm.test(\"couple fields\", () => { const j = pm.response.json(); pm.expect(j.maxMembers).to.eql(2); pm.expect(j.startDate).to.eql(\"2025-01-01\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-2 Join couple (B)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"{{coupleCode}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-3 Couple is full (C)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"{{coupleCode}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"code GROUP_FULL\", () => pm.expect(pm.response.json().code).to.eql(\"GROUP_FULL\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-4 Third member joins original group (C)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"{{inviteCode}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-5 Cannot shrink original group to couple",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"relationType\":\"COUPLE\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"code GROUP_FULL\", () => pm.expect(pm.response.json().code).to.eql(\"GROUP_FULL\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-6 Third member leaves original group (C)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenC}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-7 Retired invite endpoint is gone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/invite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "invite"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-8 Invalid successor self (A)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me?successorUserId={{userIdA}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ],
+              "query": [
+                {
+                  "key": "successorUserId",
+                  "value": "{{userIdA}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code INVALID_SUCCESSOR\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_SUCCESSOR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-9 Invalid successor nonmember (A)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me?successorUserId={{userIdC}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ],
+              "query": [
+                {
+                  "key": "successorUserId",
+                  "value": "{{userIdC}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code INVALID_SUCCESSOR\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_SUCCESSOR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-10 Transfer to B and leave (A)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me?successorUserId={{userIdB}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ],
+              "query": [
+                {
+                  "key": "successorUserId",
+                  "value": "{{userIdB}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-11 New owner is B",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"owner B\", () => pm.expect(pm.response.json().ownerId).to.eql(Number(pm.collectionVariables.get(\"userIdB\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-12 Last member leaves (B)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}/members/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5-13 Deleted group is gone",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{groupId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code GROUP_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"GROUP_NOT_FOUND\"));"
                 ]
               }
             }

@@ -3,8 +3,6 @@ package com.sapphire.hawe.group.service;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
-import com.sapphire.hawe.global.security.JwtTokenProvider;
-import com.sapphire.hawe.global.security.TokenErrorCode;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -15,6 +13,8 @@ import com.sapphire.hawe.group.dto.GroupCreateRequest;
 import com.sapphire.hawe.group.dto.GroupSettingsUpdateRequest;
 import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.MissionSlotRequest;
+import com.sapphire.hawe.group.domain.GroupCreatedEvent;
+import com.sapphire.hawe.mission.service.MissionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,9 +22,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,20 +45,22 @@ class GroupServiceTests {
     @Mock GroupMapper groupMapper;
     @Mock GroupMemberMapper groupMemberMapper;
     @Mock GroupMissionSlotMapper slotMapper;
-    @Mock JwtTokenProvider jwtTokenProvider;
+    @Mock MissionService missionService;
+    @Mock ApplicationEventPublisher events;
 
     private GroupService service;
 
     @BeforeEach
     void setUp() {
         service = new GroupService(groupMapper, groupMemberMapper, slotMapper,
-                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), jwtTokenProvider);
+                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), "https://hawe.app/invite",
+                missionService, events);
     }
 
     @Test
     void createGroupUsesDefaultsAndAddsOwner() {
         assignGroupId();
-        var response = service.createGroup(7L, new GroupCreateRequest("Home", null, null, null));
+        var response = service.createGroup(7L, new GroupCreateRequest("Home", null, null, null, null));
 
         assertEquals(11L, response.id());
         assertEquals("CASUAL", response.relationType());
@@ -69,6 +73,7 @@ class GroupServiceTests {
         assertEquals(11L, member.getValue().getGroupId());
         assertEquals(7L, member.getValue().getUserId());
         assertEquals(GroupMember.ROLE_OWNER, member.getValue().getRole());
+        verify(events).publishEvent(new GroupCreatedEvent(11L));
     }
 
     @Test
@@ -76,7 +81,7 @@ class GroupServiceTests {
         assignGroupId();
         when(slotMapper.findByGroupId(11L)).thenReturn(List.of(
                 slot(11L, 2, "14:00", "22:00"), slot(11L, 3, "19:00", null)));
-        var response = service.createGroup(7L, new GroupCreateRequest("Home", "FAMILY", 3,
+        var response = service.createGroup(7L, new GroupCreateRequest("Home", "FAMILY", null, 3,
                 List.of(new MissionSlotRequest(1, null, null), new MissionSlotRequest(2, "14:00", "22:00"),
                         new MissionSlotRequest(3, "19:00", null))));
 
@@ -95,13 +100,15 @@ class GroupServiceTests {
 
     @Test
     void replacingAndClearingSlotsDeletesExistingRows() {
-        when(groupMapper.findById(11L)).thenAnswer(invocation -> group(11L, 7L));
-        service.updateSettings(7L, 11L, new GroupSettingsUpdateRequest(null, null, 2,
+        Group group = group(11L, 7L);
+        when(groupMapper.findByIdForUpdate(11L)).thenReturn(group);
+        when(groupMapper.findById(11L)).thenReturn(group);
+        service.updateSettings(7L, 11L, new GroupSettingsUpdateRequest(null, null, null, 2,
                 List.of(new MissionSlotRequest(2, "14:00", null))));
         verify(slotMapper).deleteByGroupId(11L);
         verify(slotMapper).insert(any(GroupMissionSlot.class));
 
-        service.updateSettings(7L, 11L, new GroupSettingsUpdateRequest(null, null, null, List.of()));
+        service.updateSettings(7L, 11L, new GroupSettingsUpdateRequest(null, null, null, null, List.of()));
         verify(slotMapper, org.mockito.Mockito.times(2)).deleteByGroupId(11L);
         verify(slotMapper, org.mockito.Mockito.times(1)).insert(any(GroupMissionSlot.class));
     }
@@ -110,9 +117,10 @@ class GroupServiceTests {
     void loweringCountTrimsSlotsAndOmittedSettingsStayUnchanged() {
         Group group = group(11L, 7L);
         group.setDailyMissionCount(5);
+        when(groupMapper.findByIdForUpdate(11L)).thenReturn(group);
         when(groupMapper.findById(11L)).thenReturn(group);
         var response = service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest("New", null, 2, null));
+                new GroupSettingsUpdateRequest("New", null, null, 2, null));
         assertEquals("New", response.name());
         assertEquals("CASUAL", response.relationType());
         assertEquals(2, response.dailyMissionCount());
@@ -122,9 +130,11 @@ class GroupServiceTests {
 
     @Test
     void nameOnlyUpdateLeavesSlotsUntouched() {
-        when(groupMapper.findById(11L)).thenReturn(group(11L, 7L));
+        Group group = group(11L, 7L);
+        when(groupMapper.findByIdForUpdate(11L)).thenReturn(group);
+        when(groupMapper.findById(11L)).thenReturn(group);
         var response = service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest("New", null, null, null));
+                new GroupSettingsUpdateRequest("New", null, null, null, null));
         assertEquals("New", response.name());
         assertEquals("09:00", response.missionSlots().getFirst().publishTime());
         verify(slotMapper, never()).deleteByGroupId(11L);
@@ -133,41 +143,31 @@ class GroupServiceTests {
 
     @Test
     void invalidSettingsReturnValidationError() {
-        when(groupMapper.findById(11L)).thenAnswer(invocation -> group(11L, 7L));
+        when(groupMapper.findByIdForUpdate(11L)).thenAnswer(invocation -> group(11L, 7L));
         assertValidation(() -> service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest(null, null, 6, null)));
+                new GroupSettingsUpdateRequest(null, null, null, 6, null)));
         assertValidation(() -> service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest(null, "family", null, null)));
+                new GroupSettingsUpdateRequest(null, "family", null, null, null)));
         assertValidation(() -> service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest(null, null, null, List.of(new MissionSlotRequest(2, null, null)))));
+                new GroupSettingsUpdateRequest(null, null, null, null, List.of(new MissionSlotRequest(2, null, null)))));
         assertValidation(() -> service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest(null, null, null,
+                new GroupSettingsUpdateRequest(null, null, null, null,
                         List.of(new MissionSlotRequest(1, null, null), new MissionSlotRequest(1, null, null)))));
         assertValidation(() -> service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest(null, null, null, List.of(new MissionSlotRequest(0, null, null)))));
+                new GroupSettingsUpdateRequest(null, null, null, null, List.of(new MissionSlotRequest(0, null, null)))));
         assertValidation(() -> service.updateSettings(7L, 11L,
-                new GroupSettingsUpdateRequest(null, null, null, List.of(new MissionSlotRequest(1, "9:00", null)))));
+                new GroupSettingsUpdateRequest(null, null, null, null, List.of(new MissionSlotRequest(1, "9:00", null)))));
         verify(slotMapper, never()).insert(any(GroupMissionSlot.class));
         verify(slotMapper, never()).deleteByGroupId(11L);
     }
 
     @Test
     void nonOwnerCannotChangeSettings() {
-        when(groupMapper.findById(11L)).thenReturn(group(11L, 7L));
+        when(groupMapper.findByIdForUpdate(11L)).thenReturn(group(11L, 7L));
         BusinessException error = assertThrows(BusinessException.class,
-                () -> service.updateSettings(8L, 11L, new GroupSettingsUpdateRequest("New", null, null, null)));
+                () -> service.updateSettings(8L, 11L, new GroupSettingsUpdateRequest("New", null, null, null, null)));
         assertEquals(GroupErrorCode.NOT_GROUP_OWNER, error.errorCode());
         verify(slotMapper, never()).deleteByGroupId(11L);
-    }
-
-    @Test
-    void duplicateInsertDuringJoinReturnsAlreadyMember() {
-        when(jwtTokenProvider.validateInviteTokenAndGetGroupId("token")).thenReturn(11L);
-        when(groupMapper.findById(11L)).thenReturn(group(11L, 7L));
-        doThrow(new DuplicateKeyException("duplicate")).when(groupMemberMapper).insert(any(GroupMember.class));
-        BusinessException error = assertThrows(BusinessException.class,
-                () -> service.joinByInvite(8L, new JoinRequest("token")));
-        assertEquals(GroupErrorCode.ALREADY_MEMBER, error.errorCode());
     }
 
     @Test
@@ -184,7 +184,7 @@ class GroupServiceTests {
 
     @Test
     void missingGroupOnLeaveReturnsNotFound() {
-        BusinessException error = assertThrows(BusinessException.class, () -> service.leaveGroup(7L, 11L));
+        BusinessException error = assertThrows(BusinessException.class, () -> service.leaveGroup(7L, 11L, null));
         assertEquals(GroupErrorCode.GROUP_NOT_FOUND, error.errorCode());
     }
 
@@ -195,20 +195,15 @@ class GroupServiceTests {
         assertEquals(GroupErrorCode.NOT_GROUP_MEMBER, error.errorCode());
     }
 
-    @Test
-    void expiredInviteHasSpecificError() {
-        when(jwtTokenProvider.validateInviteTokenAndGetGroupId("token"))
-                .thenThrow(new BusinessException(TokenErrorCode.TOKEN_EXPIRED));
-        BusinessException error = assertThrows(BusinessException.class,
-                () -> service.joinByInvite(8L, new JoinRequest("token")));
-        assertEquals(GroupErrorCode.INVITE_EXPIRED, error.errorCode());
-    }
-
     private void assignGroupId() {
+        AtomicReference<Group> inserted = new AtomicReference<>();
         doAnswer(invocation -> {
-            ((Group) invocation.getArgument(0)).setId(11L);
+            Group group = invocation.getArgument(0);
+            group.setId(11L);
+            inserted.set(group);
             return null;
         }).when(groupMapper).insert(any(Group.class));
+        when(groupMapper.findById(11L)).thenAnswer(invocation -> inserted.get());
     }
 
     private static void assertValidation(org.junit.jupiter.api.function.Executable action) {

@@ -8,11 +8,16 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
+import java.time.LocalDate;
 
 public record GroupCreateRequest(
-        @NotBlank @Size(max = 100) String name,
+        @NotBlank @Size(max = 16) String name,
         @Pattern(regexp = "^(COUPLE|FAMILY|FRIEND|RIVAL|CASUAL)$") String relationType,
+        LocalDate startDate,
         @Min(1) Integer dailyMissionCount,
         @Valid List<@NotNull MissionSlotRequest> missionSlots
 ) {
+    public GroupCreateRequest {
+        if (name != null) name = name.trim();
+    }
 }

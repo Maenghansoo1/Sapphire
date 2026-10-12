@@ -43,7 +43,7 @@ import java.time.Instant
 import java.util.UUID
 
 @Composable
-fun SubmissionDetailScreen(groupID: UUID, missionID: UUID, submissionID: UUID, store: DataStore,
+fun SubmissionDetailScreen(groupID: Long, missionID: UUID, submissionID: UUID, store: DataStore,
     onBack: () -> Unit) {
     val result = store.result(groupID, missionID)
     val submission = result?.submissions?.find { it.id == submissionID }

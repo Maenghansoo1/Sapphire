@@ -9,7 +9,7 @@ import java.util.UUID
 class MissionPerformCommonTest {
     private fun mission(done: Boolean = false, type: MissionType = MissionType.WRITE) = TodayMission(
         UUID.randomUUID(), GroupDetail.mock, type, "주제", 1, Instant.EPOCH, Instant.EPOCH,
-        listOf(MissionMember(UUID.randomUUID(), Profile.mockMine, isMe = true, isDone = done)))
+        listOf(MissionMember(1L, Profile.mockMine, isMe = true, isDone = done)))
 
     @Test fun allTypesAvailable() {
         MissionType.entries.forEach { assertTrue(isPerformScreenAvailable(it)) }

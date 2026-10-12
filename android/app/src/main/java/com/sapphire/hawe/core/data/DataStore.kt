@@ -27,7 +27,11 @@ enum class InviteLookupError(val message: String) {
     NOT_FOUND("초대 코드를 찾을 수 없어요. 다시 확인해 주세요."),
     FULL("이 그룹은 정원이 다 찼어요."),
     ALREADY_MEMBER("이미 참여 중인 그룹이에요."),
+    NETWORK("네트워크 연결을 확인해 주세요"),
+    UNAVAILABLE("잠시 후 다시 시도해 주세요"),
 }
+
+enum class GroupsState { NOT_LOADED, LOADED, FAILED }
 
 sealed interface InviteLookupResult {
     data class Success(val preview: GroupInvitePreview) : InviteLookupResult
@@ -35,14 +39,14 @@ sealed interface InviteLookupResult {
 }
 
 data class StoredGroup(val detail: GroupDetail, val missions: List<StoredMission> = emptyList()) {
-    val id: UUID get() = detail.id
+    val id: Long get() = detail.id
 }
 
 data class StoredMission(
     val id: UUID, val type: MissionType, val topic: String, val number: Int,
     val opensAt: Instant, val closesAt: Instant,
     val submissions: List<Submission> = emptyList(),
-    val poked: Set<UUID> = emptySet(),
+    val poked: Set<Long> = emptySet(),
 )
 
 class DataStore(
@@ -51,6 +55,12 @@ class DataStore(
     private val random: Random = Random.Default,
 ) {
     private val _groups = mutableStateListOf<StoredGroup>()
+    var groupsState by mutableStateOf(GroupsState.NOT_LOADED)
+        private set
+    private var nextLocalGroupId = -1L
+    private var nextLocalMemberId = -1L
+    private fun nextLocalId(): Long = nextLocalGroupId--
+    private fun nextLocalMember(): Long = nextLocalMemberId--
     val groups: List<StoredGroup> get() = _groups.toList()
     private var storedProfile by mutableStateOf(Profile.mockMine)
     val myProfile: Profile get() = storedProfile
@@ -64,7 +74,32 @@ class DataStore(
         }
     }
 
-    fun reset() { _groups.clear(); storedProfile = Profile.mockMine }
+    fun reset() {
+        _groups.clear(); storedProfile = Profile.mockMine; groupsState = GroupsState.NOT_LOADED
+        nextLocalGroupId = -1L; nextLocalMemberId = -1L
+    }
+
+    // Local missions remain attached to server groups until the mission API is connected.
+    fun applyServerGroups(details: List<GroupDetail>) {
+        val old = _groups.associateBy { it.id }
+        _groups.clear()
+        _groups.addAll(details.map { detail ->
+            val missions = old[detail.id]?.missions.orEmpty()
+            StoredGroup(detail.copy(missionCount = if (missions.isEmpty()) detail.missionCount else missions.size), missions)
+        })
+        groupsState = GroupsState.LOADED
+    }
+
+    fun applyServerGroup(detail: GroupDetail) {
+        val index = _groups.indexOfFirst { it.id == detail.id }
+        val missions = if (index < 0) emptyList() else _groups[index].missions
+        val stored = StoredGroup(detail.copy(missionCount = if (missions.isEmpty()) detail.missionCount else missions.size), missions)
+        if (index < 0) _groups.add(stored) else _groups[index] = stored
+    }
+
+    fun markGroupsFailed() {
+        if (groupsState == GroupsState.NOT_LOADED) groupsState = GroupsState.FAILED
+    }
 
     val stats: ActivityStats get() {
         val mine = groups.flatMap { group -> group.missions.mapNotNull { mission ->
@@ -78,7 +113,7 @@ class DataStore(
         return ActivityStats(mine.size, streak, groups.size, mine.groupingBy { it.type }.eachCount())
     }
 
-    fun group(id: UUID): GroupDetail? = groups.firstOrNull { it.id == id }?.detail
+    fun group(id: Long): GroupDetail? = groups.firstOrNull { it.id == id }?.detail
 
     val summaries: List<GroupSummary> get() = groups.map { stored ->
         val detail = stored.detail
@@ -88,16 +123,17 @@ class DataStore(
             mission?.submissions?.size ?: 0, mission?.submissions?.any { it.isMine } == true)
     }
 
-    fun createGroup(name: String, relationship: Relationship, startDate: LocalDate? = null): UUID {
-        val detail = GroupDetail(UUID.randomUUID(), name, relationship, Instant.now(clock), 0,
-            makeInviteCode(), members = listOf(GroupMember(UUID.randomUUID(), myProfile, isMe = true, isOwner = true)),
+    // Local simulation for tests and previews only. Production uses GroupRepository.
+    internal fun createGroup(name: String, relationship: Relationship, startDate: LocalDate? = null): Long {
+        val detail = GroupDetail(nextLocalId(), name, relationship, Instant.now(clock), 0,
+            makeInviteCode(), members = listOf(GroupMember(nextLocalMember(), myProfile, isMe = true, isOwner = true)),
             startDate = if (relationship == Relationship.LOVER) startDate else null)
         _groups.add(StoredGroup(detail))
         refreshTodayMissions()
         return detail.id
     }
 
-    fun lookUpInvite(code: String): InviteLookupResult {
+    internal fun lookUpInvite(code: String): InviteLookupResult {
         if (groups.any { it.detail.inviteCode == code }) return InviteLookupResult.Failure(InviteLookupError.ALREADY_MEMBER)
         val demo = DemoSeed.group(code, Instant.now(clock)) ?: return InviteLookupResult.Failure(InviteLookupError.NOT_FOUND)
         val preview = GroupInvitePreview(demo.detail.name, demo.detail.relationship,
@@ -105,24 +141,24 @@ class DataStore(
         return if (preview.isFull) InviteLookupResult.Failure(InviteLookupError.FULL) else InviteLookupResult.Success(preview)
     }
 
-    fun join(code: String): UUID? {
+    internal fun join(code: String): Long? {
         if (lookUpInvite(code) !is InviteLookupResult.Success) return null
         val demo = DemoSeed.group(code, Instant.now(clock)) ?: return null
         val joined = demo.copy(detail = demo.detail.copy(members = demo.detail.members +
-            GroupMember(UUID.randomUUID(), myProfile, isMe = true)))
+            GroupMember(nextLocalMember(), myProfile, isMe = true)))
         _groups.add(joined)
         refreshTodayMissions()
         return joined.id
     }
 
-    fun leave(groupID: UUID) { _groups.removeAll { it.id == groupID } }
-    fun setTopicTime(time: LocalTime, groupID: UUID) = update(groupID) {
+    fun leave(groupID: Long) { _groups.removeAll { it.id == groupID } }
+    fun setTopicTime(time: LocalTime, groupID: Long) = update(groupID) {
         it.copy(detail = it.detail.copy(topicTime = time))
     }
-    fun setNotify(on: Boolean, groupID: UUID) = update(groupID) {
+    fun setNotify(on: Boolean, groupID: Long) = update(groupID) {
         it.copy(detail = it.detail.copy(notify = on))
     }
-    fun setMyGroupProfile(profile: Profile?, groupID: UUID) = update(groupID) { group ->
+    fun setMyGroupProfile(profile: Profile?, groupID: Long) = update(groupID) { group ->
         group.copy(detail = group.detail.copy(members = group.detail.members.map {
             if (it.isMe) it.copy(groupProfile = profile) else it
         }))
@@ -138,7 +174,7 @@ class DataStore(
         }
     }
 
-    fun todayMission(groupID: UUID): TodayMission? {
+    fun todayMission(groupID: Long): TodayMission? {
         val stored = groups.firstOrNull { it.id == groupID } ?: return null
         val mission = stored.missions.lastOrNull() ?: return null
         return TodayMission(mission.id, stored.detail, mission.type, mission.topic, mission.number,
@@ -148,7 +184,7 @@ class DataStore(
             })
     }
 
-    fun submit(content: SubmissionContent, groupID: UUID) = update(groupID) { group ->
+    fun submit(content: SubmissionContent, groupID: Long) = update(groupID) { group ->
         val me = group.detail.me ?: return@update group
         val mission = group.missions.lastOrNull() ?: return@update group
         if (mission.submissions.any { it.isMine }) return@update group
@@ -163,12 +199,12 @@ class DataStore(
         group.copy(missions = group.missions.dropLast(1) + mission.copy(submissions = mission.submissions + submission))
     }
 
-    fun poke(memberID: UUID, groupID: UUID) = update(groupID) { group ->
+    fun poke(memberID: Long, groupID: Long) = update(groupID) { group ->
         val mission = group.missions.lastOrNull() ?: return@update group
         group.copy(missions = group.missions.dropLast(1) + mission.copy(poked = mission.poked + memberID))
     }
 
-    fun result(groupID: UUID, missionID: UUID): MissionResult? {
+    fun result(groupID: Long, missionID: UUID): MissionResult? {
         val stored = groups.firstOrNull { it.id == groupID } ?: return null
         val mission = stored.missions.firstOrNull { it.id == missionID } ?: return null
         if (mission.submissions.none { it.isMine }) return null
@@ -178,24 +214,24 @@ class DataStore(
             stored.detail.members.filter { it.id !in done }.map { it.displayed })
     }
 
-    fun toggleLike(submissionID: UUID, missionID: UUID, groupID: UUID) = updateSubmission(submissionID, missionID, groupID) {
+    fun toggleLike(submissionID: UUID, missionID: UUID, groupID: Long) = updateSubmission(submissionID, missionID, groupID) {
         val liked = !it.likedByMe
         it.copy(likedByMe = liked, likeCount = it.likeCount + (if (liked) 1 else -1))
     }
 
-    fun addComment(body: String, submissionID: UUID, missionID: UUID, groupID: UUID) {
+    fun addComment(body: String, submissionID: UUID, missionID: UUID, groupID: Long) {
         val me = group(groupID)?.me?.displayed ?: myProfile
         updateSubmission(submissionID, missionID, groupID) {
             it.copy(comments = it.comments + SubmissionComment(UUID.randomUUID(), me, true, body, Instant.now(clock)))
         }
     }
 
-    fun deleteComment(commentID: UUID, submissionID: UUID, missionID: UUID, groupID: UUID) =
+    fun deleteComment(commentID: UUID, submissionID: UUID, missionID: UUID, groupID: Long) =
         updateSubmission(submissionID, missionID, groupID) {
             it.copy(comments = it.comments.filterNot { comment -> comment.id == commentID && comment.isMine })
         }
 
-    fun records(groupID: UUID): List<DayRecord> {
+    fun records(groupID: Long): List<DayRecord> {
         val stored = groups.firstOrNull { it.id == groupID } ?: return emptyList()
         val today = Instant.now(clock).atZone(HaweTime.SEOUL).toLocalDate()
         return stored.missions.mapNotNull { mission ->
@@ -207,7 +243,7 @@ class DataStore(
         }
     }
 
-    private fun update(groupID: UUID, change: (StoredGroup) -> StoredGroup) {
+    private fun update(groupID: Long, change: (StoredGroup) -> StoredGroup) {
         val index = _groups.indexOfFirst { it.id == groupID }
         if (index < 0) return
         val old = _groups[index]
@@ -215,7 +251,7 @@ class DataStore(
         if (next != old) _groups[index] = next
     }
 
-    private fun updateSubmission(id: UUID, missionID: UUID, groupID: UUID, change: (Submission) -> Submission) = update(groupID) { group ->
+    private fun updateSubmission(id: UUID, missionID: UUID, groupID: Long, change: (Submission) -> Submission) = update(groupID) { group ->
         group.copy(missions = group.missions.map { mission ->
             if (mission.id != missionID) mission else mission.copy(submissions = mission.submissions.map { submission ->
                 if (submission.id == id) change(submission) else submission
@@ -223,11 +259,11 @@ class DataStore(
         })
     }
 
-    internal fun replaceMissionsForTest(groupID: UUID, missions: List<StoredMission>) = update(groupID) {
+    internal fun replaceMissionsForTest(groupID: Long, missions: List<StoredMission>) = update(groupID) {
         it.copy(detail = it.detail.copy(missionCount = missions.size), missions = missions.toList())
     }
 
-    private fun makeInviteCode(): String {
+    internal fun makeInviteCode(): String {
         val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         while (true) {
             val code = (1..6).map { alphabet[random.nextInt(alphabet.length)] }.joinToString("")

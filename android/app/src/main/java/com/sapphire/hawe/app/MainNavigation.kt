@@ -3,6 +3,9 @@ package com.sapphire.hawe.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -14,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
@@ -24,6 +28,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.data.GroupsState
+import com.sapphire.hawe.core.net.GroupRepository
 import com.sapphire.hawe.core.push.PushCenter
 import com.sapphire.hawe.core.push.PushGroupSnapshot
 import com.sapphire.hawe.core.push.PushTarget
@@ -38,6 +44,8 @@ import com.sapphire.hawe.feature.results.ResultsScreen
 import com.sapphire.hawe.feature.results.SubmissionDetailScreen
 import com.sapphire.hawe.feature.mypage.*
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.designsystem.tokens.HColors
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -47,13 +55,13 @@ sealed interface MainRoute {
     @Serializable data object Start : MainRoute
     @Serializable data object CreateGroup : MainRoute
     @Serializable data class JoinGroup(val code: String? = null) : MainRoute
-    @Serializable data class GroupInfo(val groupId: String) : MainRoute
-    @Serializable data class GroupProfile(val groupId: String) : MainRoute
-    @Serializable data class Mission(val groupId: String) : MainRoute
-    @Serializable data class Calendar(val groupId: String) : MainRoute
-    @Serializable data class MissionPerform(val groupId: String, val type: String? = null) : MainRoute
-    @Serializable data class Results(val groupId: String, val missionId: String) : MainRoute
-    @Serializable data class SubmissionDetail(val groupId: String, val missionId: String,
+    @Serializable data class GroupInfo(val groupId: Long) : MainRoute
+    @Serializable data class GroupProfile(val groupId: Long) : MainRoute
+    @Serializable data class Mission(val groupId: Long) : MainRoute
+    @Serializable data class Calendar(val groupId: Long) : MainRoute
+    @Serializable data class MissionPerform(val groupId: Long, val type: String? = null) : MainRoute
+    @Serializable data class Results(val groupId: Long, val missionId: String) : MainRoute
+    @Serializable data class SubmissionDetail(val groupId: Long, val missionId: String,
         val submissionId: String) : MainRoute
     @Serializable data object MyPage : MainRoute
     @Serializable data object ProfileEdit : MainRoute
@@ -66,7 +74,7 @@ sealed interface MainRoute {
 }
 
 @Composable
-fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter) {
+fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups: GroupRepository) {
     val nav = rememberNavController()
     val context = LocalContext.current
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
@@ -91,12 +99,12 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter) {
                 PushTarget.None -> Unit
                 is PushTarget.Mission -> {
                     nav.popBackStack<MainRoute.Home>(inclusive = false)
-                    nav.navigate(MainRoute.Mission(target.groupId.toString())) { launchSingleTop = true }
+                    nav.navigate(MainRoute.Mission(target.groupId)) { launchSingleTop = true }
                 }
                 is PushTarget.Results -> {
                     nav.popBackStack<MainRoute.Home>(inclusive = false)
-                    nav.navigate(MainRoute.Mission(target.groupId.toString())) { launchSingleTop = true }
-                    nav.navigate(MainRoute.Results(target.groupId.toString(), target.missionId.toString())) {
+                    nav.navigate(MainRoute.Mission(target.groupId)) { launchSingleTop = true }
+                    nav.navigate(MainRoute.Results(target.groupId, target.missionId.toString())) {
                         launchSingleTop = true
                     }
                 }
@@ -106,83 +114,91 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter) {
     val create = { nav.navigate(MainRoute.CreateGroup) }
     val join = { nav.navigate(MainRoute.JoinGroup()) }
     val myPage = { nav.navigate(MainRoute.MyPage) { launchSingleTop = true } }
+    var retryGroups by remember { mutableStateOf(0) }
     NavHost(navController = nav, startDestination = MainRoute.Home) {
         composable<MainRoute.Home> {
-            if (store.groups.isEmpty()) StartScreen(onCreateGroup = create, onJoinGroup = join,
-                onMyPage = myPage)
-            else HomeScreen(store, onAdd = { nav.navigate(MainRoute.Start) },
-                onMyPage = myPage, onGroup = { groupId ->
-                    nav.navigate(MainRoute.Mission(groupId)) { launchSingleTop = true }
-                })
+            LaunchedEffect(retryGroups) {
+                try {
+                    val details = groups.loadAll(session.account.userId)
+                    if (session.state == AppSession.State.SIGNED_IN) store.applyServerGroups(details)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    if (session.state == AppSession.State.SIGNED_IN) store.markGroupsFailed()
+                }
+            }
+            when {
+                store.groupsState == GroupsState.NOT_LOADED -> Box(Modifier.fillMaxSize().background(HColors.bg))
+                store.groupsState == GroupsState.FAILED && store.groups.isEmpty() ->
+                    GroupsLoadFailed { retryGroups++ }
+                store.groups.isEmpty() -> StartScreen(onCreateGroup = create, onJoinGroup = join,
+                    onMyPage = myPage)
+                else -> HomeScreen(store, onAdd = { nav.navigate(MainRoute.Start) },
+                    onMyPage = myPage, onGroup = { groupId ->
+                        nav.navigate(MainRoute.Mission(groupId)) { launchSingleTop = true }
+                    })
+            }
         }
         composable<MainRoute.Start> {
             StartScreen(showsBack = true, onBack = { nav.popBackStack() },
                 onCreateGroup = create, onJoinGroup = join, onMyPage = myPage)
         }
         composable<MainRoute.CreateGroup> {
-            CreateGroupScreen(onBack = { nav.popBackStack() }, onCreated = { name, relationship, date ->
-                val id = store.createGroup(name, relationship, date)
-                nav.navigate(MainRoute.GroupInfo(id.toString())) {
+            CreateGroupScreen(groups, store, session, onBack = { nav.popBackStack() }, onCreated = { id ->
+                nav.navigate(MainRoute.GroupInfo(id)) {
                     popUpTo<MainRoute.Home> { inclusive = false }
                     launchSingleTop = true
                 }
             })
         }
         composable<MainRoute.JoinGroup> { entry ->
-            JoinGroupScreen(store, entry.toRoute<MainRoute.JoinGroup>().code,
-                onBack = { nav.popBackStack() }, onJoined = { code ->
-                    if (store.join(code) != null) {
-                        nav.popBackStack<MainRoute.Home>(inclusive = false)
-                        true
-                    } else false
+            JoinGroupScreen(groups, store, session, entry.toRoute<MainRoute.JoinGroup>().code,
+                onBack = { nav.popBackStack() }, onJoined = {
+                    nav.popBackStack<MainRoute.Home>(inclusive = false)
                 })
         }
         composable<MainRoute.GroupInfo> { entry ->
-            val id = runCatching { UUID.fromString(entry.toRoute<MainRoute.GroupInfo>().groupId) }.getOrNull()
+            val id = entry.toRoute<MainRoute.GroupInfo>().groupId
             LaunchedEffect(entry) {
-                if (id == null || store.group(id) == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
+                if (store.group(id) == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
             }
-            if (id != null) GroupInfoScreen(id, store, onBack = { nav.popBackStack() },
-                onProfile = { nav.navigate(MainRoute.GroupProfile(id.toString())) },
-                onLeft = {
-                    nav.popBackStack<MainRoute.Home>(inclusive = false)
-                    store.leave(id)
-                })
+            GroupInfoScreen(id, store, groups, session, onBack = { nav.popBackStack() },
+                onProfile = { nav.navigate(MainRoute.GroupProfile(id)) },
+                onLeft = { nav.popBackStack<MainRoute.Home>(inclusive = false) })
         }
         composable<MainRoute.GroupProfile> { entry ->
-            val id = runCatching { UUID.fromString(entry.toRoute<MainRoute.GroupProfile>().groupId) }.getOrNull()
+            val id = entry.toRoute<MainRoute.GroupProfile>().groupId
             LaunchedEffect(entry) {
-                if (id == null || store.group(id)?.me == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
+                if (store.group(id)?.me == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
             }
-            if (id != null) GroupProfileScreen(id, store, onBack = { nav.popBackStack() })
+            GroupProfileScreen(id, store, onBack = { nav.popBackStack() })
         }
         composable<MainRoute.Mission> { entry ->
-            val id = runCatching { UUID.fromString(entry.toRoute<MainRoute.Mission>().groupId) }.getOrNull()
+            val id = entry.toRoute<MainRoute.Mission>().groupId
             val submitted by entry.savedStateHandle.getStateFlow("submitted", false).collectAsState()
             LaunchedEffect(entry) {
-                if (id == null || store.todayMission(id) == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
+                if (store.todayMission(id) == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
             }
-            if (id != null) MissionScreen(id, store, onBack = { nav.popBackStack() },
+            MissionScreen(id, store, onBack = { nav.popBackStack() },
                 submittedSignal = submitted,
                 onSubmittedHandled = { entry.savedStateHandle["submitted"] = false },
-                onPerform = { type -> nav.navigate(MainRoute.MissionPerform(id.toString(), type?.name)) { launchSingleTop = true } },
+                onPerform = { type -> nav.navigate(MainRoute.MissionPerform(id, type?.name)) { launchSingleTop = true } },
                 onGroupInfo = {
-                    nav.navigate(MainRoute.GroupInfo(id.toString())) { launchSingleTop = true }
+                    nav.navigate(MainRoute.GroupInfo(id)) { launchSingleTop = true }
                 }, onCalendar = {
-                    nav.navigate(MainRoute.Calendar(id.toString())) { launchSingleTop = true }
+                    nav.navigate(MainRoute.Calendar(id)) { launchSingleTop = true }
                 }, onResults = {
                     store.todayMission(id)?.let { mission ->
-                        nav.navigate(MainRoute.Results(id.toString(), mission.id.toString())) { launchSingleTop = true }
+                        nav.navigate(MainRoute.Results(id, mission.id.toString())) { launchSingleTop = true }
                     }
                 })
         }
         composable<MainRoute.Calendar> { entry ->
             val route = entry.toRoute<MainRoute.Calendar>()
-            val id = runCatching { UUID.fromString(route.groupId) }.getOrNull()
+            val id = route.groupId
             LaunchedEffect(entry) {
-                if (id == null || store.group(id) == null) nav.popBackStack()
+                if (store.group(id) == null) nav.popBackStack()
             }
-            if (id != null) RecordCalendarScreen(id, store, onBack = { nav.popBackStack() },
+            RecordCalendarScreen(id, store, onBack = { nav.popBackStack() },
                 onResults = { missionId ->
                     nav.navigate(MainRoute.Results(route.groupId, missionId.toString())) { launchSingleTop = true }
                 })
@@ -192,18 +208,17 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter) {
             popExitTransition = { slideOutVertically(tween(300)) { it } },
         ) { entry ->
             val route = entry.toRoute<MainRoute.MissionPerform>()
-            val id = runCatching { UUID.fromString(route.groupId) }.getOrNull()
+            val id = route.groupId
             val requestedType = route.type?.let { runCatching { MissionType.valueOf(it) }.getOrNull() }
-            val mission = id?.let { store.todayMission(it) }
+            val mission = store.todayMission(id)
             val decision = remember(entry) {
                 if (route.type != null && requestedType == null) PerformEntryDecision.Unsupported
                 else performEntryDecision(mission, requestedType)
             }
             LaunchedEffect(entry) {
-                if (id == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
-                else if (decision !is PerformEntryDecision.Allow) nav.popBackStack()
+                if (decision !is PerformEntryDecision.Allow) nav.popBackStack()
             }
-            if (id != null && mission != null && decision is PerformEntryDecision.Allow) {
+            if (mission != null && decision is PerformEntryDecision.Allow) {
                 MissionPerformScreen(decision.type, mission.topic, onClose = { nav.popBackStack() },
                     onSubmit = { content ->
                         store.submit(content, id)
@@ -214,14 +229,14 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter) {
         }
         composable<MainRoute.Results> { entry ->
             val route = entry.toRoute<MainRoute.Results>()
-            val groupID = runCatching { UUID.fromString(route.groupId) }.getOrNull()
+            val groupID = route.groupId
             val missionID = runCatching { UUID.fromString(route.missionId) }.getOrNull()
             LaunchedEffect(entry) {
-                if (groupID == null || missionID == null || store.result(groupID, missionID) == null) {
+                if (missionID == null || store.result(groupID, missionID) == null) {
                     nav.popBackStack()
                 }
             }
-            if (groupID != null && missionID != null) ResultsScreen(groupID, missionID, store,
+            if (missionID != null) ResultsScreen(groupID, missionID, store,
                 onBack = { nav.popBackStack() }, onDetail = { submissionID ->
                     nav.navigate(MainRoute.SubmissionDetail(route.groupId, route.missionId,
                         submissionID.toString())) { launchSingleTop = true }
@@ -229,16 +244,16 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter) {
         }
         composable<MainRoute.SubmissionDetail> { entry ->
             val route = entry.toRoute<MainRoute.SubmissionDetail>()
-            val groupID = runCatching { UUID.fromString(route.groupId) }.getOrNull()
+            val groupID = route.groupId
             val missionID = runCatching { UUID.fromString(route.missionId) }.getOrNull()
             val submissionID = runCatching { UUID.fromString(route.submissionId) }.getOrNull()
             LaunchedEffect(entry) {
-                if (groupID == null || missionID == null || submissionID == null ||
+                if (missionID == null || submissionID == null ||
                     store.result(groupID, missionID)?.submissions?.none { it.id == submissionID } != false) {
                     nav.popBackStack()
                 }
             }
-            if (groupID != null && missionID != null && submissionID != null) {
+            if (missionID != null && submissionID != null) {
                 SubmissionDetailScreen(groupID, missionID, submissionID, store,
                     onBack = { nav.popBackStack() })
             }

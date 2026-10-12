@@ -9,7 +9,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
 
-object DemoSeed {
+internal object DemoSeed {
+    private var nextId = -1000L
+    private fun localId(): Long = nextId--
     fun group(code: String, now: Instant): StoredGroup? = when (code) {
         "K7Q2PX" -> friends(now)
         "LOVE22" -> lovers(now)
@@ -18,7 +20,7 @@ object DemoSeed {
     }
 
     private fun member(name: String, character: ProfileCharacter, owner: Boolean = false) =
-        GroupMember(UUID.randomUUID(), Profile(AvatarContent.Character(character), name), isOwner = owner)
+        GroupMember(localId(), Profile(AvatarContent.Character(character), name), isOwner = owner)
 
     private fun friends(now: Instant): StoredGroup {
         val members = listOf(member("민준", ProfileCharacter.GAMJA, true), member("지우", ProfileCharacter.KKOTNIM),
@@ -42,18 +44,18 @@ object DemoSeed {
             opens = opens.atZone(HaweTime.SEOUL).plusDays(1).toInstant()
             index++
         }
-        return StoredGroup(GroupDetail(UUID.randomUUID(), "컴공 동기", Relationship.FRIEND,
+        return StoredGroup(GroupDetail(localId(), "컴공 동기", Relationship.FRIEND,
             start, missions.size, "K7Q2PX", members = members), missions.toList())
     }
 
     private fun lovers(now: Instant): StoredGroup {
         val date = now.atZone(HaweTime.SEOUL).toLocalDate().minusDays(127)
-        return StoredGroup(GroupDetail(UUID.randomUUID(), "우리 둘", Relationship.LOVER,
+        return StoredGroup(GroupDetail(localId(), "우리 둘", Relationship.LOVER,
             date.atStartOfDay(HaweTime.SEOUL).toInstant(), 0, "LOVE22",
             members = listOf(member("도윤", ProfileCharacter.IPSAGWI, true)), startDate = date))
     }
 
-    private fun full(now: Instant): StoredGroup = StoredGroup(GroupDetail(UUID.randomUUID(), "꽉 찬 그룹",
+    private fun full(now: Instant): StoredGroup = StoredGroup(GroupDetail(localId(), "꽉 찬 그룹",
         Relationship.FRIEND, now, 0, "FULL00", members = listOf(
             member("가온", ProfileCharacter.GAMJA), member("나래", ProfileCharacter.GOMDOL),
             member("다온", ProfileCharacter.KKOTNIM), member("라온", ProfileCharacter.IPSAGWI),

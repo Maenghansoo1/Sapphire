@@ -34,7 +34,7 @@ import java.time.YearMonth
 import java.util.UUID
 
 @Composable
-fun RecordCalendarScreen(groupID: UUID, store: DataStore, onBack: () -> Unit,
+fun RecordCalendarScreen(groupID: Long, store: DataStore, onBack: () -> Unit,
     onResults: (UUID) -> Unit) {
     val group = store.group(groupID)
     if (group == null) { Box(Modifier.fillMaxSize().background(HColors.bg)); return }

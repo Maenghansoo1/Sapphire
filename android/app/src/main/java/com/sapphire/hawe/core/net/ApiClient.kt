@@ -37,6 +37,10 @@ class ApiClient(
     suspend inline fun <reified B, reified T> patch(path: String, body: B, auth: Boolean = true): T =
         decode(execute("PATCH", path, json.encodeToString(body), auth))
 
+    suspend fun delete(path: String, auth: Boolean = true) {
+        execute("DELETE", path, null, auth)
+    }
+
     @PublishedApi internal inline fun <reified T> decode(result: Pair<Int, String>): T = try {
         json.decodeFromString<T>(result.second)
     } catch (e: SerializationException) {

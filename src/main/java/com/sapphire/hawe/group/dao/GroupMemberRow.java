@@ -5,6 +5,7 @@ public class GroupMemberRow {
 
     private Long userId;
     private String nickname;
+    private String characterKey;
     private String role;
     private long submissionCountThisMonth;
     private boolean stampedToday;
@@ -23,6 +24,14 @@ public class GroupMemberRow {
 
     public void setNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    public String getCharacterKey() {
+        return characterKey;
+    }
+
+    public void setCharacterKey(String characterKey) {
+        this.characterKey = characterKey;
     }
 
     public String getRole() {

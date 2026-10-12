@@ -6,15 +6,19 @@ import com.sapphire.hawe.core.model.InviteCode
 
 data class JoinGroupState(
     val code: String = "", val preview: GroupInvitePreview? = null, val errorMessage: String? = null,
+    val loading: Boolean = false,
 ) {
-    fun withCode(input: String, lookUp: (String) -> InviteLookupResult): JoinGroupState {
+    fun withCode(input: String): JoinGroupState {
         val normalized = InviteCode.sanitize(input)
-        if (normalized.length != InviteCode.LENGTH) return JoinGroupState(normalized)
-        return when (val result = lookUp(normalized)) {
-            is InviteLookupResult.Success -> JoinGroupState(normalized, preview = result.preview)
-            is InviteLookupResult.Failure -> JoinGroupState(normalized, errorMessage = result.error.message)
+        if (normalized == code) return this
+        return JoinGroupState(normalized, loading = normalized.length == InviteCode.LENGTH)
+    }
+    fun withResult(code: String, result: InviteLookupResult): JoinGroupState {
+        if (this.code != code) return this
+        return when (result) {
+            is InviteLookupResult.Success -> copy(preview = result.preview, errorMessage = null, loading = false)
+            is InviteLookupResult.Failure -> copy(preview = null, errorMessage = result.error.message, loading = false)
         }
     }
-    fun withInitialCode(input: String, lookUp: (String) -> InviteLookupResult): JoinGroupState =
-        if (code.isEmpty()) withCode(input, lookUp) else this
+    fun withInitialCode(input: String): JoinGroupState = if (code.isEmpty()) withCode(input) else this
 }

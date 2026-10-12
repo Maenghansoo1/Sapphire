@@ -246,6 +246,10 @@ android/app/src/main/res/
 
 ## 9. 검증 방법
 
+### 3A 그룹 서버 연결
+
+Android 홈의 그룹 목록, 그룹 만들기, 초대 코드 미리보기·참여, 그룹 정보·멤버, 그룹 나가기는 `/api/groups`와 `/api/invites`를 사용해요. 그룹과 멤버 ID는 서버의 숫자 ID를 사용하고, 로그인 후 그룹 목록을 다시 불러와요. 미션·제출·결과는 4A·6A 전까지 그룹 ID에 연결된 앱 안 임시 데이터예요. 후임자 선택, 그룹 알림·주제 시간 변경, 그룹 내 프로필 편집은 현재 "준비 중"으로 표시해요.
+
 - 단계마다: `cd android && ./gradlew assembleDebug lint` 통과
 - 2단계 이후: `./gradlew testDebugUnitTest` (DataStore 규칙 테스트)
 - 화면 단계: iOS 시뮬레이터와 Android 에뮬레이터(Pixel 계열, 1080×2400)를 같은 데이터(체험 코드 `K7Q2PX`)로 띄워 화면별 나란히 비교 — 크기·여백·글꼴·색·문구

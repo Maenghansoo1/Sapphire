@@ -37,19 +37,35 @@ import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.*
 import java.time.LocalTime
 import java.util.UUID
+import com.sapphire.hawe.core.AppSession
+import com.sapphire.hawe.core.COMING_SOON
+import com.sapphire.hawe.core.net.ApiException
+import com.sapphire.hawe.core.net.GroupRepository
+import com.sapphire.hawe.core.net.toUserMessage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable
-fun GroupInfoScreen(id: UUID, store: DataStore, onBack: () -> Unit,
-    onProfile: () -> Unit, onLeft: () -> Unit) {
+fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session: AppSession,
+    onBack: () -> Unit, onProfile: () -> Unit, onLeft: () -> Unit) {
+    LaunchedEffect(id) {
+        try { store.applyServerGroup(groups.detail(id, session.account.userId)) }
+        catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (e is ApiException && (e.status == 403 || e.status == 404)) {
+                store.leave(id); onLeft()
+            }
+        }
+    }
     val group = store.group(id)
     if (group == null) {
         Box(Modifier.fillMaxSize().background(HColors.bg))
         return
     }
-    var showTime by remember { mutableStateOf(false) }
     var showLeave by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
     val toast = rememberHToastState()
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val bottom = ctaBottomPadding()
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
@@ -104,7 +120,7 @@ fun GroupInfoScreen(id: UUID, store: DataStore, onBack: () -> Unit,
                             }
                         }
                         if (member.isMe) Box(Modifier.height(34.dp).border(1.dp, HColors.border, CircleShape)
-                            .clickable(onClick = onProfile).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                            .clickable { toast.show(COMING_SOON) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                             Text("내 프로필 편집", style = HType.plex(13, FontWeight.SemiBold), color = HColors.ink)
                         }
                     }
@@ -112,13 +128,13 @@ fun GroupInfoScreen(id: UUID, store: DataStore, onBack: () -> Unit,
                 Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(HColors.line))
                     HListRow("주제 도착 시간", value = topicTimeText(group.topicTime),
-                        showsChevron = group.amIOwner) { if (group.amIOwner) showTime = true }
-                    HListRow("알림", value = if (group.notify) "켜짐" else "꺼짐") {
-                        val next = !group.notify
-                        store.setNotify(next, id)
-                        toast.show(if (next) "이 그룹 알림을 켰어요" else "이 그룹 알림을 껐어요")
-                    }
-                    Box(Modifier.fillMaxWidth().height(52.dp).clickable { showLeave = true },
+                        showsChevron = false) { toast.show(COMING_SOON) }
+                    HListRow("알림", value = "준비 중") { toast.show(COMING_SOON) }
+                    Box(Modifier.fillMaxWidth().height(52.dp).clickable {
+                        if (group.amIOwner && group.members.size > 1) toast.show(
+                            "그룹장은 다른 멤버에게 그룹장을 넘긴 뒤 나갈 수 있어요. 지금은 준비 중이에요")
+                        else showLeave = true
+                    },
                         contentAlignment = Alignment.CenterStart) {
                         Text("그룹 나가기", style = HType.body15, color = HColors.danger)
                     }
@@ -127,11 +143,21 @@ fun GroupInfoScreen(id: UUID, store: DataStore, onBack: () -> Unit,
         }
         HToastHost(toast)
     }
-    if (showTime && group.amIOwner) TopicTimeSheet(group.topicTime,
-        onDismiss = { showTime = false }, onConfirm = { store.setTopicTime(it, id); showTime = false })
     if (showLeave) HAlert("그룹에서 나갈까요?", leaveMessage(group), "나가기",
         onCancel = { showLeave = false }, onConfirm = {
-            if (!leaving) { leaving = true; showLeave = false; onLeft() }
+            if (!leaving) {
+                leaving = true; showLeave = false
+                scope.launch {
+                    try { groups.leave(id); store.leave(id); onLeft() }
+                    catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        if (e is ApiException && (e.code == "GROUP_NOT_FOUND" || e.code == "NOT_GROUP_MEMBER")) {
+                            store.leave(id); onLeft()
+                        } else toast.show(e.toUserMessage())
+                        leaving = false
+                    }
+                }
+            }
         })
 }
 

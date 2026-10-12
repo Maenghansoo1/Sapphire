@@ -28,29 +28,67 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.data.InviteLookupError
+import com.sapphire.hawe.core.data.InviteLookupResult
+import com.sapphire.hawe.core.AppSession
+import com.sapphire.hawe.core.net.ApiException
+import com.sapphire.hawe.core.net.GroupRepository
+import com.sapphire.hawe.core.net.NetworkException
+import com.sapphire.hawe.core.net.toUserMessage
 import com.sapphire.hawe.core.model.GroupInvitePreview
 import com.sapphire.hawe.core.model.InviteCode
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.HCtaScaffold
 import com.sapphire.hawe.designsystem.tokens.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 @Composable
-fun JoinGroupScreen(store: DataStore, initialCode: String?, onBack: () -> Unit, onJoined: (String) -> Boolean) {
+fun JoinGroupScreen(groups: GroupRepository, store: DataStore, session: AppSession,
+    initialCode: String?, onBack: () -> Unit, onJoined: () -> Unit) {
     var state by remember { mutableStateOf(JoinGroupState()) }
     var field by remember { mutableStateOf(TextFieldValue("")) }
     var focused by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
+    var lookupJob by remember { mutableStateOf<Job?>(null) }
+    val scope = rememberCoroutineScope()
+    val toast = rememberHToastState()
+    fun lookup(code: String) {
+        lookupJob?.cancel()
+        if (code.length != InviteCode.LENGTH) return
+        lookupJob = scope.launch {
+            val result = try {
+                InviteLookupResult.Success(groups.preview(code))
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                val error = when (e) {
+                    is NetworkException -> InviteLookupError.NETWORK
+                    is ApiException -> when (e.code) {
+                        "INVITE_NOT_FOUND" -> InviteLookupError.NOT_FOUND
+                        "GROUP_FULL" -> InviteLookupError.FULL
+                        "ALREADY_MEMBER" -> InviteLookupError.ALREADY_MEMBER
+                        else -> InviteLookupError.UNAVAILABLE
+                    }
+                    else -> InviteLookupError.UNAVAILABLE
+                }
+                InviteLookupResult.Failure(error)
+            }
+            state = state.withResult(code, result)
+        }
+    }
     val requester = remember { FocusRequester() }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(initialCode) {
         if (!initialCode.isNullOrEmpty()) {
-            state = state.withInitialCode(initialCode, store::lookUpInvite)
+            state = state.withInitialCode(initialCode)
             field = TextFieldValue(state.code, selection = TextRange(state.code.length))
+            lookup(state.code)
         }
         if (state.code.length < InviteCode.LENGTH) requester.requestFocus()
     }
-    Column(Modifier.background(HColors.bg)) {
+    Box(Modifier.fillMaxSize().background(HColors.bg)) { Column {
         Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
             HNavBar(leading = HNavLeading.BACK, onLeading = onBack)
         }
@@ -81,7 +119,8 @@ fun JoinGroupScreen(store: DataStore, initialCode: String?, onBack: () -> Unit, 
                         val normalized = InviteCode.sanitize(incoming.text)
                         field = if (normalized == incoming.text) incoming else
                             TextFieldValue(normalized, selection = TextRange(normalized.length))
-                        state = state.withCode(normalized, store::lookUpInvite)
+                        state = state.withCode(normalized)
+                        lookup(state.code)
                         if (normalized.length == InviteCode.LENGTH) { focus.clearFocus(); keyboard?.hide() }
                     }, modifier = Modifier.size(1.dp).alpha(0f).focusRequester(requester)
                         .onFocusChanged { focused = it.isFocused },
@@ -99,11 +138,26 @@ fun JoinGroupScreen(store: DataStore, initialCode: String?, onBack: () -> Unit, 
             HButton("참여하기", enabled = state.preview != null && !submitted) {
                 if (!submitted) {
                     submitted = true
-                    if (!onJoined(state.code)) submitted = false
+                    scope.launch {
+                        try {
+                            val groupId = groups.join(state.code)
+                            val detail = try { groups.detail(groupId, session.account.userId) }
+                                catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                    null
+                                }
+                            if (detail != null) store.applyServerGroup(detail)
+                            onJoined()
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            toast.show(e.toUserMessage())
+                            submitted = false
+                        }
+                    }
                 }
             }
         })
-    }
+    }; HToastHost(toast) }
 }
 
 @Composable
@@ -114,7 +168,7 @@ private fun GroupInviteCard(preview: GroupInvitePreview) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(preview.name, style = HType.plex(18, FontWeight.Bold), color = HColors.ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${preview.relationship.displayName} · ${preview.members.size} / ${preview.relationship.maxMembers}명 참여 중",
+            Text("${preview.relationship.displayName} · ${preview.memberCount} / ${preview.maxMembers}명 참여 중",
                 style = HType.plex(14), color = HColors.textSecondary)
         }
         MemberRow(preview.members, preview.relationship, avatarSize = 32.dp)

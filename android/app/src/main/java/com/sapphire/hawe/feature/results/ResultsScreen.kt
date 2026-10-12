@@ -34,7 +34,7 @@ import com.sapphire.hawe.designsystem.tokens.HType
 import java.util.UUID
 
 @Composable
-fun ResultsScreen(groupID: UUID, missionID: UUID, store: DataStore,
+fun ResultsScreen(groupID: Long, missionID: UUID, store: DataStore,
     onBack: () -> Unit, onDetail: (UUID) -> Unit) {
     val result = store.result(groupID, missionID)
     if (result == null) { Box(Modifier.fillMaxSize().background(HColors.bg)); return }
@@ -70,7 +70,7 @@ fun ResultsScreen(groupID: UUID, missionID: UUID, store: DataStore,
 }
 
 @Composable
-private fun PhotoFeed(result: MissionResult, store: DataStore, groupID: UUID, missionID: UUID,
+private fun PhotoFeed(result: MissionResult, store: DataStore, groupID: Long, missionID: UUID,
     onDetail: (UUID) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
         result.submissions.forEach { submission ->

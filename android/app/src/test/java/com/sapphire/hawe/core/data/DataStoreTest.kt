@@ -15,6 +15,34 @@ import java.util.UUID
 import kotlin.random.Random
 
 class DataStoreTest {
+    @Test fun serverGroupsPreserveLocalMissionsAndState() {
+        val store = store()
+        assertEquals(GroupsState.NOT_LOADED, store.groupsState)
+        store.markGroupsFailed()
+        assertEquals(GroupsState.FAILED, store.groupsState)
+        val local = store.createGroup("local", Relationship.FRIEND)
+        assertTrue(local < 0)
+        val first = GroupDetail.mock.copy(id = 11L, name = "first")
+        val second = GroupDetail.mock.copy(id = 12L, name = "second")
+        store.applyServerGroups(listOf(first, second))
+        assertEquals(listOf(11L, 12L), store.groups.map { it.id })
+        assertEquals(GroupsState.LOADED, store.groupsState)
+        store.refreshTodayMissions()
+        val mission = store.groups.first().missions.single()
+        store.applyServerGroups(listOf(second, first.copy(name = "updated")))
+        assertEquals(listOf(12L, 11L), store.groups.map { it.id })
+        assertEquals(mission, store.groups.last().missions.single())
+        assertEquals("updated", store.group(11L)!!.name)
+        store.applyServerGroup(first.copy(name = "again"))
+        assertEquals("again", store.group(11L)!!.name)
+        store.markGroupsFailed()
+        assertEquals(GroupsState.LOADED, store.groupsState)
+        store.leave(11L)
+        store.leave(12L)
+        assertEquals(GroupsState.LOADED, store.groupsState)
+        store.reset()
+        assertEquals(GroupsState.NOT_LOADED, store.groupsState)
+    }
     private val now = Instant.parse("2026-10-12T03:00:00Z")
     private class AdjustableClock(var current: Instant, private val zone: ZoneId = ZoneOffset.UTC) : Clock() {
         override fun getZone(): ZoneId = zone

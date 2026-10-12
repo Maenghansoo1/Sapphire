@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.COMING_SOON
 import com.sapphire.hawe.core.model.choiceName
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.HCtaScaffold
@@ -19,7 +20,7 @@ import com.sapphire.hawe.designsystem.tokens.*
 import java.util.UUID
 
 @Composable
-fun GroupProfileScreen(id: UUID, store: DataStore, onBack: () -> Unit) {
+fun GroupProfileScreen(id: Long, store: DataStore, onBack: () -> Unit) {
     val group = store.group(id)
     val me = group?.me
     if (group == null || me == null) {
@@ -27,8 +28,8 @@ fun GroupProfileScreen(id: UUID, store: DataStore, onBack: () -> Unit) {
         return
     }
     var state by remember(id) { mutableStateOf(GroupProfileState.from(me)) }
-    var saved by remember { mutableStateOf(false) }
-    Column(Modifier.background(HColors.bg)) {
+    val toast = rememberHToastState()
+    Box(Modifier.fillMaxSize().background(HColors.bg)) { Column {
         Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
             HNavBar("그룹 내 프로필", leading = HNavLeading.BACK, onLeading = onBack)
         }
@@ -65,13 +66,7 @@ fun GroupProfileScreen(id: UUID, store: DataStore, onBack: () -> Unit) {
                 }
             }
         }, cta = {
-            HButton("저장", enabled = state.canSave && !saved) {
-                if (!saved) {
-                    saved = true
-                    store.setMyGroupProfile(state.profileToSave, id)
-                    onBack()
-                }
-            }
+            HButton("저장", enabled = state.canSave) { toast.show(COMING_SOON) }
         })
-    }
+    }; HToastHost(toast) }
 }

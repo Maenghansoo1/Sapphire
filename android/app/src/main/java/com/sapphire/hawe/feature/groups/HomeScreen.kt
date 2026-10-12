@@ -28,7 +28,7 @@ import com.sapphire.hawe.designsystem.tokens.*
 import java.time.Instant
 
 @Composable
-fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (String) -> Unit,
+fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (Long) -> Unit,
     onMyPage: () -> Unit) {
     LaunchedEffect(Unit) { store.refreshTodayMissions() }
     val groups = store.summaries
@@ -50,7 +50,7 @@ fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (String) -> Unit,
                     Modifier.padding(top = 6.dp, bottom = 20.dp), style = HType.plex(14), color = HColors.textSecondary)
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     groups.forEach { group ->
-                        GroupCard(group, Modifier.fillMaxWidth().clickable { onGroup(group.id.toString()) })
+                        GroupCard(group, Modifier.fillMaxWidth().clickable { onGroup(group.id) })
                     }
                 }
             }

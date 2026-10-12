@@ -9,7 +9,7 @@ import org.junit.Test
 import java.util.UUID
 
 class GroupProfileStateTest {
-    private val member = GroupMember(UUID.randomUUID(), Profile.mockMine, isMe = true)
+    private val member = GroupMember(1L, Profile.mockMine, isMe = true)
 
     @Test fun defaultProfileSavesNull() {
         val state = GroupProfileState.from(member)

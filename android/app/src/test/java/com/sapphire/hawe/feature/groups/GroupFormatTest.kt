@@ -30,21 +30,21 @@ class GroupFormatTest {
     }
 
     @Test fun badgesAndLeaveMessage() {
-        val mine = GroupMember(UUID.randomUUID(), Profile.mockMine, isMe = true)
+        val mine = GroupMember(1L, Profile.mockMine, isMe = true)
         val owner = mine.copy(isMe = false, isOwner = true)
         assertEquals("나", memberBadge(mine))
         assertEquals("방장", memberBadge(owner))
         assertEquals("나 · 방장", memberBadge(mine.copy(isOwner = true)))
         assertNull(memberBadge(mine.copy(isMe = false)))
         val group = GroupDetail.mock.copy(name = "우리", members = listOf(mine.copy(isOwner = true)))
-        assertFalse(leaveMessage(group).contains("방장은"))
-        assertTrue(leaveMessage(group.copy(members = listOf(mine.copy(isOwner = true), owner))).contains("방장은"))
+        assertTrue(leaveMessage(group).contains("그룹이 삭제돼요"))
+        assertFalse(leaveMessage(group.copy(members = listOf(mine.copy(isOwner = true), owner))).contains("가장 먼저 들어온"))
         assertFalse(leaveMessage(group.copy(members = listOf(mine, owner))).contains("방장은"))
     }
 
     @Test fun cardSubtitleIncludesLoverDayCount() {
         val avatars = List(4) { Profile.mockMine.avatar }
-        val base = GroupSummary(UUID.randomUUID(), "친구들", Relationship.FRIEND, avatars, null,
+        val base = GroupSummary(1L, "친구들", Relationship.FRIEND, avatars, null,
             MissionType.DRAW, "주제", 0, false)
         assertEquals("친구 · 4명", groupCardSubtitle(base))
         val lover = base.copy(relationship = Relationship.LOVER, members = avatars.take(2),

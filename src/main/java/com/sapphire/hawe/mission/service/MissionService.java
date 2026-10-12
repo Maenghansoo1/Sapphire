@@ -12,12 +12,16 @@ import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.group.domain.GroupMissionSlot;
 import com.sapphire.hawe.group.service.GroupErrorCode;
 import com.sapphire.hawe.mission.dao.MissionMapper;
+import com.sapphire.hawe.mission.dao.MissionSummaryRow;
 import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
+import com.sapphire.hawe.mission.domain.MissionTiming;
+import com.sapphire.hawe.mission.dto.MissionMemberStatus;
 import com.sapphire.hawe.mission.dto.MissionResponse;
 import com.sapphire.hawe.mission.dto.MissionTemplateListResponse;
 import com.sapphire.hawe.mission.dto.MissionTemplateResponse;
 import com.sapphire.hawe.mission.dto.TodayMissionsResponse;
+import com.sapphire.hawe.mission.dto.TodayMissionSummary;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -25,14 +29,11 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 @EnableConfigurationProperties(MissionProperties.class)
@@ -64,11 +65,11 @@ public class MissionService {
             throw new BusinessException(GroupErrorCode.GROUP_NOT_FOUND);
         }
         requireMember(groupId, userId);
-        List<MissionRow> rows = missionMapper.findTodayByGroupId(groupId, userId);
-        List<MissionResponse> missions = rows.stream().map(this::toResponse).toList();
-        LocalDate date = SeoulTime.today();
-        LocalDateTime nextPublishAt = nextPublishAt(date, group.getDailyMissionCount(), rows,
-                slotMapper.findByGroupId(groupId));
+        List<MissionRow> rows = missionMapper.findCurrentByGroupId(groupId, userId);
+        Map<Integer, LocalTime> publishTimes = publishTimes(groupId);
+        List<MissionResponse> missions = rows.stream().map(row -> toResponse(row, publishTimes)).toList();
+        LocalDate date = rows.isEmpty() ? SeoulTime.today() : rows.getFirst().getMissionDate();
+        LocalDateTime nextPublishAt = nextPublishAt(group.getDailyMissionCount(), rows, publishTimes);
         return new TodayMissionsResponse(date, group.getDailyMissionCount(), SeoulTime.toOffset(nextPublishAt), missions);
     }
 
@@ -78,7 +79,7 @@ public class MissionService {
             throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
         }
         requireMember(row.getGroupId(), userId);
-        return toResponse(row);
+        return toResponse(row, publishTimes(row.getGroupId()));
     }
 
     public MissionTemplateListResponse listTemplates() {
@@ -90,22 +91,51 @@ public class MissionService {
         return new MissionTemplateListResponse(content);
     }
 
+    public Map<Long, TodayMissionSummary> summarizeCurrent(List<Long> groupIds, Long userId) {
+        if (groupIds.isEmpty()) return Map.of();
+        Map<Long, TodayMissionSummary> summaries = new HashMap<>();
+        for (MissionSummaryRow row : missionMapper.findCurrentSummariesByGroupIds(groupIds, userId)) {
+            summaries.put(row.getGroupId(), new TodayMissionSummary(row.getMissionId(),
+                    media(row.getTemplate()), displayContent(row.getContent(), resolveParams(row.getParams())),
+                    row.getSubmittedCount(), row.isSubmittedByMe()));
+        }
+        return summaries;
+    }
+
     private void requireMember(Long groupId, Long userId) {
         if (!groupMemberMapper.existsByGroupIdAndUserId(groupId, userId)) {
             throw new BusinessException(GroupErrorCode.NOT_GROUP_MEMBER);
         }
     }
 
-    private MissionResponse toResponse(MissionRow row) {
-        String media = null;
+    private String media(String templateCode) {
         try {
-            media = MissionTemplate.valueOf(row.getTemplate()).media();
+            return MissionTemplate.valueOf(templateCode).media();
         } catch (IllegalArgumentException | NullPointerException ignored) {
             // Future template codes can still be read before the catalog is expanded.
+            return null;
         }
-        return new MissionResponse(row.getId(), row.getGroupId(), row.getSlotNo(), row.getContent(),
-                row.getCategory(), row.getTemplate(), media, resolveParams(row.getParams()),
-                SeoulTime.toOffset(row.getPublishedAt()), SeoulTime.toOffset(row.getDeadlineAt()), row.isSubmittedByMe());
+    }
+
+    private MissionResponse toResponse(MissionRow row, Map<Integer, LocalTime> publishTimes) {
+        Map<String, Object> params = resolveParams(row.getParams());
+        LocalTime publishTime = publishTimes.getOrDefault(row.getSlotNo(), missionProperties.defaultPublishTime());
+        List<MissionMemberStatus> members = missionMapper.findMemberStatuses(row.getId()).stream()
+                .map(member -> new MissionMemberStatus(member.getUserId(), member.isSubmitted())).toList();
+        return new MissionResponse(row.getId(), row.getGroupId(), row.getSlotNo(), row.getNumber(),
+                displayContent(row.getContent(), params), row.getCategory(), row.getTemplate(),
+                media(row.getTemplate()), params, SeoulTime.toOffset(row.getPublishedAt()),
+                SeoulTime.toOffset(row.getDeadlineAt()),
+                SeoulTime.toOffset(MissionTiming.nextPublishAfter(row.getPublishedAt(), publishTime)),
+                row.isSubmittedByMe(), members);
+    }
+
+    private String displayContent(String content, Map<String, Object> params) {
+        if (content == null || !content.contains("[대상]")) return content;
+        Object target = params.get("target");
+        String nickname = target instanceof Map<?, ?> map && map.get("nickname") instanceof String name
+                ? name : "친구";
+        return content.replace("[대상]", nickname);
     }
 
     private Map<String, Object> resolveParams(String json) {
@@ -149,25 +179,27 @@ public class MissionService {
         return null;
     }
 
-    private LocalDateTime nextPublishAt(LocalDate date, int dailyMissionCount,
-            List<MissionRow> missions, List<GroupMissionSlot> slots) {
-        Set<Integer> published = new HashSet<>();
-        for (MissionRow mission : missions) {
-            published.add(mission.getSlotNo());
+    private Map<Integer, LocalTime> publishTimes(Long groupId) {
+        Map<Integer, LocalTime> times = new HashMap<>();
+        for (GroupMissionSlot slot : slotMapper.findByGroupId(groupId)) {
+            if (slot.getPublishTime() != null) times.put(slot.getSlotNo(), slot.getPublishTime());
         }
-        Map<Integer, LocalTime> customPublishTimes = new HashMap<>();
-        for (GroupMissionSlot slot : slots) {
-            if (slot.getPublishTime() != null) {
-                customPublishTimes.put(slot.getSlotNo(), slot.getPublishTime());
-            }
-        }
-        List<LocalDateTime> unpublishedTimes = new ArrayList<>();
+        return times;
+    }
+
+    private LocalDateTime nextPublishAt(int dailyMissionCount,
+            List<MissionRow> missions, Map<Integer, LocalTime> customPublishTimes) {
+        LocalDateTime next = null;
+        LocalDateTime now = SeoulTime.now();
         for (int slotNo = 1; slotNo <= dailyMissionCount; slotNo++) {
-            if (!published.contains(slotNo)) {
-                unpublishedTimes.add(date.atTime(customPublishTimes.getOrDefault(slotNo,
-                        missionProperties.defaultPublishTime())));
-            }
+            int currentSlot = slotNo;
+            LocalTime time = customPublishTimes.getOrDefault(slotNo, missionProperties.defaultPublishTime());
+            MissionRow current = missions.stream().filter(row -> row.getSlotNo() == currentSlot).findFirst().orElse(null);
+            LocalDateTime candidate = current == null
+                    ? MissionTiming.nextPublishAfter(now, time)
+                    : MissionTiming.nextPublishAfter(current.getPublishedAt(), time);
+            if (next == null || candidate.isBefore(next)) next = candidate;
         }
-        return unpublishedTimes.stream().min(LocalDateTime::compareTo).orElse(null);
+        return next;
     }
 }

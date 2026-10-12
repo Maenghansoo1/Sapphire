@@ -1,31 +1,23 @@
-# Implementation report — Android auth contract phase 2A
+# Backend Phase 4 implementation report
 
-## Files changed and behavior
+## Files changed
 
-- `android/gradle/libs.versions.toml`, `android/app/build.gradle.kts`, and Android manifests: added OkHttp, coroutines, Internet permission, build-specific API URL, and debug-only cleartext network config. Release keeps HTTPS-only policy and a placeholder API domain.
-- `android/app/src/main/java/com/sapphire/hawe/core/net/`: added JSON API client, single-flight refresh and one retry on expired access tokens, error mapping, auth DTOs/repository, in-memory token store, and Android Keystore AES-GCM token storage. Refresh rotates both tokens; network failures retain the session.
-- `AppSession.kt`, `AppViewModel.kt`, `RootScreen.kt`: added RESTORING state, startup `/api/me` recovery, and token/data cleanup on sign-out.
-- Auth screens/navigation: login and signup now use server endpoints; signup passes consent, retries after successful registration without re-registering, and selects a server character when available. Removed the mock login factory and its test. The signup photo cell is hidden. Unsupported auth actions show the shared coming-soon toast.
-- My page and user info: blocked unsupported profile edit, account linking, password change, and withdrawal actions with the same toast.
-- `docs/FRONTEND/ANDROID.md`: documented network stack, encrypted tokens, API URL override, and debug HTTP behavior.
-- Added `ApiClientTest`, `AuthRepositoryTest`, `AppSessionTest`, and `ApiMessagesTest`; retained the other existing tests.
+- New mission timing, deterministic MVP template selection, placeholder generator, publisher, minute scheduler, and after-commit group creation listener under `src/main/java/com/sapphire/hawe/mission/`; new `GroupCreatedEvent` under `group/domain/`.
+- Updated mission, group, member, and poke mappers and services for latest mission per slot; added mission number, closesAt, member statuses, resolved target name, and group `todayMission` summary. Enabled scheduling, restricted MyBatis scanning to `@Mapper`, and set `hawe.mission.max-daily-count=1`.
+- Added and updated unit and MariaDB integration tests under `src/test/java/com/sapphire/hawe/`.
+- Updated `docs/BACKEND/MISSIONS_API.md`, `API_DESIGN.md`, `CONTRACT_DECISIONS.md`, `docs/FEATURE/PROJECT_OVERVIEW.md`, and both Group and Mission Postman collections. Overwrote this report.
 
 ## Verification
 
-- JDK 17: `testDebugUnitTest` **passed (73 tests)**.
-- `assembleDebug`, `compileReleaseKotlin`, and `assembleRelease` **passed**.
-- `lint` **passed with 0 errors, 30 warnings, 1 hint**. An earlier combined run failed while Maven hosts were unreachable for a transitive lint dependency; retry succeeded.
-- `git diff --check -- android docs/FRONTEND/ANDROID.md` **passed**. Checked changed paths; Android files and `docs/FRONTEND/ANDROID.md` are the only implementation changes from this task. Pre-existing backend, Cordova, plan, and review changes were left intact; this report was overwritten as requested. Debug merged manifest contains the network config; release merged manifest retains `usesCleartextTraffic=false` and has no debug config.
-- The initial baseline test run overlapped implementation edits and is not a clean baseline result; final tests and builds above passed.
+- JDK 25 `./mvnw.cmd clean test -q`: passed, 92 tests, 0 failures/errors.
+- `./mvnw.cmd -q -DskipTests package`: passed. No backend lint or separate typecheck command is configured; Maven compilation passed.
+- `git diff --check`: passed. Both Postman collections parse as UTF-8 JSON.
+- Live `spring-boot:run` smoke: registered a temporary user, created a group with slot 1 at 00:00, and fetched the current mission, single mission, group list, and template catalog. The mission was number 1, `VOICE_LINE`/`VOICE`, with one member; `publishedAt`, `deadlineAt`, and `closesAt` had `+09:00`; `nextPublishAt == closesAt`; group `todayMission` matched. A group request with `dailyMissionCount=2` returned 400. The server was stopped and the temporary group and user were removed.
+- Final diff inspected. Existing uncommitted backend, Android, plan, and review changes were preserved; no commit or push.
 
-## Remaining risks and manual checks
+## Remaining risks and plan adjustments
 
-- No emulator was available, and the backend was not listening on localhost:8080. A physical device was connected, but the server flows were **not manually verified**. On an emulator with the backend running, check signup and character selection, restart/restore, logout, wrong-password and duplicate-email toasts, offline behavior, and all coming-soon actions.
-- Android Keystore persistence and debug cleartext behavior need device verification. Release `https://api.hawe.app` is a placeholder; set the actual URL with `-PhaweApiBaseUrl=...` before deployment.
-- Lint warnings are existing project-level findings; no warnings were reported in the new network or auth files.
-
-## Assumptions, adjustments, and merge conflicts
-
-- Followed the backend contract in the plan, including the PATCH character response field `characterId`. Kept character selection best-effort after registration and login.
-- Delayed the duplicate-email navigation briefly so its toast remains visible.
-- Potential future merge overlap is limited to Android app/session/auth build files and the frontend Android guide for later Android phases. No backend files were edited.
+- The scheduler scans all group IDs every minute; scaling that scan remains future work. A real future-minute tick was not observed, and the Postman runner was not executed. Scheduler exception isolation and after-commit publishing were covered by tests, and immediate publishing was covered by a committed DB integration test and HTTP smoke.
+- Group creation response `missionCount` can be 0 because first publication runs after commit. Submission close enforcement (`MISSION_CLOSED`), AI generation, notifications, and client integration remain later phases.
+- The plan described 15 template catalog entries, but the actual enum and live endpoint contain 16. All 16 remain readable; only the specified eight are eligible for automatic MVP publication. Documentation reflects the code.
+- This phase touches uncommitted Phase 3 group files and the mission contract needed by future Android 4A and submission Phase 6. Keep those changes together when merging. No schema migration was changed.

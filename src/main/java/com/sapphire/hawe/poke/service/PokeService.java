@@ -42,7 +42,7 @@ public class PokeService {
         if (!groupMemberMapper.existsByGroupIdAndUserId(groupId, targetId)) {
             throw new BusinessException(PokeErrorCode.TARGET_NOT_GROUP_MEMBER);
         }
-        if (pokeMapper.existsTodaySubmission(groupId, targetId)) {
+        if (pokeMapper.existsCurrentMissionSubmission(groupId, targetId)) {
             throw new BusinessException(PokeErrorCode.TARGET_ALREADY_SUBMITTED);
         }
 

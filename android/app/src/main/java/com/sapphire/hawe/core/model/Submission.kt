@@ -14,7 +14,7 @@ data class Submission(
     val duration: Double? = null, val waveform: List<Float> = emptyList(),
     val likeCount: Int = 0, val likedByMe: Boolean = false,
     val likerNames: List<String> = emptyList(),
-    val comments: List<SubmissionComment> = emptyList(), val authorID: UUID? = null,
+    val comments: List<SubmissionComment> = emptyList(), val authorID: Long? = null,
 )
 
 data class MissionResult(

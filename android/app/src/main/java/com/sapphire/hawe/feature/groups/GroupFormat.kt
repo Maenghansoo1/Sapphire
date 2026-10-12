@@ -21,8 +21,9 @@ fun topicTimeText(time: LocalTime): String = "${if (time.hour < 12) "오전" els
 fun memberBadge(member: GroupMember): String? = listOfNotNull(
     "나".takeIf { member.isMe }, "방장".takeIf { member.isOwner }).takeIf { it.isNotEmpty() }?.joinToString(" · ")
 fun leaveMessage(group: GroupDetail): String = buildString {
-    append("'${group.name}'에서 나가도 내가 올린 작품과 댓글은 그룹에 남아요. 다시 들어오려면 초대 코드가 필요해요.")
-    if (group.amIOwner && group.members.size > 1) append("\n방장은 가장 먼저 들어온 멤버에게 넘어가요.")
+    if (group.amIOwner && group.members.size == 1)
+        append("나가면 이 그룹이 삭제돼요. 초대 코드도 더는 쓸 수 없어요.")
+    else append("'${group.name}'에서 나가도 내가 올린 작품과 댓글은 그룹에 남아요. 다시 들어오려면 초대 코드가 필요해요.")
 }
 fun groupCardSubtitle(summary: GroupSummary, now: Instant = Instant.now()): String = buildString {
     append("${summary.relationship.displayName} · ${summary.members.size}명")

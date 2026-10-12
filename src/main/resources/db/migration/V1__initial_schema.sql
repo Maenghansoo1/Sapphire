@@ -27,10 +27,13 @@ CREATE TABLE `groups` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `owner_id` bigint(20) NOT NULL,
+  `invite_code` char(6) NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `relation_type` varchar(20) NOT NULL DEFAULT 'CASUAL',
   `daily_mission_count` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `start_date` date DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_groups_invite_code` (`invite_code`),
   KEY `fk_groups_owner` (`owner_id`),
   CONSTRAINT `fk_groups_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

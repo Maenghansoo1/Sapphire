@@ -1,5 +1,6 @@
 package com.sapphire.hawe.group.domain;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class Group {
@@ -7,8 +8,10 @@ public class Group {
     private Long id;
     private String name;
     private Long ownerId;
+    private String inviteCode;
     private String relationType;
     private int dailyMissionCount;
+    private LocalDate startDate;
     private LocalDateTime createdAt;
 
     public Long getId() {
@@ -35,6 +38,14 @@ public class Group {
         this.ownerId = ownerId;
     }
 
+    public String getInviteCode() {
+        return inviteCode;
+    }
+
+    public void setInviteCode(String inviteCode) {
+        this.inviteCode = inviteCode;
+    }
+
     public String getRelationType() {
         return relationType;
     }
@@ -49,6 +60,18 @@ public class Group {
 
     public void setDailyMissionCount(int dailyMissionCount) {
         this.dailyMissionCount = dailyMissionCount;
+    }
+
+    public LocalDate getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
+    public int maxMembers() {
+        return "COUPLE".equals(relationType) ? 2 : 6;
     }
 
     public LocalDateTime getCreatedAt() {

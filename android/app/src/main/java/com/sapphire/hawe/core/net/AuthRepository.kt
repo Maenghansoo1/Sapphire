@@ -45,8 +45,8 @@ class AuthRepository(private val api: ApiClient, private val tokens: TokenStore)
     }
 
     private fun MeDto.toAccount(): MyAccount {
-        val character = ProfileCharacter.entries.firstOrNull { it.value == characterKey } ?: ProfileCharacter.DEFAULT
+        val character = ProfileCharacter.fromKey(characterKey)
         return MyAccount(Profile(AvatarContent.Character(character), nickname), email,
-            OffsetDateTime.parse(createdAt).toInstant(), LoginProvider.EMAIL, setOf(LoginProvider.EMAIL))
+            OffsetDateTime.parse(createdAt).toInstant(), LoginProvider.EMAIL, setOf(LoginProvider.EMAIL), id)
     }
 }

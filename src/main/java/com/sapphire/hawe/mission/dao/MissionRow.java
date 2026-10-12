@@ -1,5 +1,6 @@
 package com.sapphire.hawe.mission.dao;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /** Projection for published mission reads. */
@@ -11,6 +12,8 @@ public class MissionRow {
     private String template;
     private String params;
     private int slotNo;
+    private LocalDate missionDate;
+    private int number;
     private LocalDateTime publishedAt;
     private LocalDateTime deadlineAt;
     private boolean submittedByMe;
@@ -70,6 +73,11 @@ public class MissionRow {
     public void setSlotNo(int slotNo) {
         this.slotNo = slotNo;
     }
+
+    public LocalDate getMissionDate() { return missionDate; }
+    public void setMissionDate(LocalDate missionDate) { this.missionDate = missionDate; }
+    public int getNumber() { return number; }
+    public void setNumber(int number) { this.number = number; }
 
     public LocalDateTime getPublishedAt() {
         return publishedAt;

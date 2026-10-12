@@ -6,7 +6,6 @@ import com.sapphire.hawe.group.dto.GroupMemberResponse;
 import com.sapphire.hawe.group.dto.GroupResponse;
 import com.sapphire.hawe.group.dto.GroupSettingsUpdateRequest;
 import com.sapphire.hawe.group.dto.GroupSummaryResponse;
-import com.sapphire.hawe.group.dto.InviteResponse;
 import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.JoinResponse;
 import com.sapphire.hawe.group.service.GroupService;
@@ -68,19 +67,15 @@ public class GroupController {
         return groupService.listMembers(userId, groupId, page, size);
     }
 
-    @PostMapping("/{groupId}/invite")
-    public InviteResponse createInvite(@AuthenticationPrincipal Long userId, @PathVariable Long groupId) {
-        return groupService.createInvite(userId, groupId);
-    }
-
     @PostMapping("/join")
     public JoinResponse join(@AuthenticationPrincipal Long userId, @Valid @RequestBody JoinRequest request) {
-        return groupService.joinByInvite(userId, request);
+        return groupService.join(userId, request);
     }
 
     @DeleteMapping("/{groupId}/members/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void leaveGroup(@AuthenticationPrincipal Long userId, @PathVariable Long groupId) {
-        groupService.leaveGroup(userId, groupId);
+    public void leaveGroup(@AuthenticationPrincipal Long userId, @PathVariable Long groupId,
+            @RequestParam(required = false) Long successorUserId) {
+        groupService.leaveGroup(userId, groupId, successorUserId);
     }
 }

@@ -13,16 +13,16 @@ fun parsePushDestination(type: String?, groupId: String?, submissionId: String?)
     PushKind.fromValue(type)?.let { PushDestination(it, groupId?.takeIf(String::isNotBlank),
         submissionId?.takeIf(String::isNotBlank)) }
 
-data class PushGroupSnapshot(val id: UUID, val lastMissionId: UUID?, val lastMissionSubmittedByMe: Boolean)
+data class PushGroupSnapshot(val id: Long, val lastMissionId: UUID?, val lastMissionSubmittedByMe: Boolean)
 sealed interface PushTarget {
     data object None : PushTarget
-    data class Mission(val groupId: UUID) : PushTarget
-    data class Results(val groupId: UUID, val missionId: UUID) : PushTarget
+    data class Mission(val groupId: Long) : PushTarget
+    data class Results(val groupId: Long, val missionId: UUID) : PushTarget
 }
 
 fun pushTarget(destination: PushDestination, groups: List<PushGroupSnapshot>): PushTarget {
     val first = groups.firstOrNull() ?: return PushTarget.None
-    val requested = destination.groupId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+    val requested = destination.groupId?.toLongOrNull()
     val group = groups.firstOrNull { it.id == requested } ?: first
     return if (destination.kind == PushKind.COMMENT && group.lastMissionSubmittedByMe &&
         group.lastMissionId != null) PushTarget.Results(group.id, group.lastMissionId)

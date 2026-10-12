@@ -11,5 +11,8 @@ enum class ProfileCharacter(val value: String, val displayName: String, @Drawabl
     MULBANGUL("mulbangul", "물방울", R.drawable.character_mulbangul),
     PILLEUM("pilleum", "필름이", R.drawable.character_pilleum),
     GAMJA("gamja", "감자", R.drawable.character_gamja);
-    companion object { val DEFAULT = MONGSIL }
+    companion object {
+        val DEFAULT = MONGSIL
+        fun fromKey(key: String?): ProfileCharacter = entries.firstOrNull { it.value == key } ?: DEFAULT
+    }
 }

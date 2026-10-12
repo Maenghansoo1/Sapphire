@@ -41,6 +41,6 @@ class JwtTokenProviderTests {
     }
 
     private static JwtTokenProvider provider(long accessSeconds) {
-        return new JwtTokenProvider(new JwtProperties(SECRET, accessSeconds, 1209600, 604800));
+        return new JwtTokenProvider(new JwtProperties(SECRET, accessSeconds, 1209600));
     }
 }

@@ -20,7 +20,7 @@ data class ActivityStats(
 
 data class MyAccount(
     val profile: Profile, val email: String?, val joinedAt: Instant,
-    val signUpProvider: LoginProvider, val linkedProviders: Set<LoginProvider>,
+    val signUpProvider: LoginProvider, val linkedProviders: Set<LoginProvider>, val userId: Long = 0L,
 ) {
     val canChangePassword: Boolean get() = LoginProvider.EMAIL in linkedProviders
     companion object {

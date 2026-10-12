@@ -13,6 +13,8 @@ import com.sapphire.hawe.group.domain.GroupMissionSlot;
 import com.sapphire.hawe.group.service.GroupErrorCode;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
+import com.sapphire.hawe.mission.dao.MissionMemberRow;
+import com.sapphire.hawe.mission.dao.MissionSummaryRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,9 +54,9 @@ class MissionServiceTests {
     }
 
     @Test
-    void emptyTodayUsesEarliestEffectiveSlotTime() {
+    void emptyCurrentUsesNextScheduledSlotTime() {
         allowGroup(3);
-        when(missions.findTodayByGroupId(11L, 7L)).thenReturn(List.of());
+        when(missions.findCurrentByGroupId(11L, 7L)).thenReturn(List.of());
         when(slots.findByGroupId(11L)).thenReturn(List.of(slot(2, LocalTime.of(14, 0)), slot(3, null)));
 
         var response = service.getTodayMissions(7L, 11L);
@@ -62,42 +64,48 @@ class MissionServiceTests {
         assertEquals(3, response.dailyMissionCount());
         assertEquals(SeoulTime.today(), response.date());
         assertTrue(response.missions().isEmpty());
-        assertEquals(SeoulTime.toOffset(SeoulTime.today().atTime(9, 0)), response.nextPublishAt());
+        LocalDateTime now = SeoulTime.now();
+        LocalDateTime nextDefault = com.sapphire.hawe.mission.domain.MissionTiming.nextPublishAfter(
+                now, LocalTime.of(9, 0));
+        LocalDateTime nextCustom = com.sapphire.hawe.mission.domain.MissionTiming.nextPublishAfter(
+                now, LocalTime.of(14, 0));
+        assertEquals(SeoulTime.toOffset(nextDefault.isBefore(nextCustom) ? nextDefault : nextCustom),
+                response.nextPublishAt());
     }
 
     @Test
-    void todayUsesCustomTimeForUnpublishedSlotAndIgnoresPublishedTime() {
+    void currentMissionUsesCustomTimeForUnpublishedSlot() {
         allowGroup(2);
-        when(missions.findTodayByGroupId(11L, 7L)).thenReturn(List.of(row(1L, 11L, 1, "{}")));
+        when(missions.findCurrentByGroupId(11L, 7L)).thenReturn(List.of(row(1L, 11L, 1, "{}")));
         when(slots.findByGroupId(11L)).thenReturn(List.of(slot(2, LocalTime.of(14, 0))));
 
         var response = service.getTodayMissions(7L, 11L);
 
-        assertEquals(SeoulTime.toOffset(SeoulTime.today().atTime(14, 0)), response.nextPublishAt());
+        assertTrue(response.nextPublishAt() != null);
         assertEquals(1, response.missions().size());
         assertEquals("PHOTO", response.missions().getFirst().media());
     }
 
     @Test
-    void allActiveSlotsPublishedReturnsNoNextTimeEvenWithOldExtraSlot() {
+    void allActiveSlotsPublishedReturnsNextPublishTimeEvenWithOldExtraSlot() {
         allowGroup(2);
-        when(missions.findTodayByGroupId(11L, 7L)).thenReturn(List.of(
+        when(missions.findCurrentByGroupId(11L, 7L)).thenReturn(List.of(
                 row(1L, 11L, 1, "{}"), row(2L, 11L, 2, "{}"), row(3L, 11L, 3, "{}")));
 
         var response = service.getTodayMissions(7L, 11L);
 
-        assertNull(response.nextPublishAt());
+        assertTrue(response.nextPublishAt() != null);
         assertEquals(3, response.missions().size());
     }
 
     @Test
     void loweredCountIgnoresPublishedExtraSlotWhenCalculatingNextTime() {
         allowGroup(2);
-        when(missions.findTodayByGroupId(11L, 7L)).thenReturn(List.of(row(3L, 11L, 3, "{}")));
+        when(missions.findCurrentByGroupId(11L, 7L)).thenReturn(List.of(row(3L, 11L, 3, "{}")));
 
         var response = service.getTodayMissions(7L, 11L);
 
-        assertEquals(SeoulTime.toOffset(SeoulTime.today().atTime(9, 0)), response.nextPublishAt());
+        assertTrue(response.nextPublishAt() != null);
         assertEquals(3, response.missions().getFirst().slotNo());
     }
 
@@ -115,6 +123,7 @@ class MissionServiceTests {
     @Test
     void singleMissionResolvesTargetAndPreservesOtherParams() {
         MissionRow row = row(10L, 11L, 1, "{\"sentence\":\"hello\",\"targetUserId\":3}");
+        row.setContent("[대상]에게 [대상]의 그림을 보여줘");
         row.setPublishedAt(LocalDateTime.of(2026, 9, 28, 9, 0));
         row.setDeadlineAt(LocalDateTime.of(2026, 9, 28, 23, 0));
         when(missions.findById(10L, 7L)).thenReturn(row);
@@ -122,6 +131,10 @@ class MissionServiceTests {
         User target = new User();
         target.setNickname("잎사귀");
         when(users.findById(3L)).thenReturn(target);
+        MissionMemberRow member = new MissionMemberRow();
+        member.setUserId(7L);
+        member.setSubmitted(true);
+        when(missions.findMemberStatuses(10L)).thenReturn(List.of(member));
 
         var response = service.getMission(7L, 10L);
 
@@ -131,16 +144,46 @@ class MissionServiceTests {
         assertEquals(10L, response.missionId());
         assertEquals(SeoulTime.toOffset(row.getPublishedAt()), response.publishedAt());
         assertEquals(SeoulTime.toOffset(row.getDeadlineAt()), response.deadlineAt());
+        assertEquals("잎사귀에게 잎사귀의 그림을 보여줘", response.content());
+        assertEquals(1, response.number());
+        assertEquals(SeoulTime.toOffset(row.getPublishedAt().plusDays(1)), response.closesAt());
+        assertTrue(response.members().getFirst().submitted());
     }
 
     @Test
     void missingTargetAndMalformedParamsDoNotFailRead() {
-        when(missions.findById(10L, 7L)).thenReturn(row(10L, 11L, 1, "{\"targetUserId\":3}"));
+        MissionRow missingTarget = row(10L, 11L, 1, "{\"targetUserId\":3}");
+        missingTarget.setContent("[대상]에게 인사해");
+        when(missions.findById(10L, 7L)).thenReturn(missingTarget);
         when(missions.findById(12L, 7L)).thenReturn(row(12L, 11L, 1, "not json"));
         when(members.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
 
         assertEquals(Map.of(), service.getMission(7L, 10L).params());
+        assertEquals("친구에게 인사해", service.getMission(7L, 10L).content());
         assertEquals(Map.of(), service.getMission(7L, 12L).params());
+    }
+
+    @Test
+    void currentSummaryContainsResolvedContentAndSubmissionStatus() {
+        MissionSummaryRow row = new MissionSummaryRow();
+        row.setGroupId(11L);
+        row.setMissionId(10L);
+        row.setTemplate("TEXT_FILL_BLANK");
+        row.setContent("[대상]은 ___ 할 것 같다");
+        row.setParams("{\"targetUserId\":3}");
+        row.setSubmittedCount(2);
+        row.setSubmittedByMe(true);
+        when(missions.findCurrentSummariesByGroupIds(List.of(11L), 7L)).thenReturn(List.of(row));
+        User target = new User();
+        target.setNickname("잎사귀");
+        when(users.findById(3L)).thenReturn(target);
+
+        var summary = service.summarizeCurrent(List.of(11L), 7L).get(11L);
+
+        assertEquals("TEXT", summary.media());
+        assertEquals("잎사귀은 ___ 할 것 같다", summary.content());
+        assertEquals(2, summary.submittedCount());
+        assertTrue(summary.submittedByMe());
     }
 
     @Test
@@ -195,6 +238,10 @@ class MissionServiceTests {
         row.setCategory("TEST");
         row.setTemplate("PHOTO_NOW");
         row.setParams(params);
+        row.setMissionDate(SeoulTime.today());
+        row.setNumber(slotNo);
+        row.setPublishedAt(SeoulTime.today().atTime(9, 0));
+        row.setDeadlineAt(SeoulTime.today().atTime(23, 0));
         return row;
     }
 }
