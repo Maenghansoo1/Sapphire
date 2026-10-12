@@ -41,7 +41,12 @@ fun cellDescription(date: LocalDate, record: DayRecord?, isToday: Boolean): Stri
     var text = "${date.monthValue}월 ${date.dayOfMonth}일"
     if (isToday) text += ", 오늘"
     if (record != null) text += ", ${record.type.displayName} 기록"
+    record?.stamp?.let { text += ", ${it.displayName}" }
     return text
 }
+
+/** 달을 바꾸면 그 달의 가장 최근 기록을 골라요. 이미 그 달의 날짜를 골랐으면 그대로 둬요. */
+fun selectedDateFor(month: YearMonth, selected: LocalDate?, records: Map<LocalDate, DayRecord>): LocalDate? =
+    if (selected != null && YearMonth.from(selected) == month) selected else initialSelectedDate(records)
 
 const val NOT_SUBMITTED_NOTICE = "내가 올리지 않은 날이라 볼 수 없어요"

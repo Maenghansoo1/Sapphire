@@ -15,6 +15,10 @@ class MyPageLogicTest {
         assertEquals(StatsDisplay("0", "0일", "0개"), statsDisplay(ActivityStats(0, 0, 0, emptyMap())))
         assertEquals(StatsDisplay("12", "3일", "2개"), statsDisplay(ActivityStats(12, 3, 2, emptyMap())))
         assertEquals(0, byTypeCount(ActivityStats(0, 0, 0, emptyMap()), MissionType.PHOTO))
+        // 서버에서 아직 못 받아왔을 때
+        assertEquals(StatsDisplay("-", "-", "-"), statsDisplay(null))
+        assertEquals("-", byTypeText(null, MissionType.PHOTO))
+        assertEquals("4", byTypeText(ActivityStats(4, 1, 1, mapOf(MissionType.PHOTO to 4)), MissionType.PHOTO))
     }
 
     @Test fun notificationsAndProviders() {

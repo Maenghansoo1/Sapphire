@@ -29,6 +29,7 @@ import androidx.navigation.toRoute
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.data.GroupsState
+import com.sapphire.hawe.core.net.CalendarRepository
 import com.sapphire.hawe.core.net.GroupRepository
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
@@ -78,7 +79,7 @@ sealed interface MainRoute {
 
 @Composable
 fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups: GroupRepository,
-    missions: MissionRepository, submissions: SubmissionRepository) {
+    missions: MissionRepository, submissions: SubmissionRepository, calendar: CalendarRepository) {
     val nav = rememberNavController()
     val context = LocalContext.current
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
@@ -198,6 +199,8 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
                     store.todayMission(id)?.let { mission ->
                         nav.navigate(MainRoute.Results(id, mission.id)) { launchSingleTop = true }
                     }
+                }, onCalendar = {
+                    nav.navigate(MainRoute.Calendar(id)) { launchSingleTop = true }
                 })
         }
         composable<MainRoute.Calendar> { entry ->
@@ -206,7 +209,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             LaunchedEffect(entry) {
                 if (store.group(id) == null) nav.popBackStack()
             }
-            RecordCalendarScreen(id, store, onBack = { nav.popBackStack() },
+            RecordCalendarScreen(id, store, calendar, session, onBack = { nav.popBackStack() },
                 onResults = { missionId ->
                     nav.navigate(MainRoute.Results(route.groupId, missionId)) { launchSingleTop = true }
                 })
@@ -271,9 +274,11 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             val groupID = route.groupId
             val missionID = route.missionId
             LaunchedEffect(entry) {
-                if (store.todayMission(groupID)?.let { it.id != missionID || !it.didSubmit } != false) {
-                    nav.popBackStack()
-                }
+                // 현재 미션이면 내가 냈는지, 달력에서 연 지난 미션이면 그날 내가 냈는지 확인해요.
+                val current = store.todayMission(groupID)
+                val canOpen = if (current?.id == missionID) current.didSubmit
+                    else store.calendarRecord(groupID, missionID)?.didSubmit == true
+                if (!canOpen) nav.popBackStack()
             }
             ResultsScreen(groupID, missionID, store, submissions, session,
                 onBack = { nav.popBackStack() }, onDetail = { submissionID ->
@@ -302,7 +307,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
                 onBack = { nav.popBackStack() })
         }
         composable<MainRoute.MyPage> {
-            MyPageScreen(session, store, onBack = { nav.popBackStack() },
+            MyPageScreen(session, store, calendar, onBack = { nav.popBackStack() },
                 onProfileEdit = { nav.navigate(MainRoute.ProfileEdit) { launchSingleTop = true } },
                 onNotifications = { nav.navigate(MainRoute.NotificationSettings) { launchSingleTop = true } },
                 onUserInfo = { nav.navigate(MainRoute.UserInfo) { launchSingleTop = true } },

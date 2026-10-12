@@ -13,6 +13,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.random.Random
@@ -128,16 +129,42 @@ class DataStoreTest {
         assertEquals(Profile.mockMine, store.myProfile)
     }
 
-    @Test fun recordsHideUnsubmittedCurrentDayAndIncludeMySubmission() {
+    @Test fun calendarRecordsAreKeptPerGroupAndMonth() {
         val store = store()
-        val id = store.join("K7Q2PX")!!
-        assertTrue(store.records(id).isNotEmpty())
-        assertTrue(store.records(id).all { it.date < store.todayMission(id)!!.opensAt })
-        val mission = store.todayMission(id)!!
-        val member = store.group(id)!!.me!!
-        store.applySubmitted(id, mission.id, Submission(100L, member.displayed, true,
-            MissionType.WRITE, now, text = "오늘", authorID = member.id))
-        assertTrue(store.records(id).any { it.missionID == store.todayMission(id)!!.id && it.didSubmit })
+        val october = YearMonth.of(2026, 10)
+        assertNull(store.records(11L, october))
+        val record = DayRecord(now, MissionType.PHOTO, "오늘의 하늘", 3, 4, true, 101L, Stamp.GOOD)
+        store.applyCalendar(11L, october, listOf(record))
+        assertEquals(listOf(record), store.records(11L, october))
+        assertNull(store.records(11L, YearMonth.of(2026, 9)))
+        assertNull(store.records(12L, october))
+        assertEquals(record, store.calendarRecord(11L, 101L))
+        assertNull(store.calendarRecord(12L, 101L))
+        store.reset()
+        assertNull(store.records(11L, october))
+    }
+
+    @Test fun pastMissionResultUsesCalendarRecordAndFeed() {
+        val store = store()
+        val detail = GroupDetail.mock.copy(id = 11L)
+        store.applyServerGroups(listOf(LoadedGroup(detail, null)))
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(200L), now.plusSeconds(86400)))
+        val pastDay = now.minusSeconds(3L * 86400)
+        store.applyCalendar(11L, YearMonth.of(2026, 10),
+            listOf(DayRecord(pastDay, MissionType.PHOTO, "지난 주제", 1, 4, true, 101L, Stamp.LATE)))
+        // 피드를 받기 전에는 결과가 없음
+        assertNull(store.result(11L, 101L))
+        val me = detail.me!!
+        val mine = Submission(500L, me.displayed, true, MissionType.PHOTO, pastDay, isLate = true, authorID = me.id)
+        store.applyFeed(11L, 101L, listOf(mine))
+        val result = store.result(11L, 101L)!!
+        assertEquals("지난 주제", result.topic)
+        assertEquals(MissionType.PHOTO, result.type)
+        assertEquals(4, result.memberCount)
+        assertEquals(listOf(mine), result.submissions)
+        assertFalse(result.pending.contains(me.displayed))
+        // 지난 미션 피드가 현재 미션을 건드리지 않음
+        assertFalse(store.groups.single().missions.single().feedLoaded)
     }
 
     @Test fun settingsAndPokeReplaceSnapshots() {
@@ -161,19 +188,14 @@ class DataStoreTest {
         assertEquals(setOf(memberID), store.groups.single().missions.single().poked)
     }
 
-    @Test fun streakUsesSeoulDays() {
-        val clock = AdjustableClock(now.minusSeconds(3L * 86400))
-        val store = store(clock)
-        repeat(3) { index ->
-            val id = store.createGroup("우리$index", Relationship.FRIEND)
-            injectMission(store, id, MissionType.WRITE, clock.current)
-            val mission = store.todayMission(id)!!
-            store.replaceMissionsForTest(id, listOf(store.groups.last().missions.single().copy(
-                serverSubmittedByMe = true)))
-            clock.current = clock.current.plusSeconds(86400)
-        }
-        assertEquals(3, store.stats.completedMissions)
-        assertEquals(3, store.stats.streakDays)
+    @Test fun statsComeFromServerAndResetOnSignOut() {
+        val store = store()
+        assertNull(store.stats)
+        val stats = ActivityStats(3, 2, 1, mapOf(MissionType.WRITE to 3))
+        store.applyStats(stats)
+        assertEquals(stats, store.stats)
+        store.reset()
+        assertNull(store.stats)
     }
 
     @Test fun currentMissionPreservesMatchingServerFeedAndResetsOnNewMission() {

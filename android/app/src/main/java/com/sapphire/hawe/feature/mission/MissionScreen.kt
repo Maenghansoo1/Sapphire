@@ -24,7 +24,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.data.MissionState
 import com.sapphire.hawe.core.AppSession
-import com.sapphire.hawe.core.COMING_SOON
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.model.MissionMember
 import com.sapphire.hawe.core.model.MissionType
@@ -45,7 +44,7 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, sessi
     submittedSignal: Boolean = false, onSubmittedHandled: () -> Unit = {},
     submittedLate: Boolean = false, refreshSignal: Boolean = false, onRefreshHandled: () -> Unit = {},
     notice: String? = null, onNoticeHandled: () -> Unit = {},
-    onPerform: (MissionType?) -> Unit = {}, onResults: () -> Unit = {}) {
+    onPerform: (MissionType?) -> Unit = {}, onResults: () -> Unit = {}, onCalendar: () -> Unit = {}) {
     val group = store.groups.firstOrNull { it.id == id } ?: return
     val mission = store.todayMission(id)
     val toast = rememberHToastState()
@@ -88,7 +87,7 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, sessi
         Column(Modifier.fillMaxSize().padding(horizontal = HLayout.screenPaddingCompact)) {
             HNavBar(group.detail.name, leading = HNavLeading.BACK, onLeading = onBack, trailing = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    MissionHeaderIcon(HIcon.CALENDAR, "기록 캘린더", { toast.show(COMING_SOON) })
+                    MissionHeaderIcon(HIcon.CALENDAR, "기록 캘린더", onCalendar)
                     MissionHeaderIcon(HIcon.MORE, "그룹 정보", onGroupInfo)
                 }
             })

@@ -2,6 +2,7 @@ package com.sapphire.hawe.feature.records
 
 import com.sapphire.hawe.core.model.DayRecord
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.Stamp
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
@@ -61,5 +62,18 @@ class RecordCalendarLogicTest {
         assertEquals("10월 12일, 오늘", cellDescription(date, null, true))
         assertEquals("10월 12일, 오늘, 글 기록",
             cellDescription(date, record("2026-10-12T00:00:00Z", MissionType.WRITE), true))
+        assertEquals("10월 12일, 글 기록, 벌점",
+            cellDescription(date, record("2026-10-12T00:00:00Z", MissionType.WRITE).copy(stamp = Stamp.PENALTY), false))
+    }
+
+    @Test fun selectedDateFollowsMonth() {
+        val october = recordsByDate(listOf(record("2026-10-05T00:00:00Z"), record("2026-10-08T00:00:00Z")))
+        val picked = LocalDate.of(2026, 10, 5)
+        // 처음 열면 그 달의 가장 최근 기록
+        assertEquals(LocalDate.of(2026, 10, 8), selectedDateFor(YearMonth.of(2026, 10), null, october))
+        // 같은 달에서 고른 날짜는 그대로
+        assertEquals(picked, selectedDateFor(YearMonth.of(2026, 10), picked, october))
+        // 다른 달로 넘어가면 그 달 기준으로 다시 고름 (기록 없으면 null)
+        assertNull(selectedDateFor(YearMonth.of(2026, 9), picked, emptyMap()))
     }
 }

@@ -1,0 +1,6 @@
+<!-- 임시 도장 이미지. 도장 디자인이 나오면 같은 이름으로 교체 -->
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="24" cy="24" r="21" stroke="#E8A33D" stroke-width="2.5"/>
+<circle cx="24" cy="24" r="16" stroke="#E8A33D" stroke-width="1.2"/>
+<path d="M24,15 L24,24 L30,28" stroke="#E8A33D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

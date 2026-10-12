@@ -234,30 +234,51 @@ Response 204.
 
 ---
 
-## 7. Calendar (마이페이지) — `/api/me/calendar`
+## 7. Calendar · 활동 요약 — `/api/groups/{groupId}/calendar`, `/api/me/stats`
+
+달력은 **그룹별**이다 (마이페이지 통합 달력 `/me/calendar`는 폐지, `CONTRACT_DECISIONS.md` §9).
 
 | Method | Path | 설명 |
 |---|---|---|
-| GET | `/me/calendar?month=2026-09` | 이번 달 도장 현황 |
-| GET | `/me/calendar/{date}` | 특정 날짜 상세 |
+| GET | `/groups/{groupId}/calendar?month=2026-09` | 그룹 달력 (멤버만) |
+| GET | `/me/stats` | 마이페이지 활동 요약 |
 
-### GET /me/calendar?month=2026-09
+### GET /groups/{groupId}/calendar?month=2026-09
 ```json
-{ "month": "2026-09", "days": [
-  { "date": "2026-09-01", "stamp": "GOOD" },
-  { "date": "2026-09-02", "stamp": "PENALTY" }
-] }
+{ "month": "2026-09",
+  "days": [
+    { "date": "2026-09-01",
+      "missions": [ { "missionId": 101, "media": "DRAW", "content": "오늘 기분을 날씨로 그려줘",
+                      "submittedCount": 4, "memberCount": 5, "stamp": "GOOD" } ] },
+    { "date": "2026-09-02",
+      "missions": [ { "missionId": 102, "media": "PHOTO", "content": "오늘의 하늘",
+                      "submittedCount": 3, "memberCount": 5, "stamp": "PENALTY" } ] }
+  ] }
 ```
+- 미션이 있었던 날만 `days`에 넣는다. `date`는 `mission_date`. 하루 여러 개를 대비해 `missions`는 배열이다.
+- `content`는 `[대상]` 자리를 대상 닉네임으로 채운 문장이다 (미션 조회와 같음).
+- `stamp`는 **요청한 사람의 도장**이다. 저장하지 않고 조회할 때 계산한다.
 
-### GET /me/calendar/{date}
+| 상황 | `stamp` |
+|---|---|
+| 마감 전에 제출 | `GOOD` |
+| 마감 뒤에 제출 (`isLate`) | `LATE` |
+| 미제출 + 미션이 닫힘(같은 슬롯에 다음 미션이 열림) + 미션이 열릴 때 이미 멤버였음 | `PENALTY` |
+| 그 밖 (아직 제출할 수 있는 현재 미션, 미션이 열린 뒤에 들어옴) | `null` |
+
+- `memberCount` = 미션이 열릴 때 이미 들어와 있던 **현재 멤버** + 그 미션에 **제출한 사람**(나간 사람 포함). 나가면 멤버 행이 지워지므로, 제출하지 않고 나간 사람은 셀 수 없다.
+- "미션이 열릴 때 멤버였음"은 `joined_at <= published_at + 1분`으로 판단한다. 그룹 생성 직후 첫 미션의 발행 시각과 그룹장 가입 시각이 몇 초 어긋날 수 있기 때문이다.
+- 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`, 400 `VALIDATION_ERROR`(month 누락·형식 오류)
+
+### GET /me/stats
 ```json
-{ "date": "2026-09-28", "groups": [
-  { "groupId": 1, "groupName": "우리집",
-    "mission": { "id": 10, "content": "..." },
-    "submission": { "id": 100, "imageUrl": "...", "caption": "..." },
-    "stamp": "GOOD" }
-] }
+{ "completedMissions": 42, "streakDays": 5, "groupCount": 3,
+  "byMedia": { "DRAW": 10, "PHOTO": 15, "TEXT": 9, "VOICE": 8 } }
 ```
+- `completedMissions`: 내 제출 수 (지각 포함, 나간 그룹의 제출도 포함)
+- `streakDays`: 오늘(오늘 아직 안 냈으면 어제)부터 거꾸로 하루도 빠짐없이 제출한 날 수. 모든 그룹 합산, `mission_date` 기준
+- `groupCount`: 지금 속한 그룹 수
+- `byMedia`: 유형별 제출 수. 네 유형은 0이어도 항상 들어 있다 (`SLIDER`는 제출이 있을 때만)
 
 ---
 
