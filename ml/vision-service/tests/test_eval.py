@@ -14,17 +14,20 @@ def write_person(root, person, rows, files=None):
 
 def test_read_labels_collects_all_people_and_reports_problems(tmp_path):
     write_person(tmp_path, "우준", [("a.jpg", "하늘|바다", "파랑", ""), ("b.jpg", "컵", "", "메모"),
-                                   ("gone.jpg", "책", "", "")], files=["a.jpg", "b.jpg"])
+                                   ("gone.jpg", "책", "", ""), ("face.jpg", "", "", "제외: 얼굴")],
+                 files=["a.jpg", "b.jpg", "face.jpg"])
     write_person(tmp_path, "찬희", [("c.jpg", "", "자주", ""), ("d.jpg", "신발", "하늘색", "")])
     (tmp_path / "_results").mkdir()
     photos, problems = evaluation.read_labels(tmp_path)
     assert [(p["person"], p["file"], p["topics"], p["color"]) for p in photos] == [
         ("우준", "a.jpg", ["하늘", "바다"], "파랑"), ("우준", "b.jpg", ["컵"], ""), ("찬희", "d.jpg", ["신발"], "")]
+    assert all(len(p["hash"]) == 16 for p in photos)
     assert len(problems) == 4  # 없는 파일, 알 수 없는 색 2개, 주제·색 모두 빔
 
 
-def photo(file, topics, color=""):
-    return {"person": "p", "file": file, "path": None, "topics": topics, "color": color, "note": ""}
+def photo(file, topics, color="", person="p"):
+    return {"person": person, "file": file, "path": None, "hash": f"hash-of-{file}", "topics": topics,
+            "color": color, "note": ""}
 
 
 def test_pairs_are_balanced_and_avoid_related_topics():
@@ -44,6 +47,19 @@ def test_pairs_are_stable_when_photos_are_added():
     first = evaluation.make_pairs([photo("a.jpg", ["컵"])])
     more = evaluation.make_pairs([photo("a.jpg", ["컵"]), photo("b.jpg", ["하늘"])])
     assert more[:len(first)] == first
+
+
+def test_negatives_do_not_depend_on_folder_name():
+    before = evaluation.make_pairs([photo("a.jpg", ["컵", "책"], "파랑", person="우준")])
+    after = evaluation.make_pairs([photo("a.jpg", ["컵", "책"], "파랑", person="a")])
+    assert [(p["topic"], p["label"]) for p in before] == [(p["topic"], p["label"]) for p in after]
+    other_seed = evaluation.make_pairs([photo("a.jpg", ["컵", "책"], "파랑")], seed=8)
+    assert [p["topic"] for p in other_seed if p["label"] == 1] == ["컵", "책", "파랑"]
+
+
+def test_spread_ignores_missing():
+    assert evaluation.spread([0.02, None, 0.025]) == "0.020~0.025"
+    assert evaluation.spread([None]) == "-"
 
 
 def test_roc_auc():
