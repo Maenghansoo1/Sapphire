@@ -34,7 +34,7 @@ public interface GroupMemberMapper {
     @Update("UPDATE group_members SET role = #{role} WHERE group_id = #{groupId} AND user_id = #{userId}")
     void updateRole(@Param("groupId") Long groupId, @Param("userId") Long userId, @Param("role") String role);
 
-    @Select("SELECT gm.user_id AS user_id, u.nickname AS nickname, c.svg_key AS character_key, gm.role AS role, "
+    @Select("SELECT gm.user_id AS user_id, u.nickname AS nickname, u.profile_image_url, c.svg_key AS character_key, gm.role AS role, "
             + "(SELECT COUNT(*) FROM submissions s JOIN missions m ON m.id = s.mission_id "
             + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id "
             + "AND m.mission_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) AS submission_count_this_month, "

@@ -1,6 +1,6 @@
 # HA'WE — API 설계
 
-`docs/BACKEND/BACKEND_DB.md`(DB 설계)를 기준으로 API를 처음부터 다시 설계한 문서. 이 문서는 **설계 전용**이며, 아직 어떤 컨트롤러/서비스 코드도 구현되지 않았다.
+`docs/BACKEND/BACKEND_DB.md`(DB 설계)를 기준으로 작성한 API 계약 문서다. 구현 상태는 각 절의 설명을 따른다.
 
 ## 0. 공통 규칙
 
@@ -77,6 +77,17 @@
 
 `PATCH /me/password`는 2차 범위이며 아직 구현되지 않았다.
 
+### 내 프로필과 회원 탈퇴
+
+| Method | Path | 설명 |
+|---|---|---|
+| PATCH | `/me/profile` | 기본 닉네임 변경, 응답은 `GET /me`와 동일 |
+| PUT | `/me/profile-image` | 기본 프로필 사진 등록·교체 (§8) |
+| DELETE | `/me/profile-image` | 기본 프로필 사진 삭제, 204 |
+| DELETE | `/me` | 회원 탈퇴, 204 |
+
+`PATCH /me/profile` 요청은 `{ "nickname": "하늘" }`이며, 앞뒤 공백을 제거한 뒤 2~10자를 허용한다(400 `VALIDATION_ERROR`). 탈퇴 전에 다른 멤버가 있는 그룹의 그룹장은 후임자를 정해 그룹을 나가야 한다(409 `OWNER_MUST_TRANSFER`). 탈퇴는 내 제출물·댓글·반응·정답 시도·콕·알림과 계정을 삭제한다. 내 제출물에 달린 다른 사람의 댓글·반응도 삭제한다. 혼자 소유한 그룹은 삭제된다. 삭제된 계정의 액세스 토큰과 리프레시 토큰은 401 `INVALID_TOKEN`으로 거절한다.
+
 ### POST /auth/refresh
 ```json
 // Request
@@ -131,7 +142,7 @@
 
 ### GET /groups/{groupId}/members
 
-멤버 응답은 userId, nickname, characterKey, profileImageUrl(null), role, submissionCountThisMonth, stampedToday를 가진다. 그룹 내 프로필과 hasGroupProfile은 2차 범위다.
+멤버 응답은 userId, nickname, characterKey, profileImageUrl, role, submissionCountThisMonth, stampedToday를 가진다. 사진이 없으면 `profileImageUrl`은 null이다. 그룹 내 프로필과 hasGroupProfile은 후속 범위다.
 
 ### GET /invites/{code}
 
@@ -315,8 +326,8 @@ Response 204.
 ```
 에러: `CHARACTER_NOT_FOUND` (404)
 
-### 프로필 사진 (설계만, 미구현)
-앱은 프로필로 캐릭터 대신 **내 사진**을 고를 수 있다 (A3 가입, 17-1 프로필 편집). 서버 설계는 아래와 같고 아직 구현하지 않았다.
+### 프로필 사진 (백엔드 구현됨)
+앱은 프로필로 캐릭터 대신 **내 사진**을 고를 수 있다 (A3 가입, 17-1 프로필 편집).
 
 | Method | Path | 설명 |
 |---|---|---|
@@ -325,9 +336,10 @@ Response 204.
 
 ```json
 // PUT 응답 200
-{ "profileImageUrl": "https://.../profile/1.jpg" }
+{ "profileImageUrl": "/files/profiles/uuid.jpg" }
 ```
-- DB: `users.profile_image_url VARCHAR(500) NULL` 추가 (새 마이그레이션).
+- DELETE 응답은 204이며 사진이 없어도 성공한다. `file` 파트가 없거나 비어 있으면 400 `VALIDATION_ERROR`.
+- DB: `users.profile_image_url VARCHAR(500) NULL`에 파일 key를 저장한다(V1 스키마).
 - 표시 규칙: `profileImageUrl`이 있으면 사진, 없으면 캐릭터. 사진이 있어도 `characterId`는 유지하며 사진을 지우면 그 캐릭터로 돌아간다. `PATCH /me/character`는 사진을 지우지 않는다 — 앱에서 캐릭터를 고르면 `DELETE /me/profile-image`도 함께 호출한다.
 - 사용자 정보를 내려주는 모든 응답(멤버 목록, 피드, 댓글, `GET /me`)에 `characterKey`와 `profileImageUrl`을 함께 넣는다.
 - 에러: `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413)

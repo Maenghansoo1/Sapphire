@@ -9,6 +9,7 @@ import com.sapphire.hawe.character.domain.ProfileCharacter;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.security.JwtTokenProvider;
 import com.sapphire.hawe.global.security.TokenErrorCode;
+import com.sapphire.hawe.global.storage.FileStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,12 +38,13 @@ class AuthServiceTests {
     @Mock UserMapper users;
     @Mock JwtTokenProvider tokens;
     @Mock CharacterMapper characters;
+    @Mock FileStorage storage;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private AuthService service;
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(users, encoder, tokens, characters);
+        service = new AuthService(users, encoder, tokens, characters, storage);
     }
 
     @Test
@@ -105,6 +107,9 @@ class AuthServiceTests {
         character.setSvgKey("gomdol");
         when(characters.findById(3L)).thenReturn(character);
         assertEquals("gomdol", service.getMe(7L).characterKey());
+        user.setProfileImageUrl("profiles/photo.jpg");
+        when(storage.publicUrl("profiles/photo.jpg")).thenReturn("/files/profiles/photo.jpg");
+        assertEquals("/files/profiles/photo.jpg", service.getMe(7L).profileImageUrl());
     }
 
     private static User user(Long id, Long characterId) {

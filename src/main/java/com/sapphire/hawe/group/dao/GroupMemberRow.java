@@ -6,6 +6,10 @@ public class GroupMemberRow {
     private Long userId;
     private String nickname;
     private String characterKey;
+    private String profileImageUrl;
+
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
     private String role;
     private long submissionCountThisMonth;
     private boolean stampedToday;

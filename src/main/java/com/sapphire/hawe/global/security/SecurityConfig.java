@@ -1,6 +1,7 @@
 package com.sapphire.hawe.global.security;
 
 import tools.jackson.databind.ObjectMapper;
+import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.global.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,10 +24,12 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final ObjectMapper objectMapper;
+    private final UserMapper users;
 
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider, ObjectMapper objectMapper) {
+    public SecurityConfig(JwtTokenProvider jwtTokenProvider, ObjectMapper objectMapper, UserMapper users) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.objectMapper = objectMapper;
+        this.users = users;
     }
 
     @Bean
@@ -49,7 +52,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling.authenticationEntryPoint(this::handleUnauthenticated))
-                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider, objectMapper),
+                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider, objectMapper, users),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

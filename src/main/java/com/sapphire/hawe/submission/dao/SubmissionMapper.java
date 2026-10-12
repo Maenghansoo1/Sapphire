@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface SubmissionMapper {
-    String FIELDS = "s.id, s.mission_id, m.group_id, s.user_id, u.nickname, c.svg_key AS character_key, "
+    String FIELDS = "s.id, s.mission_id, m.group_id, s.user_id, u.nickname, u.profile_image_url, c.svg_key AS character_key, "
             + "m.template, s.media_url, s.media_type, s.caption, s.answer_data, s.submitted_at, s.is_late AS late ";
     String JOINS = "FROM submissions s JOIN missions m ON m.id = s.mission_id "
             + "JOIN users u ON u.id = s.user_id LEFT JOIN characters c ON c.id = u.character_id ";

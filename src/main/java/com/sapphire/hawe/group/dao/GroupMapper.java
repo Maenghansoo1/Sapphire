@@ -54,7 +54,7 @@ public interface GroupMapper {
     @Select("SELECT COUNT(*) FROM missions WHERE group_id = #{groupId}")
     long countMissionsByGroupId(@Param("groupId") Long groupId);
 
-    @Select("<script>SELECT gm.group_id, gm.user_id, u.nickname, c.svg_key AS character_key "
+    @Select("<script>SELECT gm.group_id, gm.user_id, u.nickname, u.profile_image_url, c.svg_key AS character_key "
             + "FROM group_members gm JOIN users u ON u.id = gm.user_id "
             + "LEFT JOIN characters c ON c.id = u.character_id WHERE gm.group_id IN "
             + "<foreach collection='groupIds' item='id' open='(' separator=',' close=')'>#{id}</foreach> "

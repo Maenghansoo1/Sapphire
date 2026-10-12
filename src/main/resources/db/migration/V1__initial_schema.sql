@@ -14,6 +14,7 @@ CREATE TABLE `users` (
   `password_hash` varchar(255) NOT NULL,
   `nickname` varchar(50) NOT NULL,
   `character_id` bigint(20) DEFAULT NULL,
+  `profile_image_url` varchar(500) DEFAULT NULL,
   `terms_agreed_at` datetime NOT NULL,
   `privacy_agreed_at` datetime NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),

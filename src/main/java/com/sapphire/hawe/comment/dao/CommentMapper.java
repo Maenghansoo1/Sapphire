@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface CommentMapper {
-    String FIELDS = "co.id, co.submission_id, co.user_id, u.nickname, c.svg_key AS character_key, "
+    String FIELDS = "co.id, co.submission_id, co.user_id, u.nickname, u.profile_image_url, c.svg_key AS character_key, "
             + "co.content, co.image_url, co.created_at ";
     String JOINS = "FROM comments co JOIN users u ON u.id = co.user_id "
             + "LEFT JOIN characters c ON c.id = u.character_id ";

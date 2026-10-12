@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 
 public class SubmissionRow {
     private Long id, missionId, groupId, userId;
-    private String nickname, characterKey, template, mediaUrl, mediaType, caption, answerData;
+    private String nickname, characterKey, profileImageUrl, template, mediaUrl, mediaType, caption, answerData;
     private LocalDateTime submittedAt;
     private boolean late;
     public Long getId() { return id; }
@@ -19,6 +19,8 @@ public class SubmissionRow {
     public void setNickname(String nickname) { this.nickname = nickname; }
     public String getCharacterKey() { return characterKey; }
     public void setCharacterKey(String characterKey) { this.characterKey = characterKey; }
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
     public String getTemplate() { return template; }
     public void setTemplate(String template) { this.template = template; }
     public String getMediaUrl() { return mediaUrl; }

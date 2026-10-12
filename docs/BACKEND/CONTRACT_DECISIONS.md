@@ -393,9 +393,9 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 
 ---
 
-## 5. Me (내 정보·프로필·탈퇴) — 상태: 결정 완료 (반영 전)
+## 5. Me (내 정보·프로필·탈퇴) — 상태: 백엔드 반영됨 (그룹 내 프로필은 별도 단계, 앱은 8A)
 
-`GET /me`, `PATCH /me/password`는 §1 Auth에 있다. 그룹 내 프로필은 §2에 있다.
+`GET /me`는 §1 Auth에 있다. `PATCH /me/password`와 그룹 내 프로필은 별도 단계다.
 
 ### 5-1. 결정
 
@@ -418,8 +418,8 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 
 ```text
 PATCH  /api/me/character        기존 (요청 characterId, 응답 characterId/name/svgKey)
-PUT    /api/me/profile-image    설계 (multipart file)
-DELETE /api/me/profile-image    설계
+PUT    /api/me/profile-image    구현됨 (multipart file)
+DELETE /api/me/profile-image    구현됨 (204)
 ```
 - 앱에서 사진 프로필이던 사용자가 캐릭터를 고르면 `PATCH /me/character` 후 `DELETE /me/profile-image`를 호출한다 (기존 설계 규칙).
 
@@ -427,7 +427,8 @@ DELETE /api/me/profile-image    설계
 DELETE /api/me — 회원 탈퇴, 204
 ```
 - 다른 멤버가 있는 그룹의 그룹장이면 409 `OWNER_MUST_TRANSFER` ("그룹장인 그룹에서 먼저 나가 주세요"). 앱은 내 그룹 목록에서 `ownerId == 내 id && memberCount > 1`인 그룹을 미리 찾아 탈퇴 화면에서 안내한다.
-- 처리 순서(한 트랜잭션): 혼자인 그룹 삭제 → 모든 그룹에서 나감 → 내 제출물·업로드 파일·댓글 삭제 → 내 반응·정답 시도·콕 기록·알림·기기 토큰·알림 설정 정리 → 계정 삭제.
+- 처리 순서(한 트랜잭션): 그룹장 제한 검사 → 삭제할 파일 key 수집 → 모든 그룹에서 나감(혼자인 그룹은 삭제) → 내 제출물과 종속 댓글·반응·정답 시도, 내 댓글·반응·정답 시도·콕·알림 삭제 → 계정 삭제 → 커밋 후 파일 삭제. 삭제된 제출물에 달린 다른 사람 댓글·반응도 함께 삭제한다.
+- 9단계에서 기기 토큰·알림 설정 테이블을 추가하면 탈퇴 삭제 목록에도 추가한다.
 - 같은 이메일로 다시 가입할 수 있다 (새 계정).
 
 ### 5-3. 수정 대상
@@ -439,10 +440,10 @@ DELETE /api/me — 회원 탈퇴, 204
 | iOS | Android와 같음 (`ProfileEditView`, `WithdrawView`, `AppSession.withdraw`) |
 | 설계 문서 | `API_DESIGN.md`에 Me 절 신설(`GET /me`, `PATCH /me/profile`, `PATCH /me/password`, `DELETE /me`), §8 캐릭터는 이미 반영됨. `PROJECT_OVERVIEW.md` §3·§11 |
 
-### 5-4. 미결
+### 5-4. 확정과 후속
 
-- 탈퇴 후에도 남은 액세스 토큰(최대 30분)·refresh 토큰(최대 14일)이 유효하다. 필터에서 사용자 존재를 확인할지, 토큰 버전 컬럼을 둘지 — 구현 계획에서 결정 (비밀번호 변경 후 무효화와 같은 문제, §1-4).
-- 삭제된 사용자의 작품에 달린 다른 사람 댓글·반응 처리(작품과 함께 삭제).
+- 유효한 액세스 토큰도 보호된 요청마다 필터가 사용자 존재를 확인한다. 삭제된 계정이면 401 `INVALID_TOKEN`이다. refresh도 기존 사용자 조회로 거절한다.
+- 삭제된 사용자의 작품에 달린 다른 사람 댓글·반응은 작품과 함께 삭제한다.
 - 활동 요약 API는 §9, 알림 설정·기기 토큰 API는 §8에 있다.
 
 ---

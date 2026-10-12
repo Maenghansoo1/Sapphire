@@ -3,6 +3,7 @@ package com.sapphire.hawe.group.service;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
+import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -47,6 +48,7 @@ class GroupServiceTests {
     @Mock GroupMissionSlotMapper slotMapper;
     @Mock MissionService missionService;
     @Mock ApplicationEventPublisher events;
+    @Mock FileStorage storage;
 
     private GroupService service;
 
@@ -54,7 +56,7 @@ class GroupServiceTests {
     void setUp() {
         service = new GroupService(groupMapper, groupMemberMapper, slotMapper,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), "https://hawe.app/invite",
-                missionService, events);
+                missionService, events, storage);
     }
 
     @Test

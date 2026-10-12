@@ -37,6 +37,13 @@ class UserMapperTests {
         assertEquals(email, users.findById(user.getId()).getEmail());
         assertNotNull(users.findById(user.getId()).getTermsAgreedAt());
         assertNotNull(users.findById(user.getId()).getPrivacyAgreedAt());
+        assertTrue(users.existsById(user.getId()));
+        users.updateNickname(user.getId(), "새이름");
+        assertEquals("새이름", users.findById(user.getId()).getNickname());
+        users.updateProfileImageUrl(user.getId(), "profiles/photo.jpg");
+        assertEquals("profiles/photo.jpg", users.findByEmail(email).getProfileImageUrl());
+        users.updateProfileImageUrl(user.getId(), null);
+        assertEquals(null, users.findById(user.getId()).getProfileImageUrl());
         assertThrows(DuplicateKeyException.class, () -> users.insert(user));
     }
 }

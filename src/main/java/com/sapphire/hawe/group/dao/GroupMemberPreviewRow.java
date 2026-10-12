@@ -5,6 +5,10 @@ public class GroupMemberPreviewRow {
     private Long userId;
     private String nickname;
     private String characterKey;
+    private String profileImageUrl;
+
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
 
     public Long getGroupId() {
         return groupId;

@@ -1,0 +1,51 @@
+{
+  "info": {
+    "name": "HA'WE - Me API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "토큰을 설정한 뒤 프로필 변경 요청을 순서대로 실행하세요. 탈퇴는 계정과 게시물을 삭제하므로 마지막에 실행하세요. 다른 멤버가 있는 그룹의 그룹장은 먼저 그룹장을 넘겨야 합니다."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" }
+  ],
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+  "item": [
+    {
+      "name": "1. 내 프로필 조회",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/me" }
+    },
+    {
+      "name": "2. 닉네임 변경",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"nickname\":\"하늘\"}" },
+        "url": "{{baseUrl}}/api/me/profile"
+      }
+    },
+    {
+      "name": "3. 프로필 사진 등록·교체 (파일 선택)",
+      "request": {
+        "method": "PUT",
+        "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "" }] },
+        "url": "{{baseUrl}}/api/me/profile-image"
+      }
+    },
+    {
+      "name": "4. 사진 반영 확인",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/me" }
+    },
+    {
+      "name": "5. 프로필 사진 삭제",
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/api/me/profile-image" }
+    },
+    {
+      "name": "6. 회원 탈퇴 (마지막에 실행)",
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/api/me" }
+    },
+    {
+      "name": "7. 탈퇴 후 토큰 거부 확인 (401 INVALID_TOKEN)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/me" }
+    }
+  ]
+}

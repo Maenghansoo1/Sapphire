@@ -123,7 +123,7 @@ public class CommentService {
 
     private CommentResponse response(CommentRow row, List<Long> mentions, Long userId) {
         return new CommentResponse(row.getId(), new MemberProfileResponse(row.getUserId(), row.getNickname(),
-                row.getCharacterKey(), null), row.getContent(),
+                row.getCharacterKey(), row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())), row.getContent(),
                 row.getImageUrl() == null ? null : storage.publicUrl(row.getImageUrl()),
                 mentions, SeoulTime.toOffset(row.getCreatedAt()), row.getUserId().equals(userId));
     }

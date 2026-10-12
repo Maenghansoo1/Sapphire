@@ -1,5 +1,6 @@
 package com.sapphire.hawe.global.security;
 
+import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.global.exception.BusinessException;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 class JwtAuthenticationFilterTests {
 
@@ -20,7 +24,7 @@ class JwtAuthenticationFilterTests {
     void publicCharacterListIgnoresExpiredBearerToken() throws Exception {
         JwtTokenProvider provider = mock(JwtTokenProvider.class);
         FilterChain chain = mock(FilterChain.class);
-        var filter = new JwtAuthenticationFilter(provider, mock(ObjectMapper.class));
+        var filter = new JwtAuthenticationFilter(provider, mock(ObjectMapper.class), mock(UserMapper.class));
         var request = request("GET", "/api/characters");
         var response = new MockHttpServletResponse();
 
@@ -36,7 +40,7 @@ class JwtAuthenticationFilterTests {
         JwtTokenProvider provider = mock(JwtTokenProvider.class);
         ObjectMapper objectMapper = mock(ObjectMapper.class);
         FilterChain chain = mock(FilterChain.class);
-        var filter = new JwtAuthenticationFilter(provider, objectMapper);
+        var filter = new JwtAuthenticationFilter(provider, objectMapper, mock(UserMapper.class));
         var request = request("PATCH", "/api/me/character");
         var response = new MockHttpServletResponse();
         when(provider.validateAndGetUserId("expired"))
@@ -47,6 +51,25 @@ class JwtAuthenticationFilterTests {
 
         assertEquals(401, response.getStatus());
         verifyNoInteractions(chain);
+    }
+
+    @Test
+    void deletedUserTokenIsRejectedBeforeChain() throws Exception {
+        SecurityContextHolder.clearContext();
+        JwtTokenProvider provider = mock(JwtTokenProvider.class);
+        UserMapper users = mock(UserMapper.class);
+        FilterChain chain = mock(FilterChain.class);
+        var filter = new JwtAuthenticationFilter(provider, new ObjectMapper(), users);
+        var request = request("GET", "/api/me");
+        var response = new MockHttpServletResponse();
+        when(provider.validateAndGetUserId("expired")).thenReturn(9L);
+
+        filter.doFilter(request, response, chain);
+
+        assertEquals(401, response.getStatus());
+        assertEquals("INVALID_TOKEN", new ObjectMapper().readTree(response.getContentAsString()).get("code").asText());
+        assertFalse(SecurityContextHolder.getContext().getAuthentication() != null);
+        verify(chain, never()).doFilter(request, response);
     }
 
     private MockHttpServletRequest request(String method, String path) {

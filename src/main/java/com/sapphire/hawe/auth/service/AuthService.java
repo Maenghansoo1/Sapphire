@@ -13,6 +13,7 @@ import com.sapphire.hawe.character.domain.ProfileCharacter;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.security.JwtTokenProvider;
 import com.sapphire.hawe.global.security.TokenErrorCode;
+import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.global.time.SeoulTime;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,13 +29,15 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final CharacterMapper characterMapper;
+    private final FileStorage storage;
 
     public AuthService(UserMapper userMapper, PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider,
-            CharacterMapper characterMapper) {
+            CharacterMapper characterMapper, FileStorage storage) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.characterMapper = characterMapper;
+        this.storage = storage;
     }
 
     @Transactional
@@ -86,7 +89,8 @@ public class AuthService {
             ProfileCharacter character = characterMapper.findById(user.getCharacterId());
             if (character != null) characterKey = character.getSvgKey();
         }
-        return new MeResponse(user.getId(), user.getEmail(), user.getNickname(), characterKey, null,
+        return new MeResponse(user.getId(), user.getEmail(), user.getNickname(), characterKey,
+                user.getProfileImageUrl() == null ? null : storage.publicUrl(user.getProfileImageUrl()),
                 SeoulTime.toOffset(user.getCreatedAt()));
     }
 

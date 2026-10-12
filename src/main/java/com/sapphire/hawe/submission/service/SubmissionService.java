@@ -256,7 +256,8 @@ public class SubmissionService {
             }
         } catch (Exception ignored) { }
         return new SubmissionResponse(row.getId(), row.getMissionId(),
-                new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(), null),
+                new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
+                        row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())),
                 row.getTemplate(), row.getMediaUrl() == null ? null : storage.publicUrl(row.getMediaUrl()),
                 row.getMediaType(), row.getCaption(), text, duration, waveform, reactions, commentCount,
                 SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());

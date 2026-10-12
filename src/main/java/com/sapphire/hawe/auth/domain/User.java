@@ -9,6 +9,7 @@ public class User {
     private String passwordHash;
     private String email;
     private Long characterId;
+    private String profileImageUrl;
     private LocalDateTime createdAt;
     private LocalDateTime termsAgreedAt;
     private LocalDateTime privacyAgreedAt;
@@ -52,6 +53,9 @@ public class User {
     public void setCharacterId(Long characterId) {
         this.characterId = characterId;
     }
+
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

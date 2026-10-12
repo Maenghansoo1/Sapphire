@@ -1,6 +1,7 @@
 package com.sapphire.hawe.global.security;
 
 import tools.jackson.databind.ObjectMapper;
+import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.ErrorResponse;
 import jakarta.servlet.FilterChain;
@@ -25,10 +26,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final ObjectMapper objectMapper;
+    private final UserMapper users;
 
-    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider, ObjectMapper objectMapper) {
+    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider, ObjectMapper objectMapper, UserMapper users) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.objectMapper = objectMapper;
+        this.users = users;
     }
 
     @Override
@@ -45,6 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null) {
             try {
                 Long userId = jwtTokenProvider.validateAndGetUserId(token);
+                if (!users.existsById(userId)) throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
                 var authentication = new UsernamePasswordAuthenticationToken(userId, null, List.of());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (BusinessException e) {

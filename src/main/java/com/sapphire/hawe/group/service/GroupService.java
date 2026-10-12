@@ -5,6 +5,7 @@ import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.time.SeoulTime;
+import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -60,17 +61,19 @@ public class GroupService {
     private final MissionService missionService;
     private final ApplicationEventPublisher events;
     private final String inviteBaseUrl;
+    private final FileStorage storage;
 
     public GroupService(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper,
             GroupMissionSlotMapper slotMapper, MissionProperties missionProperties,
             @Value("${hawe.invite.base-url:https://hawe.app/invite}") String inviteBaseUrl,
-            MissionService missionService, ApplicationEventPublisher events) {
+            MissionService missionService, ApplicationEventPublisher events, FileStorage storage) {
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.slotMapper = slotMapper;
         this.missionProperties = missionProperties;
         this.missionService = missionService;
         this.events = events;
+        this.storage = storage;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
@@ -194,7 +197,8 @@ public class GroupService {
         long total = groupMemberMapper.countByGroupId(groupId);
 
         List<GroupMemberResponse> content = rows.stream()
-                .map(row -> new GroupMemberResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(), null, row.getRole(),
+                .map(row -> new GroupMemberResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
+                        row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl()), row.getRole(),
                         row.getSubmissionCountThisMonth(), row.isStampedToday()))
                 .toList();
         return PageResponse.of(content, safePage, safeSize, total);
@@ -277,7 +281,8 @@ public class GroupService {
     }
 
     private MemberProfileResponse toMemberProfile(GroupMemberPreviewRow row) {
-        return new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(), null);
+        return new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
+                row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl()));
     }
 
     private void deleteGroupCascade(Long groupId) {
