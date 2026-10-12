@@ -9,6 +9,7 @@ import com.sapphire.hawe.poke.dao.PokeMapper;
 import com.sapphire.hawe.poke.domain.Poke;
 import com.sapphire.hawe.poke.dto.PokeRequest;
 import com.sapphire.hawe.poke.dto.PokeResponse;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,19 +43,31 @@ public class PokeService {
         if (!groupMemberMapper.existsByGroupIdAndUserId(groupId, targetId)) {
             throw new BusinessException(PokeErrorCode.TARGET_NOT_GROUP_MEMBER);
         }
-        if (pokeMapper.existsCurrentMissionSubmission(groupId, targetId)) {
+        Long missionId = pokeMapper.findCurrentMissionId(groupId);
+        if (missionId == null) {
+            throw new BusinessException(PokeErrorCode.NO_OPEN_MISSION);
+        }
+        if (pokeMapper.existsSubmission(missionId, targetId)) {
             throw new BusinessException(PokeErrorCode.TARGET_ALREADY_SUBMITTED);
+        }
+        if (pokeMapper.existsPoke(userId, targetId, missionId, request.type())) {
+            throw new BusinessException(PokeErrorCode.ALREADY_POKED);
         }
 
         Poke poke = new Poke();
         poke.setFromUserId(userId);
         poke.setToUserId(targetId);
         poke.setGroupId(groupId);
+        poke.setMissionId(missionId);
         poke.setType(request.type());
         poke.setSentAt(SeoulTime.now().withNano(0));
-        pokeMapper.insert(poke);
+        try {
+            pokeMapper.insert(poke);
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(PokeErrorCode.ALREADY_POKED);
+        }
 
-        return new PokeResponse(poke.getId(), poke.getToUserId(), poke.getType(),
+        return new PokeResponse(poke.getId(), poke.getToUserId(), poke.getType(), poke.getMissionId(),
                 SeoulTime.toOffset(poke.getSentAt()));
     }
 }

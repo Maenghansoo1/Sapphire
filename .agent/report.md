@@ -1,25 +1,24 @@
-﻿# 6A Android 서버 제출·결과 연결 보고
+﻿# 백엔드 5단계: 콕·똥뿌리기 보고
 
-## 변경 파일
+## 변경 파일과 동작
 
-- `android/app/src/main/java/com/sapphire/hawe/core/net/ApiClient.kt`, `SubmissionApi.kt`, `SubmissionRepository.kt`: multipart 제출, 60초 업로드 타임아웃, 토큰 재발급 후 본문 재전송, 서버 DTO 및 오류 분류를 추가했습니다.
-- `android/app/src/main/java/com/sapphire/hawe/core/data/DataStore.kt`, `DemoSeed.kt`, `core/model/Submission.kt`: 제출·피드의 서버 ID와 상태를 사용하고, 로컬 제출·파일 저장·좋아요·댓글 상태를 제거했습니다. 같은 미션의 피드는 재조회 때 유지하고 새 미션에서는 비웁니다.
-- `android/app/src/main/java/com/sapphire/hawe/app/{AppViewModel,RootScreen,MainNavigation}.kt`, `feature/mission/*Screen.kt`: 네 유형을 서버에 업로드하며 진행 표시, 실패 시 입력 보존·재시도, 오류별 안내, 지각 안내와 미션 재조회 신호를 연결했습니다.
-- `android/app/src/main/java/com/sapphire/hawe/feature/results/{ResultsScreen,SubmissionDetailScreen,ResultsFormat,VoicePlayerController}.kt`: 진입·복귀 시 서버 피드 로드, 재시도 및 접근 오류 처리, 지각 표시, 좋아요·댓글 UI 숨김, 서버 URL 음성 비동기 재생을 적용했습니다. 기존 `ResultComponents.kt`의 URL 모델 경로는 그대로 사용합니다.
-- `android/gradle/libs.versions.toml`, `android/app/build.gradle.kts`: Coil `coil-network-okhttp`을 추가해 서버 이미지 URL을 로드합니다.
-- `android/app/src/test/java/com/sapphire/hawe/core/{data/DataStoreTest,net/ApiClientTest,net/SubmissionRepositoryTest}.kt`, `feature/results/ResultsFormatTest.kt`: 서버 상태·multipart·재발급·DTO·오류·표시 문구 회귀 검증을 갱신/추가했습니다.
-- `docs/FRONTEND/ANDROID.md`: 6A의 현재 서버 연결 상태를 기록했습니다.
+- `src/main/resources/db/migration/V1__initial_schema.sql`: `pokes.mission_id`의 NOT NULL/FK와 `(from_user_id, to_user_id, mission_id, type)` UNIQUE를 추가했습니다. V2는 변경하지 않았습니다.
+- `src/main/java/com/sapphire/hawe/poke/{domain,dao,dto,service}/`: 현재 미션(그룹의 최소 슬롯 번호에서 최신 발행 미션)을 찾아 기록하고, 해당 미션의 대상 제출 여부를 검사합니다. 종류별 중복은 사전 조회와 DB UNIQUE로 막으며 동시 삽입 충돌을 `ALREADY_POKED`로 반환합니다. 응답에 `missionId`를 포함합니다. 현재 미션이 없으면 `NO_OPEN_MISSION`입니다.
+- `src/main/java/com/sapphire/hawe/mission/{dto,service}/`: 현재·개별 미션 응답의 각 `members[]`에 요청자가 보낸 종류 `pokedByMe`를 한 번의 조회로 채웁니다. 순서는 `poke`, `fling`이며 본인 항목과 기록 없는 항목은 `[]`입니다.
+- `src/main/java/com/sapphire/hawe/group/service/GroupService.java`: 그룹 삭제 때 pokes를 missions보다 먼저 삭제해 새 FK와 충돌하지 않게 했습니다.
+- `src/test/java/com/sapphire/hawe/`의 poke·mission·group·time 관련 테스트: 서비스 검사 순서와 중복 충돌, 실 MariaDB의 FK/UNIQUE·미션별 조회, 인증/검증/응답/조회 MockMvc 흐름을 검증했습니다. `PokeControllerTests`를 새로 추가했습니다.
+- `docs/BACKEND/{API_DESIGN,BACKEND_DB,MISSIONS_API,CONTRACT_DECISIONS,CONTRACT_WORK_PLAN}.md`와 `docs/BACKEND/postman/HAWE_POKE.postman_collection.json`: 구현 계약, 스키마, 요청 예시와 5단계 상태를 반영했습니다.
 
-## 검증
+## 검증 결과
 
-- JDK 17: `android\gradlew.bat testDebugUnitTest assembleDebug lint assembleRelease --quiet` 통과. JVM 테스트 96개, 실패 0, 오류 0입니다.
-- `git diff --check` 통과(내용 오류 없음; 기존 파일의 LF/CRLF 변환 경고만 출력).
-- 잔여 코드 검색: 제품 화면에 `toggleLike`/`addComment`/`deleteComment`/`CommentInput` 호출 없음. `LikeButton` 정의만 7A 재사용을 위해 남아 있습니다.
-- 수동 서버 시나리오는 미검증입니다. `adb` 연결 기기는 있었으나 로컬 8080 백엔드가 실행 중이지 않아 가입·제출·피드·이미지·음성·재시작·오프라인·지각 동작을 실제 서버로 확인하지 못했습니다.
+- Java 25 `mvnw.cmd clean test -q`: 통과. 테스트 108개, 실패 0, 오류 0, 건너뜀 0. 컴파일은 이 명령에 포함됩니다. 별도 lint/typecheck 명령은 이 Maven 프로젝트에 없습니다.
+- Postman 컬렉션 `ConvertFrom-Json`: 통과. 한글 대체 문자 없음.
+- `rg existsCurrentMissionSubmission src`: 잔여 사용처 없음.
+- `git diff --check`: 통과. LF/CRLF 변환 경고만 출력됐습니다. 최종 diff는 백엔드 코드·테스트·문서와 이 보고서로 한정했습니다. 이미 있던 `.agent/plan.md`, `.agent/review.md` 변경 및 Cordova node_modules의 미추적 파일은 건드리지 않았습니다.
+- 별도 실행 서버를 이용한 수동 HTTP 스모크는 미검증입니다. 동일 계약의 MockMvc 통합 테스트에서 인증, `poke`/`fling`, 중복 409, `pokedByMe`, 대상 제출 뒤 409를 검증했습니다.
 
-## 남은 위험·가정·충돌
+## DB 재생성·남은 위험·가정
 
-- 4A Android 작업과 백엔드 6단계 변경이 작업 트리에 이미 미커밋 상태였습니다. 이 구현은 그 위에 6A를 쌓았고 백엔드, iOS, Cordova 파일은 수정하지 않았습니다. Android의 공통 파일(`DataStore.kt`, `MainNavigation.kt`, `MissionScreen.kt` 등)은 4A와 변경이 겹치므로 별도 커밋으로 분리하려면 검토가 필요합니다.
-- `DemoSeed`/`TopicPool`은 테스트·프리뷰용, `poke`/`records`/`stats`는 기존 코드 호환용으로 남겼습니다. 제품의 콕·달력·활동 요약은 계속 숨김/준비 중 상태입니다.
-- 서버 계약과 다른 별도 설계 변경은 하지 않았습니다. 서버에서 제공하지 않는 스티커·댓글은 7A까지 숨깁니다.
-- 디바이스 기반 흐름, 특히 URL 미디어 로딩·재생과 네트워크 타임아웃 후 중복 제출 수렴은 JVM 테스트 외 수동 확인이 필요합니다.
+- 계획에 따라 로컬 `hawe` 개발 DB를 백업한 뒤 재생성했습니다. 백업: `C:\Users\kimch\AppData\Local\Temp\hawe-before-pokes-20261012-153131.sql` (20,813바이트). 재생성 전 사용자 2명, 미션 2개, 제출 4개가 있었습니다. 새 DB에 Flyway V1/V2가 적용됐고 전체 테스트가 통과했습니다. 이전 개발 데이터가 필요하면 이 백업에서 복원해야 합니다.
+- 계획의 V1 직접 수정 결정을 따랐습니다. 이미 V1을 적용한 다른 DB는 이 변경과 checksum이 다르므로 그 환경의 별도 마이그레이션 또는 개발 DB 재생성이 필요합니다. 운영 DB에는 적용하지 않았습니다.
+- 알림/FCM/notifications 저장은 9단계, 앱 버튼과 상태 표시는 5A 범위이므로 이번 변경에 넣지 않았습니다. 관련 파일과 Android/iOS/Cordova는 변경하지 않았습니다.

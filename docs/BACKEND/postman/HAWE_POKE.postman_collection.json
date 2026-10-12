@@ -1,0 +1,71 @@
+{
+  "info": {
+    "name": "HA'WE - POKE API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "그룹 멤버 토큰과 groupId, 미제출 대상의 toUserId를 입력하세요. 현재 미션이 발행된 그룹에서 조회 → 콕 → 중복 콕 → 똥 → 재조회 순서로 실행합니다. 알림 발송은 9단계에서 연결합니다."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "groupId", "value": "" },
+    { "key": "toUserId", "value": "" },
+    { "key": "missionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. 현재 미션 확인 (pokedByMe 초기값 [])",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200 && pm.response.json().missions.length) pm.collectionVariables.set('missionId', pm.response.json().missions[0].missionId);"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/missions/today"
+      }
+    },
+    {
+      "name": "2. 콕 보내기 (201)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"toUserId\":{{toUserId}},\"type\":\"poke\"}" },
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/pokes"
+      }
+    },
+    {
+      "name": "3. 같은 콕 다시 보내기 (409 ALREADY_POKED)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"toUserId\":{{toUserId}},\"type\":\"poke\"}" },
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/pokes"
+      }
+    },
+    {
+      "name": "4. 똥 뿌리기 (201)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"toUserId\":{{toUserId}},\"type\":\"fling\"}" },
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/pokes"
+      }
+    },
+    {
+      "name": "5. 현재 미션 재조회 (pokedByMe: poke, fling)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/missions/today"
+      }
+    }
+  ]
+}

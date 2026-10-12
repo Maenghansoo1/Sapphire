@@ -15,6 +15,8 @@ import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.mission.dao.MissionMemberRow;
 import com.sapphire.hawe.mission.dao.MissionSummaryRow;
+import com.sapphire.hawe.poke.dao.PokeMapper;
+import com.sapphire.hawe.poke.dao.PokedRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,13 +46,14 @@ class MissionServiceTests {
     @Mock GroupMemberMapper members;
     @Mock GroupMissionSlotMapper slots;
     @Mock UserMapper users;
+    @Mock PokeMapper pokes;
 
     private MissionService service;
 
     @BeforeEach
     void setUp() {
         service = new MissionService(missions, groups, members, slots, users,
-                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), new ObjectMapper());
+                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), new ObjectMapper(), pokes);
     }
 
     @Test
@@ -148,6 +151,33 @@ class MissionServiceTests {
         assertEquals(1, response.number());
         assertEquals(SeoulTime.toOffset(row.getPublishedAt().plusDays(1)), response.closesAt());
         assertTrue(response.members().getFirst().submitted());
+        assertEquals(List.of(), response.members().getFirst().pokedByMe());
+    }
+
+    @Test
+    void memberStatusesShowOnlyMySentTypesInFixedOrder() {
+        when(missions.findById(10L, 7L)).thenReturn(row(10L, 11L, 1, "{}"));
+        when(members.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
+        MissionMemberRow me = new MissionMemberRow();
+        me.setUserId(7L);
+        MissionMemberRow target = new MissionMemberRow();
+        target.setUserId(8L);
+        when(missions.findMemberStatuses(10L)).thenReturn(List.of(me, target));
+        when(pokes.findSentTypes(10L, 7L)).thenReturn(List.of(poked(8L, "fling"),
+                poked(8L, "poke"), poked(7L, "poke")));
+
+        var response = service.getMission(7L, 10L);
+
+        assertEquals(List.of(), response.members().get(0).pokedByMe());
+        assertEquals(List.of("poke", "fling"), response.members().get(1).pokedByMe());
+        verify(pokes).findSentTypes(10L, 7L);
+    }
+
+    private static PokedRow poked(Long toUserId, String type) {
+        PokedRow row = new PokedRow();
+        row.setToUserId(toUserId);
+        row.setType(type);
+        return row;
     }
 
     @Test

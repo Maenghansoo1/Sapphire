@@ -29,6 +29,7 @@ erDiagram
   USERS ||--o{ POKES : sends
   USERS ||--o{ POKES : receives
   GROUPS ||--o{ POKES : scopes
+  MISSIONS ||--o{ POKES : scopes
   USERS ||--o{ NOTIFICATIONS : sends
   USERS ||--o{ NOTIFICATIONS : receives
 
@@ -125,6 +126,7 @@ erDiagram
     bigint from_user_id FK
     bigint to_user_id FK
     bigint group_id FK
+    bigint mission_id FK
     string type
     datetime sent_at
   }
@@ -323,7 +325,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - `POST /api/submissions/{id}/reactions` — 스티커 반응
 
 ### 재촉 기능
-- `POST /api/groups/{groupId}/pokes` — 콕찌르기/똥뿌리기 (`toUserId`, `type`). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별
+- `POST /api/groups/{groupId}/pokes` — 콕찌르기/똥뿌리기 (`toUserId`, `type`). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별한다. `pokes.mission_id`는 현재 미션 FK이며 `(from_user_id, to_user_id, mission_id, type)`에 UNIQUE 제약을 둔다. 응답은 `missionId`를 포함하고 현재 미션의 `members[].pokedByMe`는 요청자가 보낸 종류를 표시한다. 알림 발송은 9단계에서 연결한다.
 
 ### 마이페이지
 - `GET /api/me/calendar?month=2026-09` — 이번 달 도장 현황 (그룹 통합)

@@ -8,6 +8,7 @@ public class Poke {
     private Long fromUserId;
     private Long toUserId;
     private Long groupId;
+    private Long missionId;
     private String type;
     private LocalDateTime sentAt;
 
@@ -41,6 +42,14 @@ public class Poke {
 
     public void setGroupId(Long groupId) {
         this.groupId = groupId;
+    }
+
+    public Long getMissionId() {
+        return missionId;
+    }
+
+    public void setMissionId(Long missionId) {
+        this.missionId = missionId;
     }
 
     public String getType() {

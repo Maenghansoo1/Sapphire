@@ -7,7 +7,9 @@ public enum PokeErrorCode implements ErrorCode {
 
     CANNOT_POKE_SELF(HttpStatus.BAD_REQUEST, "자기 자신에게는 보낼 수 없습니다"),
     TARGET_NOT_GROUP_MEMBER(HttpStatus.NOT_FOUND, "상대방이 그룹 멤버가 아닙니다"),
-    TARGET_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "오늘 미션을 이미 제출한 멤버입니다");
+    TARGET_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "현재 미션을 이미 제출한 멤버입니다"),
+    ALREADY_POKED(HttpStatus.CONFLICT, "이미 보낸 재촉입니다"),
+    NO_OPEN_MISSION(HttpStatus.CONFLICT, "지금 열려 있는 미션이 없습니다");
 
     private final HttpStatus httpStatus;
     private final String message;

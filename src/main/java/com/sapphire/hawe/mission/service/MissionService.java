@@ -22,6 +22,8 @@ import com.sapphire.hawe.mission.dto.MissionTemplateListResponse;
 import com.sapphire.hawe.mission.dto.MissionTemplateResponse;
 import com.sapphire.hawe.mission.dto.TodayMissionsResponse;
 import com.sapphire.hawe.mission.dto.TodayMissionSummary;
+import com.sapphire.hawe.poke.dao.PokeMapper;
+import com.sapphire.hawe.poke.dao.PokedRow;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -31,9 +33,11 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @EnableConfigurationProperties(MissionProperties.class)
@@ -46,10 +50,11 @@ public class MissionService {
     private final UserMapper userMapper;
     private final MissionProperties missionProperties;
     private final ObjectMapper objectMapper;
+    private final PokeMapper pokeMapper;
 
     public MissionService(MissionMapper missionMapper, GroupMapper groupMapper,
             GroupMemberMapper groupMemberMapper, GroupMissionSlotMapper slotMapper, UserMapper userMapper,
-            MissionProperties missionProperties, ObjectMapper objectMapper) {
+            MissionProperties missionProperties, ObjectMapper objectMapper, PokeMapper pokeMapper) {
         this.missionMapper = missionMapper;
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
@@ -57,6 +62,7 @@ public class MissionService {
         this.userMapper = userMapper;
         this.missionProperties = missionProperties;
         this.objectMapper = objectMapper;
+        this.pokeMapper = pokeMapper;
     }
 
     public TodayMissionsResponse getTodayMissions(Long userId, Long groupId) {
@@ -67,7 +73,7 @@ public class MissionService {
         requireMember(groupId, userId);
         List<MissionRow> rows = missionMapper.findCurrentByGroupId(groupId, userId);
         Map<Integer, LocalTime> publishTimes = publishTimes(groupId);
-        List<MissionResponse> missions = rows.stream().map(row -> toResponse(row, publishTimes)).toList();
+        List<MissionResponse> missions = rows.stream().map(row -> toResponse(row, publishTimes, userId)).toList();
         LocalDate date = rows.isEmpty() ? SeoulTime.today() : rows.getFirst().getMissionDate();
         LocalDateTime nextPublishAt = nextPublishAt(group.getDailyMissionCount(), rows, publishTimes);
         return new TodayMissionsResponse(date, group.getDailyMissionCount(), SeoulTime.toOffset(nextPublishAt), missions);
@@ -79,7 +85,7 @@ public class MissionService {
             throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
         }
         requireMember(row.getGroupId(), userId);
-        return toResponse(row, publishTimes(row.getGroupId()));
+        return toResponse(row, publishTimes(row.getGroupId()), userId);
     }
 
     public MissionTemplateListResponse listTemplates() {
@@ -117,11 +123,21 @@ public class MissionService {
         }
     }
 
-    private MissionResponse toResponse(MissionRow row, Map<Integer, LocalTime> publishTimes) {
+    private MissionResponse toResponse(MissionRow row, Map<Integer, LocalTime> publishTimes, Long viewerId) {
         Map<String, Object> params = resolveParams(row.getParams());
         LocalTime publishTime = publishTimes.getOrDefault(row.getSlotNo(), missionProperties.defaultPublishTime());
+        Map<Long, Set<String>> sent = new HashMap<>();
+        for (PokedRow poke : pokeMapper.findSentTypes(row.getId(), viewerId)) {
+            sent.computeIfAbsent(poke.getToUserId(), ignored -> new HashSet<>()).add(poke.getType());
+        }
         List<MissionMemberStatus> members = missionMapper.findMemberStatuses(row.getId()).stream()
-                .map(member -> new MissionMemberStatus(member.getUserId(), member.isSubmitted())).toList();
+                .map(member -> {
+                    Set<String> types = member.getUserId().equals(viewerId)
+                            ? Set.of() : sent.getOrDefault(member.getUserId(), Set.of());
+                    List<String> pokedByMe = List.of("poke", "fling").stream()
+                            .filter(types::contains).toList();
+                    return new MissionMemberStatus(member.getUserId(), member.isSubmitted(), pokedByMe);
+                }).toList();
         return new MissionResponse(row.getId(), row.getGroupId(), row.getSlotNo(), row.getNumber(),
                 displayContent(row.getContent(), params), row.getCategory(), row.getTemplate(),
                 media(row.getTemplate()), params, SeoulTime.toOffset(row.getPublishedAt()),

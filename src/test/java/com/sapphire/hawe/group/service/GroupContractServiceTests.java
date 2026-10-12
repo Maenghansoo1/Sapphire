@@ -208,8 +208,8 @@ class GroupContractServiceTests {
         order.verify(groups).deleteReactionsByGroupId(11L);
         order.verify(groups).deleteSubmissionGuessesByGroupId(11L);
         order.verify(groups).deleteSubmissionsByGroupId(11L);
-        order.verify(groups).deleteMissionsByGroupId(11L);
         order.verify(groups).deletePokesByGroupId(11L);
+        order.verify(groups).deleteMissionsByGroupId(11L);
         order.verify(slots).deleteByGroupId(11L);
         order.verify(members).deleteByGroupId(11L);
         order.verify(groups).deleteById(11L);

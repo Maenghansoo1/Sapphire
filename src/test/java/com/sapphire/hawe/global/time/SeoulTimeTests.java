@@ -34,7 +34,7 @@ class SeoulTimeTests {
 
     @Test
     void serializesOffsetInResponse() {
-        var response = new PokeResponse(1L, 2L, "poke",
+        var response = new PokeResponse(1L, 2L, "poke", 10L,
                 SeoulTime.toOffset(LocalDateTime.of(2026, 9, 28, 15, 41, 48)));
         String json = new ObjectMapper().writeValueAsString(response);
         assertTrue(json.contains("\"sentAt\":\"2026-09-28T15:41:48+09:00\""), json);

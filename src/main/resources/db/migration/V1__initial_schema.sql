@@ -155,14 +155,18 @@ CREATE TABLE `pokes` (
   `from_user_id` bigint(20) NOT NULL,
   `to_user_id` bigint(20) NOT NULL,
   `group_id` bigint(20) NOT NULL,
+  `mission_id` bigint(20) NOT NULL,
   `type` varchar(20) NOT NULL,
   `sent_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_pokes_from_to_mission_type` (`from_user_id`,`to_user_id`,`mission_id`,`type`),
+  KEY `fk_pokes_mission` (`mission_id`),
   KEY `fk_pokes_from_user` (`from_user_id`),
   KEY `fk_pokes_to_user` (`to_user_id`),
   KEY `fk_pokes_group` (`group_id`),
   CONSTRAINT `fk_pokes_from_user` FOREIGN KEY (`from_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_pokes_group` FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`),
+  CONSTRAINT `fk_pokes_mission` FOREIGN KEY (`mission_id`) REFERENCES `missions` (`id`),
   CONSTRAINT `fk_pokes_to_user` FOREIGN KEY (`to_user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

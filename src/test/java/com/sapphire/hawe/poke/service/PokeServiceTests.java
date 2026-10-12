@@ -15,12 +15,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +46,7 @@ class PokeServiceTests {
         when(groupMapper.findById(11L)).thenReturn(group(11L));
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
+        when(pokeMapper.findCurrentMissionId(11L)).thenReturn(10L);
         doAnswer(invocation -> {
             Poke poke = invocation.getArgument(0);
             poke.setId(1L);
@@ -55,11 +58,13 @@ class PokeServiceTests {
         assertEquals(1L, response.id());
         assertEquals(8L, response.toUserId());
         assertEquals("fling", response.type());
+        assertEquals(10L, response.missionId());
         assertNotNull(response.sentAt());
         ArgumentCaptor<Poke> saved = ArgumentCaptor.forClass(Poke.class);
         verify(pokeMapper).insert(saved.capture());
         assertEquals(7L, saved.getValue().getFromUserId());
         assertEquals(11L, saved.getValue().getGroupId());
+        assertEquals(10L, saved.getValue().getMissionId());
     }
 
     @Test
@@ -91,13 +96,45 @@ class PokeServiceTests {
     }
 
     @Test
-    void targetWhoSubmittedTodayCannotBePoked() {
+    void targetWhoSubmittedCurrentMissionCannotBePoked() {
         when(groupMapper.findById(11L)).thenReturn(group(11L));
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
-        when(pokeMapper.existsCurrentMissionSubmission(11L, 8L)).thenReturn(true);
+        when(pokeMapper.findCurrentMissionId(11L)).thenReturn(10L);
+        when(pokeMapper.existsSubmission(10L, 8L)).thenReturn(true);
 
         assertFailsWith(PokeErrorCode.TARGET_ALREADY_SUBMITTED, new PokeRequest(8L, "poke"));
+    }
+
+    @Test
+    void noCurrentMissionReturnsConflict() {
+        allowMembers();
+        when(pokeMapper.findCurrentMissionId(11L)).thenReturn(null);
+        assertFailsWith(PokeErrorCode.NO_OPEN_MISSION, new PokeRequest(8L, "poke"));
+    }
+
+    @Test
+    void sameTypeCannotBeSentTwice() {
+        allowMembers();
+        when(pokeMapper.findCurrentMissionId(11L)).thenReturn(10L);
+        when(pokeMapper.existsPoke(7L, 8L, 10L, "poke")).thenReturn(true);
+        assertFailsWith(PokeErrorCode.ALREADY_POKED, new PokeRequest(8L, "poke"));
+    }
+
+    @Test
+    void concurrentDuplicateBecomesAlreadyPoked() {
+        allowMembers();
+        when(pokeMapper.findCurrentMissionId(11L)).thenReturn(10L);
+        doThrow(new DuplicateKeyException("duplicate")).when(pokeMapper).insert(any(Poke.class));
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.sendPoke(7L, 11L, new PokeRequest(8L, "poke")));
+        assertEquals(PokeErrorCode.ALREADY_POKED, error.errorCode());
+    }
+
+    private void allowMembers() {
+        when(groupMapper.findById(11L)).thenReturn(group(11L));
+        when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
+        when(groupMemberMapper.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
     }
 
     private void assertFailsWith(ErrorCode expected, PokeRequest request) {

@@ -201,9 +201,11 @@
 { "toUserId": 7, "type": "poke" }   // type: "poke" | "fling"
 
 // Response 201
-{ "id": 1, "toUserId": 7, "type": "poke", "sentAt": "..." }
+{ "id": 1, "toUserId": 7, "type": "poke", "missionId": 10, "sentAt": "2026-09-28T15:41:48+09:00" }
 ```
-에러: `TARGET_ALREADY_SUBMITTED` (409), `TARGET_NOT_GROUP_MEMBER` (404)
+현재 미션은 그룹의 가장 작은 슬롯 번호에서 가장 최근 발행된 미션이다. 현재 미션이 없으면 보낼 수 없다. 같은 보낸 사람·받는 사람·미션·종류마다 한 번만 보낼 수 있으므로 `poke`와 `fling`은 각각 한 번 가능하다. 알림 발송은 9단계에서 연결한다.
+
+에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `CANNOT_POKE_SELF` (400), `TARGET_NOT_GROUP_MEMBER` (404), `NO_OPEN_MISSION` (409), `TARGET_ALREADY_SUBMITTED` (409), `ALREADY_POKED` (409), `VALIDATION_ERROR` (400).
 
 ---
 

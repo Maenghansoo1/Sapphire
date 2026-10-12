@@ -79,7 +79,8 @@ class GroupContractMapperTests {
         jdbc.update("INSERT INTO comment_mentions (comment_id, mentioned_user_id) VALUES (?, ?)", comment, other);
         jdbc.update("INSERT INTO reactions (submission_id, user_id, sticker_type) VALUES (?, ?, 'HEART')", submission, owner);
         jdbc.update("INSERT INTO submission_guesses (submission_id, user_id, guess_text, is_correct) VALUES (?, ?, 'yes', 0)", submission, other);
-        jdbc.update("INSERT INTO pokes (from_user_id, to_user_id, group_id, type) VALUES (?, ?, ?, 'POKE')", owner, other, removed);
+        jdbc.update("INSERT INTO pokes (from_user_id, to_user_id, group_id, mission_id, type) VALUES (?, ?, ?, ?, 'poke')",
+                owner, other, removed, mission);
 
         service.leaveGroup(owner, removed, null);
         assertNull(groups.findById(removed));

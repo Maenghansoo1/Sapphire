@@ -353,7 +353,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 
 ---
 
-## 4. Pokes — 상태: 결정 완료 (반영 전)
+## 4. Pokes — 상태: 반영됨 (백엔드; 앱은 5A, 알림 발송은 9단계)
 
 ### 4-1. 결정
 
@@ -382,7 +382,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 
 | 대상 | 내용 |
 |---|---|
-| 백엔드 | 새 마이그레이션: `pokes.mission_id` + 유니크 키 `(from_user_id, to_user_id, mission_id, type)`. `PokeService` 현재 미션 조회·횟수 검사, `PokeErrorCode.ALREADY_POKED`·`NO_OPEN_MISSION`. `PokeResponse.missionId`. 현재 미션 응답 `members[].pokedByMe`. 보내면 받는 사람에게 `poke`/`fling` 알림 발송(§8) |
+| 백엔드 | V1 최종 스키마에 `pokes.mission_id` + 유니크 키 `(from_user_id, to_user_id, mission_id, type)` 반영. `PokeService` 현재 미션 조회·횟수 검사, `PokeErrorCode.ALREADY_POKED`·`NO_OPEN_MISSION`, `PokeResponse.missionId`, 현재 미션 응답 `members[].pokedByMe` 구현. 알림 발송은 9단계에서 연결 |
 | Android | 05 화면 `MissionMemberRow`에 똥뿌리기 버튼, 종류별 보낸 상태, 토스트 문구. `DataStore.poke` → API, `StoredMission.poked` → 서버 `pokedByMe`. 409 `ALREADY_POKED`/`TARGET_ALREADY_SUBMITTED`는 상태를 새로고침하고 조용히 처리. `PushKind`에 `fling` 추가, `poke` 채널로 표시(§8) |
 | iOS | Android와 같음 (`MissionView.status(for:)`, `DataStore.poke`, `PushKind`) |
 | 설계 문서 | `API_DESIGN.md` §5 Poke(횟수 제한·`missionId`·오류 코드). `BACKEND_DB.md` pokes. `PROJECT_OVERVIEW.md` §3 재촉 |

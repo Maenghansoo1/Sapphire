@@ -286,8 +286,8 @@ public class GroupService {
         groupMapper.deleteReactionsByGroupId(groupId);
         groupMapper.deleteSubmissionGuessesByGroupId(groupId);
         groupMapper.deleteSubmissionsByGroupId(groupId);
-        groupMapper.deleteMissionsByGroupId(groupId);
         groupMapper.deletePokesByGroupId(groupId);
+        groupMapper.deleteMissionsByGroupId(groupId);
         slotMapper.deleteByGroupId(groupId);
         groupMemberMapper.deleteByGroupId(groupId);
         groupMapper.deleteById(groupId);
