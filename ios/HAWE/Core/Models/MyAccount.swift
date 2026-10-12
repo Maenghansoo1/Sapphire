@@ -34,7 +34,7 @@ struct ActivityStats: Hashable {
     var byType: [MissionType: Int]
 }
 
-/// 내 계정 — 기본 프로필, 로그인 연결 (활동 요약은 DataStore.stats 에서 계산)
+/// 내 계정 — 기본 프로필, 로그인 연결 (활동 요약은 서버 `/api/me/stats` 값을 DataStore.stats 에 둬요)
 struct MyAccount: Hashable {
     var profile: Profile
     var email: String?

@@ -86,6 +86,17 @@ final class DataStore {
     private(set) var groupsState: LoadState = .notLoaded
     /// 내 기본 프로필 (마이페이지)
     private(set) var myProfile: Profile = .mockMine
+    /// 17 마이페이지 활동 요약 — 서버에서 아직 못 받았으면 nil
+    private(set) var stats: ActivityStats?
+    /// 15 달력 — (그룹, 달) → 그 달 기록
+    private var calendars: [CalendarKey: [DayRecord]] = [:]
+    /// 달력에서 연 지난 미션의 피드 (missionID → 제출물)
+    private var pastFeeds: [Int: [Submission]] = [:]
+
+    private struct CalendarKey: Hashable {
+        let groupID: Int
+        let month: String
+    }
 
     init() {}
 
@@ -105,35 +116,14 @@ final class DataStore {
         groups = []
         groupsState = .notLoaded
         myProfile = .mockMine
+        stats = nil
+        calendars = [:]
+        pastFeeds = [:]
     }
 
-    /// 17 마이페이지 활동 요약 (서버 통계 API 가 생기기 전까지 화면에서는 숨겨요)
-    var stats: ActivityStats {
-        let mine = groups.flatMap { $0.missions.filter(\.serverSubmittedByMe) }
-        var byType: [MissionType: Int] = [:]
-        for mission in mine {
-            if let type = mission.type { byType[type, default: 0] += 1 }
-        }
-        return ActivityStats(
-            completedMissions: mine.count,
-            streakDays: streak(days: Set(mine.map { Self.calendar.startOfDay(for: $0.opensAt) })),
-            groupCount: groups.count,
-            byType: byType
-        )
-    }
-
-    /// 오늘(또는 어제)부터 거꾸로 하루도 빠지지 않고 올린 날 수
-    private func streak(days: Set<Date>) -> Int {
-        var day = Self.calendar.startOfDay(for: .now)
-        if !days.contains(day) {
-            day = Self.calendar.date(byAdding: .day, value: -1, to: day) ?? day
-        }
-        var count = 0
-        while days.contains(day) {
-            count += 1
-            day = Self.calendar.date(byAdding: .day, value: -1, to: day) ?? day
-        }
-        return count
+    /// 17 마이페이지 활동 요약 (`/api/me/stats`)
+    func applyStats(_ stats: ActivityStats) {
+        self.stats = stats
     }
 
     // MARK: - 그룹 (서버)
@@ -278,8 +268,13 @@ final class DataStore {
         }
     }
 
-    /// 10~13 결과 피드
+    /// 10~13 결과 피드 — 달력에서 연 지난 미션이면 pastFeeds 에 따로 둬요.
     func applyFeed(_ submissions: [Submission], missionID: Int, groupID: Int) {
+        let isCurrent = groups.first { $0.id == groupID }?.missions.last?.id == missionID
+        if !isCurrent && calendarRecord(groupID: groupID, missionID: missionID) != nil {
+            pastFeeds[missionID] = submissions
+            return
+        }
         update(groupID) { group in
             guard let index = group.missions.indices.last, group.missions[index].id == missionID else { return }
             group.missions[index].submissions = submissions
@@ -299,9 +294,11 @@ final class DataStore {
 
     /// 10~13 결과 — 피드를 받아 온 미션만 (내가 올려야 서버가 피드를 줘요, §5-2)
     func result(groupID: Int, missionID: Int) -> MissionResult? {
-        guard let stored = groups.first(where: { $0.id == groupID }),
-              let mission = stored.missions.first(where: { $0.id == missionID }),
-              mission.feedLoaded, let type = mission.type else { return nil }
+        guard let stored = groups.first(where: { $0.id == groupID }) else { return nil }
+        guard let mission = stored.missions.first(where: { $0.id == missionID }) else {
+            return pastResult(stored, missionID: missionID)
+        }
+        guard mission.feedLoaded, let type = mission.type else { return nil }
         let done = Set(mission.submissions.compactMap(\.authorID))
         return MissionResult(
             id: mission.id,
@@ -315,26 +312,37 @@ final class DataStore {
         )
     }
 
+    /// 달력에서 연 지난 미션 — 미션 정보는 달력 기록, 제출물은 pastFeeds 에서 가져와요.
+    private func pastResult(_ stored: StoredGroup, missionID: Int) -> MissionResult? {
+        guard let record = calendarRecord(groupID: stored.id, missionID: missionID),
+              let submissions = pastFeeds[missionID] else { return nil }
+        let done = Set(submissions.compactMap(\.authorID))
+        return MissionResult(
+            id: missionID,
+            groupName: stored.detail.name,
+            type: record.type,
+            topic: record.topic,
+            date: record.date,
+            memberCount: record.memberCount,
+            submissions: submissions,
+            pending: stored.detail.members.filter { !done.contains($0.id) }.map(\.displayed)
+        )
+    }
+
     // MARK: - 기록
 
-    /// 15 캘린더 — 지난 미션 중 누군가 올린 날 + 오늘(내가 올렸으면). 서버 기록 API 가 생기기 전까지 진입은 준비 중이에요.
-    func records(_ groupID: Int) -> [DayRecord] {
-        guard let stored = groups.first(where: { $0.id == groupID }) else { return [] }
-        let today = Self.calendar.startOfDay(for: .now)
-        return stored.missions.compactMap { mission in
-            let day = Self.calendar.startOfDay(for: mission.opensAt)
-            let mine = mission.serverSubmittedByMe
-            guard let type = mission.type, !mission.submissions.isEmpty, day < today || mine else { return nil }
-            return DayRecord(
-                date: mission.opensAt,
-                type: type,
-                topic: mission.topic,
-                doneCount: mission.submissions.count,
-                memberCount: stored.detail.members.count,
-                didSubmit: mine,
-                missionID: mission.id
-            )
-        }
+    /// 15 캘린더 — 서버에서 받은 그 달 기록 (`/api/groups/{id}/calendar`)
+    func applyCalendar(_ records: [DayRecord], groupID: Int, month: Date) {
+        calendars[CalendarKey(groupID: groupID, month: CalendarRepository.monthString(month))] = records
+    }
+
+    /// 아직 불러오지 않은 달이면 nil
+    func records(_ groupID: Int, month: Date) -> [DayRecord]? {
+        calendars[CalendarKey(groupID: groupID, month: CalendarRepository.monthString(month))]
+    }
+
+    func calendarRecord(groupID: Int, missionID: Int) -> DayRecord? {
+        calendars.filter { $0.key.groupID == groupID }.values.joined().first { $0.missionID == missionID }
     }
 
     // MARK: - 앱 안 체험 (미리보기 전용 — 실제 화면은 GroupRepository 를 써요)

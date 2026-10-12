@@ -1,29 +1,27 @@
 import SwiftUI
 
-/// 하루치 기록 (15 캘린더 칸)
-struct DayRecord: Hashable {
-    var date: Date
-    var type: MissionType
-    var topic: String
-    var doneCount: Int
-    var memberCount: Int
-    /// 내가 그날 올렸는지 — 안 올린 날은 결과를 볼 수 없어요 (CLAUDE.md §5-2, 사용자 결정 2026-10-12)
-    var didSubmit: Bool
-    /// '모아보기'로 열 미션
-    var missionID: Int? = nil
-}
-
 /// 15 기록 캘린더 (Figma 1:1311)
-/// 그룹별 월간 캘린더. 기록 있는 날에 유형 이름(그림/사진/글/음성), 오늘 테두리,
+/// 그룹별 월간 캘린더. 기록 있는 날에 내 도장(참잘했어요·지각·벌점, 없으면 유형 이름), 오늘 테두리,
 /// 날짜를 고르면 아래 카드 → '모아보기'로 그날 결과 공개 화면 (내가 올린 날만)
+/// 달을 열 때마다 서버(`/api/groups/{id}/calendar`)에서 그 달 기록을 받아요.
 struct RecordCalendarView: View {
     let groupID: Int
     @Binding var path: [MainRoute]
 
     @Environment(\.dismiss) private var dismiss
     @Environment(DataStore.self) private var store
+    @Environment(AppSession.self) private var session
+    @Environment(Services.self) private var services
     @State private var month: Date
     @State private var selected: Date?
+    @State private var failed = false
+    @State private var reload = 0
+
+    /// 달이 바뀌거나 '다시 시도'를 누르면 다시 받아요.
+    private struct LoadKey: Equatable {
+        let month: Date
+        let reload: Int
+    }
 
     private static let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
@@ -43,7 +41,8 @@ struct RecordCalendarView: View {
 
     /// 날짜(그날 0시) → 기록
     private var records: [Date: DayRecord] {
-        Dictionary(store.records(groupID).map { (calendar.startOfDay(for: $0.date), $0) }, uniquingKeysWith: { a, _ in a })
+        let loaded = store.records(groupID, month: month) ?? []
+        return Dictionary(loaded.map { (calendar.startOfDay(for: $0.date), $0) }, uniquingKeysWith: { a, _ in a })
     }
 
     private var calendar: Calendar { Self.calendar }
@@ -56,9 +55,13 @@ struct RecordCalendarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     monthHeader.padding(.top, 12)
-                    grid.padding(.top, 12)
-                    if let selected, let record = records[selected] {
-                        selectedCard(record).padding(.top, 20)
+                    if failed {
+                        loadFailed.padding(.top, 12)
+                    } else {
+                        grid.padding(.top, 12)
+                        if let selected, let record = records[selected] {
+                            selectedCard(record).padding(.top, 20)
+                        }
                     }
                 }
                 .padding(.bottom, 32)
@@ -68,8 +71,40 @@ struct RecordCalendarView: View {
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
-        // 처음에는 가장 최근 기록이 있는 날을 골라 둬요.
-        .onAppear { if selected == nil { selected = records.keys.max() } }
+        // 이미 받아 둔 달이면 먼저 보여 주고, 서버 값이 오면 바꿔요.
+        .onAppear { selectLatestIfNeeded() }
+        .task(id: LoadKey(month: month, reload: reload)) { await load() }
+    }
+
+    private func load() async {
+        failed = false
+        do {
+            let loaded = try await services.calendar.month(groupID: groupID, month: month)
+            if session.state == .signedIn { store.applyCalendar(loaded, groupID: groupID, month: month) }
+            selectLatestIfNeeded()
+        } catch is CancellationError {
+        } catch {
+            // 이미 받아 둔 기록이 있으면 그대로 보여 줘요.
+            if store.records(groupID, month: month) == nil { failed = true }
+        }
+    }
+
+    /// 보고 있는 달의 날짜를 아직 안 골랐으면 그 달의 가장 최근 기록을 골라 둬요.
+    private func selectLatestIfNeeded() {
+        if let selected, calendar.isDate(selected, equalTo: month, toGranularity: .month) { return }
+        selected = records.keys.max()
+    }
+
+    /// 불러오지 못했을 때 — 안내 + 다시 시도
+    private var loadFailed: some View {
+        VStack(spacing: 16) {
+            Text("기록을 불러오지 못했어요")
+                .font(.sectionTitle)
+                .foregroundStyle(.ink)
+            HButton("다시 시도") { reload += 1 }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
     }
 
     // MARK: - Month
@@ -112,7 +147,7 @@ struct RecordCalendarView: View {
 
     // MARK: - Grid
 
-    /// 요일 줄 28 + 주마다 칸 52 (모서리 14), 간격 4
+    /// 요일 줄 28 + 주마다 칸 56 (모서리 14), 간격 4
     private var grid: some View {
         VStack(spacing: 4) {
             HStack(spacing: 0) {
@@ -130,7 +165,7 @@ struct RecordCalendarView: View {
                         if let day {
                             dayCell(day)
                         } else {
-                            Color.clear.frame(maxWidth: .infinity).frame(height: 52)
+                            Color.clear.frame(maxWidth: .infinity).frame(height: 56)
                         }
                     }
                 }
@@ -164,14 +199,17 @@ struct RecordCalendarView: View {
                 Text("\(calendar.component(.day, from: date))")
                     .font(.plex(15, record != nil ? .bold : .medium))
                     .foregroundStyle(isSelected ? Color.onAccent : isFuture ? Color.textDisabled : Color.ink)
-                // 글자가 없어도 높이를 맞춰요.
-                // 유형 이름을 그대로 써요 (그림·사진·글·음성, 사용자 요청)
-                Text(record?.type.displayName ?? " ")
-                    .font(.plex(10, .semibold))
-                    .foregroundStyle(isSelected ? Color.onAccent : Color.textSecondary)
+                if let stamp = record?.stamp {
+                    stampImage(stamp, size: 20)
+                } else {
+                    // 도장이 없으면 유형 이름 (그림·사진·글·음성). 글자가 없어도 높이를 맞춰요.
+                    Text(record?.type.displayName ?? " ")
+                        .font(.plex(10, .semibold))
+                        .foregroundStyle(isSelected ? Color.onAccent : Color.textSecondary)
+                }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(height: 56)
             .background(isSelected ? Color.ink : Color.clear, in: shape)
             .overlay {
                 if isToday && !isSelected {
@@ -191,7 +229,16 @@ struct RecordCalendarView: View {
         var text = date.koreanMonthDay
         if isToday { text += ", 오늘" }
         if let record { text += ", \(record.type.displayName) 기록" }
+        if let stamp = record?.stamp { text += ", \(stamp.displayName)" }
         return text
+    }
+
+    private func stampImage(_ stamp: Stamp, size: CGFloat) -> some View {
+        Image(stamp.imageName)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Selected day
@@ -199,12 +246,19 @@ struct RecordCalendarView: View {
     /// 테두리 line · 모서리 20 · 안쪽 18 · 간격 10
     private func selectedCard(_ record: DayRecord) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(record.date.koreanMonthDay) · \(record.type.displayName)")
+            Text([record.date.koreanMonthDay, record.type.displayName, record.stamp?.displayName]
+                .compactMap { $0 }.joined(separator: " · "))
                 .font(.caption13)
                 .foregroundStyle(.textSecondary)
-            Text(record.topic)
-                .font(.plex(17, .bold))
-                .foregroundStyle(.ink)
+            HStack(spacing: 12) {
+                Text(record.topic)
+                    .font(.plex(17, .bold))
+                    .foregroundStyle(.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let stamp = record.stamp {
+                    stampImage(stamp, size: 44)
+                }
+            }
             HStack {
                 Text("\(record.doneCount) / \(record.memberCount)명 참여")
                     .font(.caption13)
@@ -249,4 +303,6 @@ struct RecordCalendarView: View {
         RecordCalendarView(groupID: store.groups[0].id, path: .constant([]))
     }
     .environment(store)
+    .environment(AppSession(state: .signedIn))
+    .environment(Services.preview)
 }

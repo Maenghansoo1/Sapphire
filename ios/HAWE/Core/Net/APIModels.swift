@@ -208,6 +208,35 @@ struct SubmissionPageDTO: Decodable {
     let content: [SubmissionDTO]
 }
 
+// MARK: - 달력 · 활동 요약
+
+struct CalendarDTO: Decodable {
+    let month: String
+    let days: [CalendarDayDTO]
+}
+
+struct CalendarDayDTO: Decodable {
+    let date: String
+    let missions: [CalendarMissionDTO]
+}
+
+struct CalendarMissionDTO: Decodable {
+    let missionId: Int
+    let media: String?
+    let content: String
+    let submittedCount: Int
+    let memberCount: Int
+    /// GOOD · LATE · PENALTY · null
+    let stamp: String?
+}
+
+struct MyStatsDTO: Decodable {
+    let completedMissions: Int
+    let streakDays: Int
+    let groupCount: Int
+    let byMedia: [String: Int]?
+}
+
 /// 미션 `params` 처럼 모양이 정해지지 않은 값
 enum JSONValue: Decodable {
     case string(String), number(Double), bool(Bool), null, other
