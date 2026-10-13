@@ -1,0 +1,73 @@
+{
+  "info": {
+    "name": "HA'WE - EXPERIMENT REPORT (internal)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "AI 주제 vs 랜덤 주제 비교 리포트(B9, 내부용). 서버를 HAWE_ADMIN_TOKEN 으로 켜고 같은 값을 collection 변수 adminToken 에 넣는다. 사용자 로그인 토큰은 쓰지 않는다. 토큰이 없거나 틀리면 404(엔드포인트가 없는 것처럼). 실험 데이터가 없으면 숫자는 null 이고 warnings 에 이유가 나온다. 설계: docs/BACKEND/EXPERIMENT_TOPIC.md"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "adminToken", "value": "" },
+    { "key": "from", "value": "2026-10-01" },
+    { "key": "to", "value": "2026-10-31" }
+  ],
+  "item": [
+    {
+      "name": "1. 리포트 JSON (200)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "const j = pm.response.json();",
+        "pm.test('report shape', () => { pm.expect(j).to.have.keys('from','to','underpowered','warnings','ai','random','difference','aiPerProtocol','perProtocolDifference','aiFallbackMissions','paired'); });",
+        "pm.test('no identifiers', () => pm.expect(pm.response.text()).to.not.match(/groupId|missionId|userId|nickname/));"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Admin-Token", "value": "{{adminToken}}" }],
+        "url": "{{baseUrl}}/internal/experiments/topic?from={{from}}&to={{to}}"
+      }
+    },
+    {
+      "name": "2. 리포트 Markdown (200, text/markdown)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 markdown', () => { pm.response.to.have.status(200); pm.expect(pm.response.headers.get('Content-Type')).to.include('text/markdown'); });",
+        "pm.test('title', () => pm.expect(pm.response.text()).to.include('# AI 주제 vs 랜덤 주제'));"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Admin-Token", "value": "{{adminToken}}" }],
+        "url": "{{baseUrl}}/internal/experiments/topic?from={{from}}&to={{to}}&format=md"
+      }
+    },
+    {
+      "name": "3. 토큰 없음 (404)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('404', () => pm.response.to.have.status(404));"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/internal/experiments/topic?from={{from}}&to={{to}}"
+      }
+    },
+    {
+      "name": "4. 틀린 토큰 (404)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('404', () => pm.response.to.have.status(404));"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Admin-Token", "value": "wrong-token" }],
+        "url": "{{baseUrl}}/internal/experiments/topic?from={{from}}&to={{to}}"
+      }
+    },
+    {
+      "name": "5. 기간 오류 — 시작이 끝보다 늦음 (400 VALIDATION_ERROR)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('400', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'); });"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Admin-Token", "value": "{{adminToken}}" }],
+        "url": "{{baseUrl}}/internal/experiments/topic?from={{to}}&to={{from}}"
+      }
+    }
+  ]
+}

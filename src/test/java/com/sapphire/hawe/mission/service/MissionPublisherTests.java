@@ -8,8 +8,10 @@ import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.mission.dao.MissionInsertRow;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.RecentMissionRow;
+import com.sapphire.hawe.mission.domain.ExperimentArm;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
 import com.sapphire.hawe.mission.domain.GenerationContext;
+import com.sapphire.hawe.mission.domain.GenerationSource;
 import com.sapphire.hawe.mission.domain.GroupSignals;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
@@ -30,6 +32,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -43,6 +46,7 @@ class MissionPublisherTests {
     @Mock GroupMissionSlotMapper slots;
     @Mock MissionGenerator generator;
     @Mock GroupContextBuilder contexts;
+    @Mock ExperimentAssigner experiments;  // 기본은 군 없음 (Optional.empty)
     MissionPublisher publisher;
     static final GenerationContext GROUP_CONTEXT = new GenerationContext(LocalDate.of(2026, 10, 12), "FRIEND", List.of(),
             List.of(new SpecialDay(SpecialDay.Kind.GROUP_MILESTONE, "우리 그룹 100일", 0)), GroupSignals.none(1, 100));
@@ -51,7 +55,7 @@ class MissionPublisherTests {
     void setUp() {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, MissionTemplateSelector.MVP_POOL), generator,
-                contexts, new ObjectMapper());
+                contexts, experiments, new ObjectMapper());
         lenient().when(members.findUserIdsByGroupId(11L)).thenReturn(List.of(7L));
         lenient().when(contexts.build(any(), any())).thenReturn(GROUP_CONTEXT);
     }
@@ -83,12 +87,56 @@ class MissionPublisherTests {
         assertEquals(now.toLocalDate().atTime(9, 0), row.getPublishedAt());
         assertEquals(now.toLocalDate().atTime(23, 0), row.getDeadlineAt());
         assertTrue(MissionTemplateSelector.MVP_POOL.contains(MissionTemplate.valueOf(row.getTemplate())));
+        // 실험 밖: 군은 비우고 문장 출처만 남긴다
+        assertNull(context.getValue().experimentArm());
+        assertNull(row.getExperimentArm());
+        assertEquals("PLACEHOLDER", row.getGenerationSource());
 
         // 이미 발행된 슬롯만 있으면 그룹 정보를 모으지도 않는다
         when(missions.existsByGroupIdAndDateAndSlot(11L, now.toLocalDate(), 1)).thenReturn(true);
         publisher.publishIfDue(11L, now);
         verify(missions, times(1)).insert(any());
         verify(contexts, times(1)).build(any(), any());
+    }
+
+    @Test
+    void experimentArmIsRecordedAndDoesNotChangeTemplateOrTarget() {
+        LocalDateTime now = LocalDateTime.of(2026, 10, 13, 9, 0);
+        Group group = group(now.minusDays(2));
+        group.setDailyMissionCount(3);
+        when(groups.findById(11L)).thenReturn(group);
+        when(members.findUserIdsByGroupId(11L)).thenReturn(List.of(7L, 8L, 9L));
+        when(generator.generate(any(), anyLong(), any(), anyBoolean())).thenAnswer(invocation -> {
+            GenerationContext context = invocation.getArgument(2);
+            return new GeneratedMission("[대상] 문장 " + context.experimentArm(), "일상", Map.of(),
+                    context.experimentArm() == ExperimentArm.AI ? GenerationSource.AI : GenerationSource.PLACEHOLDER);
+        });
+
+        when(experiments.assign(11L, now.toLocalDate())).thenReturn(Optional.of(ExperimentArm.AI));
+        List<MissionInsertRow> ai = publishAndCapture(now, 3);
+        when(experiments.assign(11L, now.toLocalDate())).thenReturn(Optional.of(ExperimentArm.RANDOM));
+        List<MissionInsertRow> random = publishAndCapture(now, 6);
+
+        // 같은 날 세 슬롯이 모두 같은 군, 출처도 그대로 저장
+        assertEquals(List.of("AI", "AI", "AI"), ai.stream().map(MissionInsertRow::getExperimentArm).toList());
+        assertEquals(List.of("AI", "AI", "AI"), ai.stream().map(MissionInsertRow::getGenerationSource).toList());
+        assertEquals(List.of("RANDOM", "RANDOM", "RANDOM"), random.stream().map(MissionInsertRow::getExperimentArm).toList());
+        assertEquals(List.of("PLACEHOLDER", "PLACEHOLDER", "PLACEHOLDER"),
+                random.stream().map(MissionInsertRow::getGenerationSource).toList());
+        // 틀·대상·시각은 군과 무관하다 (두 군의 틀 분포가 같다)
+        for (int i = 0; i < 3; i++) {
+            assertEquals(ai.get(i).getTemplate(), random.get(i).getTemplate());
+            assertEquals(ai.get(i).getParams(), random.get(i).getParams());
+            assertEquals(ai.get(i).getPublishedAt(), random.get(i).getPublishedAt());
+        }
+        verify(experiments, times(2)).assign(11L, now.toLocalDate());  // 발행할 때마다 날짜 단위로 한 번
+    }
+
+    private List<MissionInsertRow> publishAndCapture(LocalDateTime now, int insertedSoFar) {
+        publisher.publishIfDue(11L, now);
+        ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
+        verify(missions, times(insertedSoFar)).insert(inserted.capture());
+        return inserted.getAllValues().subList(insertedSoFar - 3, insertedSoFar);
     }
 
     @Test
@@ -112,7 +160,7 @@ class MissionPublisherTests {
     void publishesOnlyFromTheConfiguredPool() {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, List.of(MissionTemplate.SLIDER_TASTE)),
-                generator, contexts, new ObjectMapper());
+                generator, contexts, experiments, new ObjectMapper());
         LocalDateTime now = LocalDateTime.of(2026, 10, 13, 10, 0);
         when(groups.findById(11L)).thenReturn(group(now.minusDays(2)));
         when(generator.generate(eq(MissionTemplate.SLIDER_TASTE), anyLong(), any(), eq(false)))
@@ -171,7 +219,7 @@ class MissionPublisherTests {
     private List<MissionInsertRow> publishThreeSlots(LocalDateTime now, List<MissionTemplate> pool) {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, pool),
-                new PlaceholderMissionGenerator(), contexts, new ObjectMapper());
+                new PlaceholderMissionGenerator(), contexts, experiments, new ObjectMapper());
         Group group = group(now.minusDays(2));
         group.setDailyMissionCount(3);
         when(groups.findById(11L)).thenReturn(group);

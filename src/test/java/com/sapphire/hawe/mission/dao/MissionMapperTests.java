@@ -188,6 +188,31 @@ class MissionMapperTests {
                 missionId, userId);
     }
 
+    @Test
+    void insertStoresGenerationSourceAndExperimentArm() {
+        Long groupId = insertGroup(insertUser());
+        insertContent(groupId, "실험 밖", SeoulTime.today().minusDays(1), 1, 9);
+        MissionInsertRow row = new MissionInsertRow();
+        row.setGroupId(groupId);
+        row.setContent("AI 문장");
+        row.setCategory("일상");
+        row.setMissionDate(SeoulTime.today());
+        row.setTemplate("PHOTO_NOW");
+        row.setParams("{}");
+        row.setSlotNo(1);
+        row.setPublishedAt(SeoulTime.today().atTime(9, 0));
+        row.setDeadlineAt(SeoulTime.today().atTime(23, 0));
+        row.setGenerationSource("AI_FALLBACK");
+        row.setExperimentArm("AI");
+        missions.insert(row);
+        assertEquals(java.util.Map.of("generation_source", "AI_FALLBACK", "experiment_arm", "AI"), jdbc.queryForMap(
+                "SELECT generation_source, experiment_arm FROM missions WHERE id = ?", row.getId()));
+        var outside = jdbc.queryForMap("SELECT generation_source, experiment_arm FROM missions WHERE group_id = ? "
+                + "AND content = '실험 밖'", groupId);
+        assertNull(outside.get("generation_source"));
+        assertNull(outside.get("experiment_arm"));
+    }
+
     private void insertContent(Long groupId, String content, LocalDate date, int slotNo, int hour) {
         MissionInsertRow row = new MissionInsertRow();
         row.setGroupId(groupId);

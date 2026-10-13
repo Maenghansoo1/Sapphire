@@ -80,8 +80,11 @@ CREATE TABLE `missions` (
   `slot_no` tinyint(3) unsigned NOT NULL DEFAULT 1,
   `published_at` datetime NOT NULL,
   `deadline_at` datetime NOT NULL,
+  `generation_source` varchar(20) DEFAULT NULL,
+  `experiment_arm` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_missions_group_date_slot` (`group_id`,`mission_date`,`slot_no`),
+  KEY `idx_missions_experiment` (`experiment_arm`,`mission_date`),
   CONSTRAINT `fk_missions_group` FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

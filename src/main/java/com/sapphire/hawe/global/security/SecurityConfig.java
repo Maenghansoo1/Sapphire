@@ -50,6 +50,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/files/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // 내부 리포트는 사용자 JWT 대신 컨트롤러가 X-Admin-Token 으로 막는다 (B9)
+                        .requestMatchers(HttpMethod.GET, "/internal/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling.authenticationEntryPoint(this::handleUnauthenticated))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider, objectMapper, users),

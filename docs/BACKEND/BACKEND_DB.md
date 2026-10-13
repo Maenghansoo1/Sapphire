@@ -83,6 +83,8 @@ erDiagram
     datetime published_at
     datetime deadline_at
     date mission_date
+    string generation_source
+    string experiment_arm
   }
   SUBMISSIONS {
     bigint id PK
@@ -165,6 +167,7 @@ erDiagram
 - 제출 답은 **하이브리드 방식**으로 저장한다 (아래 "제출 답 저장 방식"). 집계하는 값은 컬럼(`number_value`, `choice_value`), 그 밖의 답은 JSON(`answer_data`)이다. 사진·그림=`media_*`, 슬라이더·별점=`number_value`, 밸런스 게임=`choice_value`, 글=`answer_data.text`, 다수결 예측의 예측값=`answer_data.guess`. 쓰지 않는 컬럼은 NULL이며, 틀별 필수 여부는 DB가 아니라 서비스가 검증한다
 - `SUBMISSIONS.answer_text` / `answer_aliases`, `SUBMISSION_GUESSES` — **미사용(잔재).** 정답 맞히기(G 유형) 용도였으나 2026-10-12 음성 제거로 G 유형 틀이 없어졌다. 스키마는 지우지 않고 유지한다(나중에 서버 기반 맞히기 게임이 생기면 재사용, 탈퇴·그룹 삭제 쿼리가 아직 참조)
 - 하루 미션 수 — `GROUPS.daily_mission_count`(1~5, 기본 1)만큼 슬롯(`MISSIONS.slot_no` 1, 2, …)이 열린다. 슬롯별 발행·마감 시각은 `GROUP_MISSION_SLOTS`가 전담하며, **행이 없거나 값이 NULL이면 설정 파일의 기본 시각**(발행 09:00, 마감 23:00 — 초안)을 쓴다. `GROUPS`에는 시각 컬럼이 없다
+- 미션 문장 출처·실험 군 — `MISSIONS.generation_source`(`AI`/`AI_FALLBACK`/`PLACEHOLDER`)와 `MISSIONS.experiment_arm`(`AI`/`RANDOM`, 실험 밖이면 NULL). 앱 응답에는 내보내지 않고 비교 리포트에만 쓴다 (B9, `EXPERIMENT_TOPIC.md`)
 - `MISSIONS.published_at` / `deadline_at` — 발행 시점의 실제 발행·마감 시각을 고정 저장. 이후 그룹 설정이 바뀌어도 이미 열린 미션의 시각과 지각 판정(`SUBMISSIONS.is_late`)은 바뀌지 않는다
 - 유일성 제약 — `GROUP_MISSION_SLOTS (group_id, slot_no)`: 슬롯 재정의는 슬롯당 1행, `MISSIONS (group_id, mission_date, slot_no)`: 그룹·날짜·슬롯당 미션 1개(중복 발행 방지), `SUBMISSIONS (mission_id, user_id)`: 미션당 1인 1회 제출(`ALREADY_SUBMITTED`)
 - `NOTIFICATIONS`는 `from_user_id`(발신자, 시스템 알림은 NULL) / `to_user_id`(수신자)로 분리
@@ -327,6 +330,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
   - 저장 위치만 환경별로 다름: 개발 환경은 로컬 디스크, 운영 환경은 내부적으로 S3 업로드 (presigned URL 방식은 사용하지 않음 — 클라이언트 변경 없이 저장소만 전환)
 - `GET /api/missions/{missionId}/submissions` — 그룹 피드 (내가 제출했을 때만 200, 아니면 423 Locked)
 - `GET /api/missions/{missionId}/result` — 집계 틀의 그룹 결과 (제출한 사람만, 집계 틀이 아니면 400)
+- `GET /internal/experiments/topic` — AI 주제 vs 랜덤 주제 비교 리포트 (내부용, 헤더 `X-Admin-Token`, 틀리면 404. B9 — `EXPERIMENT_TOPIC.md`)
 - ~~`POST /api/submissions/{id}/guesses`~~ — 폐기됨 (음성 제거로 정답 맞히기 틀 없음)
 
 ### 게시물 & 댓글

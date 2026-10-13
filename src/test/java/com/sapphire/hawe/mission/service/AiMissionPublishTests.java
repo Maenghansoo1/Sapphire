@@ -38,7 +38,7 @@ class AiMissionPublishTests {
     void firstMissionUsesTheCheckedAiTextAndTheServerChosenTarget() {
         AtomicReference<Map<String, Object>> answered = new AtomicReference<>();
         when(client.callTool(anyString(), anyString(), any())).thenAnswer(invocation -> {
-            Map<String, Object> answer = fakeAnswer(invocation.getArgument(1));
+            Map<String, Object> answer = fakeAnswer(objectMapper, invocation.getArgument(1));
             answered.set(answer);
             return answer;
         });
@@ -75,7 +75,7 @@ class AiMissionPublishTests {
     }
 
     /** 받은 입력의 틀·대상에 맞는 정상 답 (기본 발행 풀 7종). */
-    private Map<String, Object> fakeAnswer(String userMessage) {
+    static Map<String, Object> fakeAnswer(ObjectMapper objectMapper, String userMessage) {
         JsonNode input = objectMapper.readTree(userMessage.substring(userMessage.indexOf('\n') + 1));
         boolean target = "대상 있음".equals(input.path("대상").asString());
         String code = input.path("틀").path("코드").asString();

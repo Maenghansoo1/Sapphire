@@ -1,5 +1,6 @@
 package com.sapphire.hawe.mission.service;
 
+import com.sapphire.hawe.mission.domain.ExperimentArm;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
 import com.sapphire.hawe.mission.domain.GenerationContext;
 import com.sapphire.hawe.mission.domain.GenerationSource;
@@ -29,7 +30,9 @@ public class FallbackMissionGenerator implements MissionGenerator {
 
     @Override
     public GeneratedMission generate(MissionTemplate template, long seed, GenerationContext context, boolean withTarget) {
-        if (!ai.available()) return placeholder.generate(template, seed, context, withTarget);
+        // 주제 비교 실험의 랜덤 군은 AI 를 쓸 수 있어도 고정 문장
+        boolean randomArm = context != null && context.experimentArm() == ExperimentArm.RANDOM;
+        if (randomArm || !ai.available()) return placeholder.generate(template, seed, context, withTarget);
         try {
             return ai.generate(template, context, withTarget);
         } catch (RuntimeException e) {

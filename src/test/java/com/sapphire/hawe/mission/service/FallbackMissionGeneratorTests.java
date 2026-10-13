@@ -1,5 +1,6 @@
 package com.sapphire.hawe.mission.service;
 
+import com.sapphire.hawe.mission.domain.ExperimentArm;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
 import com.sapphire.hawe.mission.domain.GenerationContext;
 import com.sapphire.hawe.mission.domain.GenerationSource;
@@ -44,6 +45,19 @@ class FallbackMissionGeneratorTests {
         when(ai.available()).thenReturn(true);
         when(ai.generate(MissionTemplate.PHOTO_COLOR, CONTEXT, false)).thenReturn(fromAi);
         assertSame(fromAi, generator.generate(MissionTemplate.PHOTO_COLOR, 7, CONTEXT, false));
+    }
+
+    @Test
+    void randomExperimentArmNeverCallsTheAi() {
+        when(ai.available()).thenReturn(true);
+        GeneratedMission mission = generator.generate(MissionTemplate.PHOTO_COLOR, 7,
+                CONTEXT.withExperimentArm(ExperimentArm.RANDOM), false);
+        assertEquals(GenerationSource.PLACEHOLDER, mission.source());
+        verify(ai, never()).generate(any(), any(), anyBoolean());
+        // AI 군은 평소처럼 AI 를 먼저 쓴다
+        when(ai.generate(any(), any(), anyBoolean())).thenThrow(new AiGenerationException("AI 응답 오류 HTTP 500"));
+        assertEquals(GenerationSource.AI_FALLBACK, generator.generate(MissionTemplate.PHOTO_COLOR, 7,
+                CONTEXT.withExperimentArm(ExperimentArm.AI), false).source());
     }
 
     @Test

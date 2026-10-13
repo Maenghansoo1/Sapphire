@@ -14,6 +14,8 @@ public class MissionInsertRow {
     private int slotNo;
     private LocalDateTime publishedAt;
     private LocalDateTime deadlineAt;
+    private String generationSource;
+    private String experimentArm;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -35,4 +37,8 @@ public class MissionInsertRow {
     public void setPublishedAt(LocalDateTime publishedAt) { this.publishedAt = publishedAt; }
     public LocalDateTime getDeadlineAt() { return deadlineAt; }
     public void setDeadlineAt(LocalDateTime deadlineAt) { this.deadlineAt = deadlineAt; }
+    public String getGenerationSource() { return generationSource; }
+    public void setGenerationSource(String generationSource) { this.generationSource = generationSource; }
+    public String getExperimentArm() { return experimentArm; }
+    public void setExperimentArm(String experimentArm) { this.experimentArm = experimentArm; }
 }

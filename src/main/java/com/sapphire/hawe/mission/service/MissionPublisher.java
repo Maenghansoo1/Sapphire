@@ -43,11 +43,12 @@ public class MissionPublisher {
     private final MissionProperties properties;
     private final MissionGenerator generator;
     private final GroupContextBuilder contexts;
+    private final ExperimentAssigner experiments;
     private final ObjectMapper objectMapper;
 
     public MissionPublisher(MissionMapper missions, GroupMapper groups, GroupMemberMapper members,
             GroupMissionSlotMapper slots, MissionProperties properties, MissionGenerator generator,
-            GroupContextBuilder contexts, ObjectMapper objectMapper) {
+            GroupContextBuilder contexts, ExperimentAssigner experiments, ObjectMapper objectMapper) {
         this.missions = missions;
         this.groups = groups;
         this.members = members;
@@ -55,6 +56,7 @@ public class MissionPublisher {
         this.properties = properties;
         this.generator = generator;
         this.contexts = contexts;
+        this.experiments = experiments;
         this.objectMapper = objectMapper;
     }
 
@@ -85,7 +87,9 @@ public class MissionPublisher {
             MissionTemplate template = MissionTemplateSelector.select(groupId, date, slotNo,
                     group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates());
             boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
-            if (groupContext == null) groupContext = contexts.build(group, date);
+            // 실험 군은 (그룹, 날짜) 단위라 같은 날 슬롯은 모두 같은 군이다. 위의 틀·대상 선택은 군과 무관하다
+            if (groupContext == null)
+                groupContext = contexts.build(group, date).withExperimentArm(experiments.assign(groupId, date).orElse(null));
             // 슬롯 순서대로 같은 트랜잭션에서 저장하므로 앞 슬롯 문장도 여기에 보인다
             List<RecentMission> recent = missions.findRecentByGroupId(groupId,
                     RECENT_CONTENTS + group.getDailyMissionCount() - 1).stream().map(RecentMissionRow::toDomain).toList();
@@ -109,6 +113,8 @@ public class MissionPublisher {
             mission.setSlotNo(slotNo);
             mission.setPublishedAt(publishedAt);
             mission.setDeadlineAt(MissionTiming.deadlineAfter(publishedAt, deadlineTime));
+            mission.setGenerationSource(generated.source().name());
+            mission.setExperimentArm(groupContext.experimentArm() == null ? null : groupContext.experimentArm().name());
             try { missions.insert(mission); }
             catch (DuplicateKeyException ignored) { /* Another publisher already committed this slot. */ }
         }

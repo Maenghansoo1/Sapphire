@@ -360,7 +360,7 @@ V 유형 틀(`TEXT_BALANCE`, `SLIDER_POSITION`, `SLIDER_TASTE`, `SLIDER_CONSENSU
 
 그룹 생성 트랜잭션이 커밋되면 첫 발행을 시도한다. 오늘 발행 시각이 이미 지났으면 바로 열린다. 생성 응답의 `missionCount`는 커밋 이후 발행 전 값인 0일 수 있으므로 상세 조회에서 갱신한다. 발행 시각은 예정 시각과 그룹 생성 시각 중 늦은 값이다. `deadlineAt`은 발행 이후 처음 오는 슬롯 마감 시각이며, `closesAt`은 응답 시점에 계산하는 다음 발행 예정 시각이다.
 
-미션 문장은 `MissionGenerator.generate(template, seed, context, withTarget)`가 만든다. 발행기가 주입받는 것은 `FallbackMissionGenerator`(`@Primary`)다. AI 를 쓸 수 있으면 `AiMissionGenerator`(§6-2)를 먼저 부르고, 꺼져 있거나 실패하면 고정 문장 `PlaceholderMissionGenerator`를 쓴다 — 어느 경우에도 예외를 던지지 않아 AI 장애가 발행을 막지 않는다. `context`(`GenerationContext`)에는 날짜·그룹 관계·기념일·지난 기록 신호(§6-2)와 **같은 날 먼저 열린 슬롯 + 그 전 최근 미션 5개**(문장·카테고리·틀, 최근 것부터, 최대 `5 + 하루 미션 수 − 1`개)가 들어 있다. 슬롯 순서대로 같은 트랜잭션에서 저장하므로 같은 시각에 열리는 앞 슬롯 문장도 들어간다. 고정 문장 생성기는 틀마다 3개 이상의 변형 중 최근 문장에 없는 것을 시드 순서로 고르고, 모두 있으면 가장 오래전에 쓴 변형을 고른다(예외 없음, B7). 그 밖의 그룹 정보는 쓰지 않는다. 생성된 미션에는 출처(`GenerationSource`: `AI`·`AI_FALLBACK`·`PLACEHOLDER`)가 붙는다 — DB 저장과 비교 리포트는 B9, 앱 응답에는 내보내지 않는다. 알림 발송은 아직 없다. 발행 중 다른 오류는 기록되며 다음 분 실행에서 재시도한다.
+미션 문장은 `MissionGenerator.generate(template, seed, context, withTarget)`가 만든다. 발행기가 주입받는 것은 `FallbackMissionGenerator`(`@Primary`)다. AI 를 쓸 수 있으면 `AiMissionGenerator`(§6-2)를 먼저 부르고, 꺼져 있거나 실패하면 고정 문장 `PlaceholderMissionGenerator`를 쓴다 — 어느 경우에도 예외를 던지지 않아 AI 장애가 발행을 막지 않는다. `context`(`GenerationContext`)에는 날짜·그룹 관계·기념일·지난 기록 신호(§6-2)와 **같은 날 먼저 열린 슬롯 + 그 전 최근 미션 5개**(문장·카테고리·틀, 최근 것부터, 최대 `5 + 하루 미션 수 − 1`개)가 들어 있다. 슬롯 순서대로 같은 트랜잭션에서 저장하므로 같은 시각에 열리는 앞 슬롯 문장도 들어간다. 고정 문장 생성기는 틀마다 3개 이상의 변형 중 최근 문장에 없는 것을 시드 순서로 고르고, 모두 있으면 가장 오래전에 쓴 변형을 고른다(예외 없음, B7). 그 밖의 그룹 정보는 쓰지 않는다. 생성된 미션에는 출처(`GenerationSource`: `AI`·`AI_FALLBACK`·`PLACEHOLDER`)가 붙어 `missions.generation_source`에 저장된다(B9) — 앱 응답에는 내보내지 않는다. 알림 발송은 아직 없다. 발행 중 다른 오류는 기록되며 다음 분 실행에서 재시도한다.
 
 AI 응답에 대한 서버 검증 (`GeneratedMissionValidator`, AI가 규칙을 어길 수 있으므로 프롬프트와 별개로 반드시 수행, B8 구현됨). 하나라도 어기면 그 응답은 버리고 다시 요청한다:
 
@@ -462,6 +462,15 @@ N >= 2 : p = (k-1) % 매체 수, r = (k-1) / 매체 수        // 슬롯 k, r = 
 - `application.properties`·`.env`는 ISO-8859-1로 읽히므로 한글 값은 `\uXXXX`로 쓰거나 환경변수로 넣는다(예: `special-days=12-25=크리스마스`).
 - 테스트는 `pom.xml`의 surefire 설정(`hawe.mission.ai.enabled=false`)으로 `.env`에 키가 있어도 실제 AI 를 부르지 않는다. 실제 호출 확인은 키가 있는 환경에서 사람이 한다.
 
+### 6-3. AI 주제 vs 랜덤 주제 비교 실험 (B9, 2026-10-13 구현됨)
+
+효과를 숫자로 보이기 위해 일부 (그룹, 날짜)는 AI 주제, 나머지는 고정 문장(랜덤) 주제로 발행한다. 설계·지표·분석·한계는 `EXPERIMENT_TOPIC.md`.
+
+- **배정**: `ExperimentAssigner`가 `SHA-256(salt|그룹|날짜)`로 군을 정한다(`hawe.experiment.topic.ai-ratio`, 기본 0.5). 같은 날 슬롯은 모두 같은 군. 실험이 꺼져 있거나(`enabled=false`, 기본) AI 를 쓸 수 없으면 군을 정하지 않는다 — 발행은 이전과 같다.
+- **발행**: 발행기가 그날 군을 한 번 정해 `GenerationContext.experimentArm`에 넣는다. 랜덤 군이면 `FallbackMissionGenerator`가 AI 를 부르지 않고 고정 문장을 쓴다. 틀·대상·시각·최근 문장 회피는 군과 무관하다(두 군의 틀 분포가 같음 — 테스트로 고정).
+- **기록**: `missions.experiment_arm`(`AI`/`RANDOM`, 실험 밖이면 NULL), `missions.generation_source`(`AI`/`AI_FALLBACK`/`PLACEHOLDER`). AI 군에서 AI 가 실패한 미션은 군 `AI`·출처 `AI_FALLBACK`(배정대로 센다). 앱 응답(DTO)에는 둘 다 없다(블라인드).
+- **리포트**: `GET /internal/experiments/topic?from=&to=&format=json|md`, 헤더 `X-Admin-Token`(= `hawe.admin.token`, 환경변수 `HAWE_ADMIN_TOKEN`). 토큰이 없거나 틀리면 404, 설정하지 않으면 엔드포인트가 꺼진다. 닫힌 실험 미션만 센다.
+
 ## 7. 2차 틀 (R 유형) — 별도 설계 필요
 
 `TEXT_RELAY`, `DRAW_RELAY`, `DRAW_GUESS`, `DRAW_TELEPHONE`, `SLIDER_CLUE_BAR`는 이 문서의 단일 제출 구조로는 표현할 수 없다.
@@ -493,7 +502,7 @@ N >= 2 : p = (k-1) % 매체 수, r = (k-1) / 매체 수        // 슬롯 k, r = 
 |---|---|
 | `groups` | `relation_type VARCHAR(20) NOT NULL DEFAULT 'CASUAL'` 추가 (그룹 관계, 코드 유효성은 서비스에서 검증). `daily_mission_count TINYINT UNSIGNED NOT NULL DEFAULT 1` 추가. `mission_publish_time`, `mission_deadline_time` **삭제** (현재 데이터가 없어 이전 없이 삭제) |
 | `group_mission_slots` (신규) | 슬롯별 발행·마감 시각 지정. 컬럼: `group_id`, `slot_no`, `publish_time NULL`, `deadline_time NULL`. 행이 없거나 값이 NULL이면 설정 파일의 기본 시각을 사용. `(group_id, slot_no)` UNIQUE |
-| `missions` | `template VARCHAR(40) NOT NULL`, `params JSON NOT NULL`, `slot_no TINYINT UNSIGNED NOT NULL DEFAULT 1`, `published_at DATETIME NOT NULL`, `deadline_at DATETIME NOT NULL` 추가. UNIQUE `(group_id, mission_date, slot_no)` 추가 (중복 발행 방지) |
+| `missions` | `template VARCHAR(40) NOT NULL`, `params JSON NOT NULL`, `slot_no TINYINT UNSIGNED NOT NULL DEFAULT 1`, `published_at DATETIME NOT NULL`, `deadline_at DATETIME NOT NULL` 추가. UNIQUE `(group_id, mission_date, slot_no)` 추가 (중복 발행 방지). B9: `generation_source VARCHAR(20) NULL`, `experiment_arm VARCHAR(10) NULL`, 인덱스 `(experiment_arm, mission_date)` (§6-3) |
 | `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `number_value`, `choice_value`, `answer_data`(JSON: 글 본문 `text`, 다수결 예측값 `guess` 등 집계하지 않는 답), `answer_text`(정답), `answer_aliases`(별칭 JSON 배열) 추가 (모두 NULL 허용, `answer_text`·`answer_aliases`는 음성 제거로 **현재 미사용** 잔재). 요청 필드(`text`, `guess`)는 그대로이고 저장만 다르다: `number`→`number_value`, `choice`→`choice_value`, `text`→`answer_data.text`, `guess`→`answer_data.guess` (`BACKEND_DB.md` "제출 답 저장 방식"). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
 | `submission_guesses` (신규) | 정답 시도 기록 — **현재 미사용** (음성 제거로 정답 맞히기 폐기, 테이블은 유지). 컬럼: `id`, `submission_id`(FK), `user_id`(FK), `guess_text VARCHAR(100) NOT NULL`, `is_correct BOOLEAN NOT NULL`, `created_at DATETIME`. `(submission_id, user_id)` 인덱스(UNIQUE 아님, 여러 번 시도 가능) |
 
