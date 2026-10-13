@@ -179,6 +179,7 @@
 - 미션 템플릿 목록: `docs/FEATURE/MISSIONS.md`
 - B5(2026-10-13): 새 틀 6종(한 단어·한 줄 후기·밸런스·슬라이더 3종) 제출 규칙은 `MISSIONS_API.md` §3-2, 집계 결과 `GET /missions/{missionId}/result`는 §5, 발행 풀 설정 `hawe.mission.enabled-templates`는 §6-1
 - B7(2026-10-13): 하루 미션 여러 개(1~5) — 설정·현재 미션 규칙은 `MISSIONS_API.md` §2, 같은 날 틀·문장 겹침 방지는 §6·§6-1, 결정 사항은 §11
+- B8(2026-10-13): 그룹 맞춤 AI 미션 문장(Claude API, 기본 꺼짐) — `MISSIONS_API.md` §6·§6-2. HTTP API 모양은 바뀌지 않는다
 
 ---
 

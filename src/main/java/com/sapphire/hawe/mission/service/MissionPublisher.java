@@ -8,8 +8,11 @@ import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.group.domain.GroupMissionSlot;
 import com.sapphire.hawe.mission.dao.MissionInsertRow;
 import com.sapphire.hawe.mission.dao.MissionMapper;
+import com.sapphire.hawe.mission.dao.RecentMissionRow;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
+import com.sapphire.hawe.mission.domain.GenerationContext;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
+import com.sapphire.hawe.mission.domain.RecentMission;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
 import com.sapphire.hawe.mission.domain.MissionTiming;
 import org.springframework.dao.DuplicateKeyException;
@@ -39,17 +42,19 @@ public class MissionPublisher {
     private final GroupMissionSlotMapper slots;
     private final MissionProperties properties;
     private final MissionGenerator generator;
+    private final GroupContextBuilder contexts;
     private final ObjectMapper objectMapper;
 
     public MissionPublisher(MissionMapper missions, GroupMapper groups, GroupMemberMapper members,
             GroupMissionSlotMapper slots, MissionProperties properties, MissionGenerator generator,
-            ObjectMapper objectMapper) {
+            GroupContextBuilder contexts, ObjectMapper objectMapper) {
         this.missions = missions;
         this.groups = groups;
         this.members = members;
         this.slots = slots;
         this.properties = properties;
         this.generator = generator;
+        this.contexts = contexts;
         this.objectMapper = objectMapper;
     }
 
@@ -65,6 +70,7 @@ public class MissionPublisher {
             try { yesterdayMedia.add(MissionTemplate.valueOf(code).media()); }
             catch (IllegalArgumentException | NullPointerException ignored) { }
         }
+        GenerationContext groupContext = null;  // 실제로 발행할 슬롯이 있을 때만 만든다
         for (int slotNo = 1; slotNo <= group.getDailyMissionCount(); slotNo++) {
             GroupMissionSlot slot = configured.get(slotNo);
             LocalTime publishTime = slot != null && slot.getPublishTime() != null
@@ -79,10 +85,13 @@ public class MissionPublisher {
             MissionTemplate template = MissionTemplateSelector.select(groupId, date, slotNo,
                     group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates());
             boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
+            if (groupContext == null) groupContext = contexts.build(group, date);
             // 슬롯 순서대로 같은 트랜잭션에서 저장하므로 앞 슬롯 문장도 여기에 보인다
-            List<String> recent = missions.findRecentContentsByGroupId(groupId,
-                    RECENT_CONTENTS + group.getDailyMissionCount() - 1);
-            GeneratedMission generated = generator.generate(template, seed, recent, withTarget);
+            List<RecentMission> recent = missions.findRecentByGroupId(groupId,
+                    RECENT_CONTENTS + group.getDailyMissionCount() - 1).stream().map(RecentMissionRow::toDomain).toList();
+            // AI 를 쓰면 여기서 외부 호출을 기다린다(발행 트랜잭션 안) — 대기 시간은 hawe.mission.ai.total-timeout 으로 제한
+            GeneratedMission generated = generator.generate(template, seed, groupContext.withRecentMissions(recent),
+                    withTarget);
             Map<String, Object> params = new HashMap<>(generated.params());
             if (withTarget) {
                 List<Long> userIds = members.findUserIdsByGroupId(groupId);

@@ -11,18 +11,12 @@ import java.util.List;
 @Mapper
 public interface CalendarMapper {
 
-    // "미션이 열릴 때 그룹에 있었는지". 그룹을 만들면 첫 미션 발행 시각과 그룹장 가입 시각이
-    // 몇 초 어긋날 수 있어서 1분 여유를 둔다.
-    String JOINED_BY_PUBLISH = "gm.joined_at <= m.published_at + INTERVAL 1 MINUTE";
+    String JOINED_BY_PUBLISH = MissionMapper.JOINED_BY_PUBLISH;
 
     @Select("SELECT m.id AS mission_id, m.mission_date, m.template, m.content, "
             + "(SELECT u.nickname FROM users u WHERE u.id = JSON_VALUE(m.params, '$.targetUserId')) AS target_nickname, "
             + "(SELECT COUNT(*) FROM submissions s WHERE s.mission_id = m.id) AS submitted_count, "
-            // 전체 인원 = 미션이 열릴 때 있던 지금 멤버 + 그 미션에 냈지만 지금은 위에 없는 사람(나간 사람 등)
-            + "(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = m.group_id AND " + JOINED_BY_PUBLISH + ") "
-            + "+ (SELECT COUNT(*) FROM submissions s WHERE s.mission_id = m.id AND NOT EXISTS ("
-            + "SELECT 1 FROM group_members gm WHERE gm.group_id = m.group_id AND gm.user_id = s.user_id "
-            + "AND " + JOINED_BY_PUBLISH + ")) AS member_count, "
+            + MissionMapper.MEMBER_COUNT + "AS member_count, "
             + "EXISTS (SELECT 1 FROM submissions s WHERE s.mission_id = m.id "
             + "AND s.user_id = #{userId}) AS submitted_by_me, "
             + "EXISTS (SELECT 1 FROM submissions s WHERE s.mission_id = m.id "

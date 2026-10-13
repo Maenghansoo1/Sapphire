@@ -1,6 +1,7 @@
 package com.sapphire.hawe.mission.service;
 
 import com.sapphire.hawe.mission.domain.GeneratedMission;
+import com.sapphire.hawe.mission.domain.GenerationContext;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
 import org.springframework.stereotype.Component;
 
@@ -11,10 +12,10 @@ import java.util.Random;
 @Component
 public class PlaceholderMissionGenerator implements MissionGenerator {
 
-    /** 최근에 쓰지 않은 변형을 시드 순서대로 고르고, 모두 썼으면 가장 오래전에 쓴 변형을 고른다. */
+    /** 최근에 쓰지 않은 변형을 시드 순서대로 고르고, 모두 썼으면 가장 오래전에 쓴 변형을 고른다. 다른 그룹 정보는 쓰지 않는다. */
     @Override
-    public GeneratedMission generate(MissionTemplate template, long seed, List<String> recentContents, boolean withTarget) {
-        List<String> recent = recentContents == null ? List.of() : recentContents;
+    public GeneratedMission generate(MissionTemplate template, long seed, GenerationContext context, boolean withTarget) {
+        List<String> recent = context == null ? List.of() : context.recentContents();
         List<GeneratedMission> variants = variants(template, withTarget);
         int index = new Random(seed).nextInt(variants.size());
         GeneratedMission leastRecent = null;

@@ -118,7 +118,7 @@ class MissionMapperTests {
         assertTrue(missions.existsByGroupIdAndDateAndSlot(groupId, yesterday, 1));
         assertFalse(missions.existsByGroupIdAndDateAndSlot(groupId, yesterday.plusDays(1), 1));
         assertEquals(java.util.List.of("PHOTO_NOW"), missions.findTemplatesByGroupIdAndDate(groupId, yesterday));
-        assertEquals(java.util.List.of("Yesterday"), missions.findRecentContentsByGroupId(groupId, 5));
+        assertEquals(java.util.List.of("Yesterday"), recentContents(groupId, 5));
         assertEquals(row.getId(), missions.findCurrentByGroupId(groupId, userId).getFirst().getId());
         assertEquals(yesterday, missions.findCurrentByGroupId(groupId, userId).getFirst().getMissionDate());
         assertThrows(DuplicateKeyException.class, () -> missions.insert(row));
@@ -133,9 +133,59 @@ class MissionMapperTests {
         insertContent(groupId, "어제", today.minusDays(1), 1, 9);
         insertContent(groupId, "오늘 1번", today, 1, 9);
         assertEquals(java.util.List.of("오늘 2번", "오늘 1번", "어제", "그저께"),
-                missions.findRecentContentsByGroupId(groupId, 5));
-        assertEquals(java.util.List.of("오늘 2번", "오늘 1번"), missions.findRecentContentsByGroupId(groupId, 2));
-        assertTrue(missions.findRecentContentsByGroupId(insertGroup(insertUser()), 5).isEmpty());
+                recentContents(groupId, 5));
+        assertEquals(java.util.List.of("오늘 2번", "오늘 1번"), recentContents(groupId, 2));
+        assertTrue(recentContents(insertGroup(insertUser()), 5).isEmpty());
+        RecentMissionRow newest = missions.findRecentByGroupId(groupId, 1).getFirst();
+        assertEquals("일상", newest.getCategory());
+        assertEquals("PHOTO_NOW", newest.getTemplate());
+    }
+
+    @Test
+    void closedMissionStatsCountParticipationAndReactions() {
+        Long owner = insertUser();
+        Long member = insertUser();
+        Long lateJoiner = insertUser();
+        Long groupId = insertGroup(owner);
+        join(groupId, owner, "CURDATE() - INTERVAL 10 DAY");
+        join(groupId, member, "CURDATE() - INTERVAL 10 DAY");
+        insertMission(groupId, 1, "CURDATE() - INTERVAL 40 DAY");      // 30일보다 오래됨 → 제외
+        Long older = insertMission(groupId, 1, "CURDATE() - INTERVAL 3 DAY");
+        Long previous = insertMission(groupId, 1, "CURDATE() - INTERVAL 2 DAY");
+        insertMission(groupId, 1, "CURDATE()");                         // 현재 미션 → 제외
+        join(groupId, lateJoiner, "CURDATE() - INTERVAL 2 DAY + INTERVAL 1 HOUR");  // previous 가 열린 뒤 들어옴
+        Long ownerAnswer = submit(older, owner);
+        submit(older, member);
+        submit(previous, owner);
+        submit(previous, lateJoiner);
+        jdbc.update("INSERT INTO reactions (submission_id, user_id, sticker_type) VALUES (?, ?, 'heart'), (?, ?, 'fire')",
+                ownerAnswer, member, ownerAnswer, owner);
+        jdbc.update("INSERT INTO comments (submission_id, user_id, content) VALUES (?, ?, 'ㅋㅋ')", ownerAnswer, member);
+
+        var stats = missions.findClosedStatsByGroupId(groupId, SeoulTime.today().minusDays(30), 150);
+
+        assertEquals(2, stats.size());
+        // 최근 것부터: previous(2명 중 1명 + 열린 뒤 들어와서 낸 1명 → 인원 3, 제출 2), older(2명 모두 제출, 반응 2 + 댓글 1)
+        assertEquals(java.util.List.of(2L, 2L), stats.stream().map(MissionStatRow::getSubmittedCount).toList());
+        assertEquals(java.util.List.of(3L, 2L), stats.stream().map(MissionStatRow::getMemberCount).toList());
+        assertEquals(java.util.List.of(0L, 3L), stats.stream().map(MissionStatRow::getEngagementCount).toList());
+        assertEquals("PHOTO_NOW", stats.getFirst().getTemplate());
+        assertEquals(1, missions.findClosedStatsByGroupId(groupId, SeoulTime.today().minusDays(30), 1).size());
+    }
+
+    private java.util.List<String> recentContents(Long groupId, int limit) {
+        return missions.findRecentByGroupId(groupId, limit).stream().map(RecentMissionRow::getContent).toList();
+    }
+
+    private void join(Long groupId, Long userId, String joinedAt) {
+        jdbc.update("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'member', "
+                + joinedAt + ")", groupId, userId);
+    }
+
+    private Long submit(Long missionId, Long userId) {
+        jdbc.update("INSERT INTO submissions (mission_id, user_id, media_url) VALUES (?, ?, 'test.png')", missionId, userId);
+        return jdbc.queryForObject("SELECT id FROM submissions WHERE mission_id = ? AND user_id = ?", Long.class,
+                missionId, userId);
     }
 
     private void insertContent(Long groupId, String content, LocalDate date, int slotNo, int hour) {

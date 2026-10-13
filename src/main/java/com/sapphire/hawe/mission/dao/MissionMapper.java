@@ -12,6 +12,14 @@ import java.util.List;
 @Mapper
 public interface MissionMapper {
 
+    // "미션이 열릴 때 그룹에 있었는지". 그룹을 만들면 첫 미션 발행 시각과 그룹장 가입 시각이
+    // 몇 초 어긋날 수 있어서 1분 여유를 둔다.
+    String JOINED_BY_PUBLISH = "gm.joined_at <= m.published_at + INTERVAL 1 MINUTE";
+    // 미션의 전체 인원 = 미션이 열릴 때 있던 지금 멤버 + 그 미션에 냈지만 지금은 위에 없는 사람(나간 사람 등)
+    String MEMBER_COUNT = "((SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = m.group_id AND "
+            + JOINED_BY_PUBLISH + ") + (SELECT COUNT(*) FROM submissions s WHERE s.mission_id = m.id AND NOT EXISTS ("
+            + "SELECT 1 FROM group_members gm WHERE gm.group_id = m.group_id AND gm.user_id = s.user_id "
+            + "AND " + JOINED_BY_PUBLISH + "))) ";
     String NUMBER = "(SELECT COUNT(*) FROM missions x WHERE x.group_id = m.group_id "
             + "AND (x.published_at &lt; m.published_at OR "
             + "(x.published_at = m.published_at AND x.id &lt;= m.id))) AS number ";
@@ -55,9 +63,21 @@ public interface MissionMapper {
     @Select("SELECT template FROM missions WHERE group_id = #{groupId} AND mission_date = #{date}")
     List<String> findTemplatesByGroupIdAndDate(@Param("groupId") Long groupId, @Param("date") LocalDate date);
 
-    @Select("SELECT content FROM missions WHERE group_id = #{groupId} "
+    @Select("SELECT content, category, template FROM missions WHERE group_id = #{groupId} "
             + "ORDER BY published_at DESC, id DESC LIMIT #{limit}")
-    List<String> findRecentContentsByGroupId(@Param("groupId") Long groupId, @Param("limit") int limit);
+    List<RecentMissionRow> findRecentByGroupId(@Param("groupId") Long groupId, @Param("limit") int limit);
+
+    /** {@code since} 이후 닫힌 미션(현재 미션이 아님)의 참여 숫자, 최근 것부터. 사람·답 내용은 읽지 않는다. */
+    @Select("SELECT m.template, m.content, "
+            + "(SELECT COUNT(*) FROM submissions s WHERE s.mission_id = m.id) AS submitted_count, "
+            + MEMBER_COUNT + "AS member_count, "
+            + "(SELECT COUNT(*) FROM reactions r JOIN submissions s ON s.id = r.submission_id WHERE s.mission_id = m.id) "
+            + "+ (SELECT COUNT(*) FROM comments c JOIN submissions s ON s.id = c.submission_id "
+            + "WHERE s.mission_id = m.id) AS engagement_count "
+            + "FROM missions m WHERE m.group_id = #{groupId} AND m.mission_date >= #{since} AND NOT (" + CURRENT + ") "
+            + "ORDER BY m.published_at DESC, m.id DESC LIMIT #{limit}")
+    List<MissionStatRow> findClosedStatsByGroupId(@Param("groupId") Long groupId, @Param("since") LocalDate since,
+            @Param("limit") int limit);
 
     @Select("SELECT gm.user_id, EXISTS (SELECT 1 FROM submissions s WHERE s.mission_id = #{missionId} "
             + "AND s.user_id = gm.user_id) AS submitted FROM group_members gm "

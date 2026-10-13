@@ -7,9 +7,14 @@ import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
 import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.mission.dao.MissionInsertRow;
 import com.sapphire.hawe.mission.dao.MissionMapper;
+import com.sapphire.hawe.mission.dao.RecentMissionRow;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
+import com.sapphire.hawe.mission.domain.GenerationContext;
+import com.sapphire.hawe.mission.domain.GroupSignals;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
+import com.sapphire.hawe.mission.domain.RecentMission;
+import com.sapphire.hawe.mission.domain.SpecialDay;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -36,24 +42,37 @@ class MissionPublisherTests {
     @Mock GroupMemberMapper members;
     @Mock GroupMissionSlotMapper slots;
     @Mock MissionGenerator generator;
+    @Mock GroupContextBuilder contexts;
     MissionPublisher publisher;
+    static final GenerationContext GROUP_CONTEXT = new GenerationContext(LocalDate.of(2026, 10, 12), "FRIEND", List.of(),
+            List.of(new SpecialDay(SpecialDay.Kind.GROUP_MILESTONE, "우리 그룹 100일", 0)), GroupSignals.none(1, 100));
 
     @BeforeEach
     void setUp() {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, MissionTemplateSelector.MVP_POOL), generator,
-                new ObjectMapper());
+                contexts, new ObjectMapper());
         lenient().when(members.findUserIdsByGroupId(11L)).thenReturn(List.of(7L));
+        lenient().when(contexts.build(any(), any())).thenReturn(GROUP_CONTEXT);
     }
 
     @Test
     void publishesScheduledMissionOnceAndCatchesUpToday() {
         LocalDateTime now = LocalDateTime.of(2026, 10, 12, 11, 0);
         when(groups.findById(11L)).thenReturn(group(now.minusDays(2)));
-        when(generator.generate(any(), anyLong(), anyList(), anyBoolean()))
+        when(missions.findRecentByGroupId(11L, MissionPublisher.RECENT_CONTENTS))
+                .thenReturn(List.of(recentRow("어제 문장", "DRAW_SKETCH")));
+        when(generator.generate(any(), anyLong(), any(), anyBoolean()))
                 .thenReturn(new GeneratedMission("A", "일상", Map.of("subject", "A")));
 
         publisher.publishIfDue(11L, now);
+
+        // 그룹 정보(관계·기념일·기록)에 이번 슬롯의 최근 미션을 더해 생성기에 넘긴다
+        ArgumentCaptor<GenerationContext> context = ArgumentCaptor.forClass(GenerationContext.class);
+        verify(generator).generate(any(), anyLong(), context.capture(), anyBoolean());
+        assertEquals(GROUP_CONTEXT.specialDays(), context.getValue().specialDays());
+        assertEquals(List.of(new RecentMission("어제 문장", "일상", "DRAW_SKETCH")), context.getValue().recentMissions());
+        verify(contexts).build(any(), eq(now.toLocalDate()));
 
         ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
         verify(missions).insert(inserted.capture());
@@ -64,11 +83,12 @@ class MissionPublisherTests {
         assertEquals(now.toLocalDate().atTime(9, 0), row.getPublishedAt());
         assertEquals(now.toLocalDate().atTime(23, 0), row.getDeadlineAt());
         assertTrue(MissionTemplateSelector.MVP_POOL.contains(MissionTemplate.valueOf(row.getTemplate())));
-        verify(missions).findRecentContentsByGroupId(11L, MissionPublisher.RECENT_CONTENTS);
 
+        // 이미 발행된 슬롯만 있으면 그룹 정보를 모으지도 않는다
         when(missions.existsByGroupIdAndDateAndSlot(11L, now.toLocalDate(), 1)).thenReturn(true);
         publisher.publishIfDue(11L, now);
         verify(missions, times(1)).insert(any());
+        verify(contexts, times(1)).build(any(), any());
     }
 
     @Test
@@ -80,7 +100,7 @@ class MissionPublisherTests {
 
         LocalDateTime created = LocalDateTime.of(2026, 10, 12, 14, 0);
         when(groups.findById(11L)).thenReturn(group(created));
-        when(generator.generate(any(), anyLong(), anyList(), anyBoolean()))
+        when(generator.generate(any(), anyLong(), any(), anyBoolean()))
                 .thenReturn(new GeneratedMission("A", "일상", Map.of()));
         publisher.publishIfDue(11L, created);
         ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
@@ -92,10 +112,10 @@ class MissionPublisherTests {
     void publishesOnlyFromTheConfiguredPool() {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, List.of(MissionTemplate.SLIDER_TASTE)),
-                generator, new ObjectMapper());
+                generator, contexts, new ObjectMapper());
         LocalDateTime now = LocalDateTime.of(2026, 10, 13, 10, 0);
         when(groups.findById(11L)).thenReturn(group(now.minusDays(2)));
-        when(generator.generate(eq(MissionTemplate.SLIDER_TASTE), anyLong(), anyList(), eq(false)))
+        when(generator.generate(eq(MissionTemplate.SLIDER_TASTE), anyLong(), any(), eq(false)))
                 .thenReturn(new GeneratedMission("민트초코, 내 취향은 어디쯤?", "일상",
                         Map.of("topic", "민트초코", "left", "별로", "right", "최고")));
 
@@ -111,7 +131,7 @@ class MissionPublisherTests {
         publisher.publishIfDue(99L, LocalDateTime.of(2026, 10, 12, 12, 0));
         verify(missions, never()).insert(any());
         when(groups.findById(11L)).thenReturn(group(LocalDateTime.of(2026, 10, 11, 12, 0)));
-        when(generator.generate(any(), anyLong(), anyList(), anyBoolean()))
+        when(generator.generate(any(), anyLong(), any(), anyBoolean()))
                 .thenReturn(new GeneratedMission("A", "일상", Map.of()));
         doThrow(new DuplicateKeyException("duplicate")).when(missions).insert(any());
         assertDoesNotThrow(() -> publisher.publishIfDue(11L, LocalDateTime.of(2026, 10, 12, 12, 0)));
@@ -128,7 +148,8 @@ class MissionPublisherTests {
                 .map(MissionTemplate::media).distinct().count());
         assertTrue(saved.stream().allMatch(row -> row.getPublishedAt().equals(now)));
         // 앞 슬롯 문장 + 그 전 5개를 피하도록 5 + 3 − 1 개를 읽는다
-        verify(missions, times(3)).findRecentContentsByGroupId(11L, MissionPublisher.RECENT_CONTENTS + 2);
+        verify(missions, times(3)).findRecentByGroupId(11L, MissionPublisher.RECENT_CONTENTS + 2);
+        verify(contexts, times(1)).build(any(), eq(now.toLocalDate()));  // 그룹 정보는 한 번만 모은다
 
         // 다시 실행해도 이미 있는 슬롯은 건너뛴다
         when(missions.existsByGroupIdAndDateAndSlot(eq(11L), eq(now.toLocalDate()), anyInt())).thenReturn(true);
@@ -150,17 +171,25 @@ class MissionPublisherTests {
     private List<MissionInsertRow> publishThreeSlots(LocalDateTime now, List<MissionTemplate> pool) {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, pool),
-                new PlaceholderMissionGenerator(), new ObjectMapper());
+                new PlaceholderMissionGenerator(), contexts, new ObjectMapper());
         Group group = group(now.minusDays(2));
         group.setDailyMissionCount(3);
         when(groups.findById(11L)).thenReturn(group);
         List<MissionInsertRow> saved = new ArrayList<>();
         doAnswer(invocation -> saved.add(invocation.getArgument(0))).when(missions).insert(any());
-        when(missions.findRecentContentsByGroupId(eq(11L), anyInt())).thenAnswer(invocation ->
-                saved.reversed().stream().map(MissionInsertRow::getContent).toList());
+        when(missions.findRecentByGroupId(eq(11L), anyInt())).thenAnswer(invocation ->
+                saved.reversed().stream().map(row -> recentRow(row.getContent(), row.getTemplate())).toList());
 
         publisher.publishIfDue(11L, now);
         return saved;
+    }
+
+    private static RecentMissionRow recentRow(String content, String template) {
+        RecentMissionRow row = new RecentMissionRow();
+        row.setContent(content);
+        row.setCategory("일상");
+        row.setTemplate(template);
+        return row;
     }
 
     private Group group(LocalDateTime createdAt) {
