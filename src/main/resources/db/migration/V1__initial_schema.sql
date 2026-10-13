@@ -45,11 +45,16 @@ CREATE TABLE `group_members` (
   `user_id` bigint(20) NOT NULL,
   `role` varchar(20) NOT NULL,
   `joined_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `nickname_override` varchar(50) DEFAULT NULL,
+  `character_id_override` bigint(20) DEFAULT NULL,
+  `profile_image_url_override` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_group_members_group_user` (`group_id`,`user_id`),
   KEY `fk_group_members_user` (`user_id`),
+  KEY `fk_group_members_character` (`character_id_override`),
   CONSTRAINT `fk_group_members_group` FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`),
-  CONSTRAINT `fk_group_members_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  CONSTRAINT `fk_group_members_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_group_members_character` FOREIGN KEY (`character_id_override`) REFERENCES `characters` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `group_mission_slots` (

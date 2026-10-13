@@ -12,6 +12,16 @@ public class GroupMember {
     private Long userId;
     private String role;
     private LocalDateTime joinedAt;
+    private String nicknameOverride;
+    private Long characterIdOverride;
+    private String profileImageUrlOverride;
+
+    public String getNicknameOverride() { return nicknameOverride; }
+    public void setNicknameOverride(String nicknameOverride) { this.nicknameOverride = nicknameOverride; }
+    public Long getCharacterIdOverride() { return characterIdOverride; }
+    public void setCharacterIdOverride(Long characterIdOverride) { this.characterIdOverride = characterIdOverride; }
+    public String getProfileImageUrlOverride() { return profileImageUrlOverride; }
+    public void setProfileImageUrlOverride(String profileImageUrlOverride) { this.profileImageUrlOverride = profileImageUrlOverride; }
 
     public Long getId() {
         return id;

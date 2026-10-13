@@ -1,53 +1,57 @@
-# Review — 계약 반영 1차 / 6A: Android 제출·결과 서버 연결
+# B1 그룹 내 프로필 리뷰
 
-대상: 6A 구현(현재 HEAD `6cd6153`에 4A·6단계 클라이언트와 함께 커밋됨) + `.agent/report.md`. 백엔드는 이전 리뷰(승인 가능) 그대로라 제외.
-검증 근거: `ApiClient`(multipart/재시도/타임아웃), `SubmissionApi`·`SubmissionRepository`, `DataStore`(applyFeed/applySubmitted/result), `MainNavigation`의 MissionPerform·Results 경로, 네 제출 화면 `onSubmit`, `VoicePlayerController`, `VoiceRecorderController`, `ResultsScreen` 전문을 읽었다. 빌드·테스트는 재실행하지 않고 보고서(JVM 96개 통과, assemble/lint 통과)를 신뢰한다. 실서버 수동 검증은 보고서 자체가 미수행이라고 명시했다.
+대상: 미커밋 변경(`git diff` + 신규 파일), `.agent/plan.md`, `.agent/report.md`. 코드는 수정하지 않았다.
 
-## 요구사항 충족 확인
+## 확인한 것
 
-| 요구 | 결과 |
-|---|---|
-| multipart | JSON Content-Type 헤더 제거, 요청마다 본문 빌더 재호출이라 401 재발급 후 재전송 가능, 업로드 전용 60초 타임아웃 |
-| 틀별 파트 | 사진/그림 `file`만, 글 `text`만, 음성 `file`+`duration`(0.1~30)+`waveform`(≤64, 0~1) — 서버 허용 필드와 일치 |
-| 응답 매핑 | `Submission.id` Long, `isLate`, `mediaUrl` → 서버 origin 결합, 알 수 없는 template 은 건너뜀 |
-| 제출 UI | 중복 탭 방지, 실패 시 입력 보존·재시도, 성공 시 `applySubmitted` + 이전 화면에 신호 |
-| 오류 분류 | ALREADY_SUBMITTED=성공 취급, MISSION_CLOSED 안내, 413/415/400 메시지, 403/404 홈 복귀, 네트워크 안내 |
-| 결과 | 진입·복귀 시 피드 로드, 423 → 05로 복귀 + 안내, 실패 시 재시도 화면, "지각" 표시 |
-| 숨김 | 좋아요·댓글 UI 제거(7A 재사용용 `LikeButton`만 유지) |
-| 이미지/음성 | `coil-network-okhttp` 추가, 음성 http 재생은 `prepareAsync` + generation 가드 |
-
-논리 버그, 레이스, 파일 정리 문제는 찾지 못했다(음성 파일은 업로드 중 배경 전환에도 보존, 화면 해제 시 삭제).
+- 스키마: `group_members` 에 컬럼 3개 + KEY/FK 추가, `characters` FK 는 V1 에서 정상 적용(report 상 Flyway 재적용·170 테스트 통과).
+- 표시 CASE 는 `GroupMemberMapper` 상수 한 곳에만 정의, 4개 쿼리(`findMembersByGroupId`, `findMemberPreviewsByGroupIds`, `SubmissionMapper`, `CommentMapper`)가 참조. 닉네임·캐릭터·사진이 같은 조건(`nickname_override IS NOT NULL`)으로 한 묶음 선택됨.
+- 제출·댓글은 `LEFT JOIN group_members`(UNIQUE(group_id,user_id) 라 행 중복 없음), 댓글은 `co.user_id`(댓글 작성자) 기준 — 계획과 일치. 나간 작성자는 기본 프로필.
+- `GroupProfileService`: 그룹 404 → 비멤버 403 순서, 닉네임 검증이 파일 저장보다 앞, 롤백 시 새 파일 삭제 / 커밋 후 이전 파일 삭제, DELETE 멱등, 불변식(캐릭터형은 image NULL, 사진형은 character NULL) 유지. 응답은 기존 `MemberProfileResponse` 재사용.
+- `hasGroupProfile` 전달 경로(Row → Response → `GroupService.listMembers`) 정상. 다른 생성 호출처 없음.
+- 범위: `GroupService.leaveGroup`/`deleteGroupCascade`, 기본 프로필 API, 앱, 알림 미변경. 불필요한 리팩터링 없음. 문서·Postman 갱신됨.
+- 병렬 작업 충돌 지점은 계획의 "Potential Merge Conflicts" 와 동일(V1, group mappers/service, Submission/CommentMapper). 실제 충돌은 현 시점에서 확인 불가(HEAD 기준 변경 없음).
 
 ## P0
+
 없음.
 
 ## P1
+
 없음.
 
 ## P2
 
-### `feature/results/ResultsScreen.kt:49-65` — 진입 시 피드 이중 호출
-#### Problem
-`LaunchedEffect(missionID, refresh)` 가 첫 호출을 하고, `DisposableEffect` 에서 옵저버를 등록하면 이미 RESUMED 상태라 `ON_RESUME` 이 즉시 와서 `refresh++` → 같은 피드를 한 번 더 조회한다.
-#### Why It Matters
-네트워크 1회 낭비, 깜박임 가능성. 기능 결함은 아니다(4A 의 05 화면과 같은 패턴).
-#### Recommended Fix
-(선택) 첫 resume 은 건너뛰거나 `refresh` 를 `ON_START` 이후에만 증가.
+### File / Location
+`src/main/java/com/sapphire/hawe/group/service/GroupProfileService.java` (`updateImage` 검증 메시지), `group/controller/GroupProfileController.java` (`"Attach one image file"`)
 
-### `core/net/SubmissionRepository.kt` `feed` — 첫 페이지(100개)만 조회
-#### Problem
-`page=0&size=100` 한 번만 호출한다. 서버 상한도 100.
-#### Why It Matters
-그룹 정원이 100을 넘을 수 없다면 영향 없음. 정원이 늘어나면 뒤쪽 제출이 잘린다.
-#### Recommended Fix
-(선택) 정원 상한을 계약에 명시하거나, `totalPages` 만큼 이어 조회.
+### Problem
+`VALIDATION_ERROR` 메시지가 영어("Nickname must be 2 to 10 characters", "Attach an image file", "Attach one image file")다. 같은 로직을 복사한 원본 `ProfileService`/`ProfileController` 와 기존 오류 코드 메시지는 한국어다.
 
-### 참고 (조치 불필요)
-- **수동 검증 미수행**: 가입→그룹→4종 제출→결과→재시작→서버 중단 재시도→지각 시나리오는 실기기 확인이 필요하다. 이번에 폰에 설치된 빌드가 바로 그 대상이다.
-- **타임아웃 후 중복 제출**: 서버는 처리했는데 응답을 못 받은 경우, 재시도가 ALREADY_SUBMITTED 로 수렴해 성공 처리된다(설계대로).
-- **커밋 분리**: 4A·6(백엔드)·6A 가 한 커밋(`6cd6153`)에 들어갔다. 기능상 문제는 없으나 이력 분리가 필요하면 이미 늦었다.
-- 5단계(콕)는 `POKES` 스키마가 이미 있어 백엔드부터 시작 가능하며, 앱은 숨겨 둔 콕 버튼만 켜면 된다.
+### Why It Matters
+클라이언트에 그대로 노출되는 오류 문구라 언어가 섞인다. 기능 문제는 아니다.
+
+### Recommended Fix
+원본 `ProfileService` 와 같은 한국어 문구로 교체(예: "사진 파일을 첨부해 주세요", "사진 파일을 하나 첨부해 주세요"; 닉네임은 "닉네임은 2~10자여야 합니다" 등). 인코딩 문제가 이유였다면 UTF-8 로 저장되는지만 확인.
+
+---
+
+### File / Location
+`src/test/java/com/sapphire/hawe/group/**` (테스트 보강)
+
+### Problem
+계획의 테스트 항목 중 아래가 확인되지 않는다: ① 10MB 초과 → 413 (컨트롤러/서비스 어느 쪽도 해당 케이스 없음; `imageValidationPrecedesStorageAndUpdate` 가 포함하는지 확인 필요), ② 기본 프로필 변경(`PATCH /me/profile`)이 그룹 프로필이 있는 그룹에 반영되지 않음, ③ 컨트롤러 통합 테스트가 단일 멤버 그룹이라 `content[0]` 만 검증 — 다른 멤버의 프로필이 섞이지 않는지(멤버 2명 이상) 미검증.
+
+### Why It Matters
+①은 413 경로 회귀를 못 잡고, ②는 계약의 핵심 규칙(§2-2)이다. 쿼리 규칙상 현재 동작은 맞을 가능성이 높지만 보장하는 테스트가 없다.
+
+### Recommended Fix
+`GroupProfileServiceTests` 에 `file.getSize() > 10MB` 케이스(저장·갱신 미호출, `FILE_TOO_LARGE`) 추가. `GroupMemberMapperTests` 또는 컨트롤러 테스트에 "그룹 프로필 설정 후 `users.nickname` 변경 → 그룹 응답 불변, 다른 그룹은 변경 반영" 케이스 추가. 멤버 2명 케이스는 `GroupMemberMapperTests` 가 이미 일부 다룬다면 생략 가능.
+
+## 미검증(보고서에도 명시됨)
+
+- 실서버 기동 스모크 미실행(MockMvc 로 대체). 공유 DB 는 V1 변경 때문에 별도 재생성 필요 — 병합 시 팀 공지.
 
 ## 결론
 
-**승인 가능.** 계획 요구사항과 서버 계약을 충족하고 결함은 없다. P2 는 선택이라 Codex 에게 보낼 필수 수정은 없다.
+**승인 가능** — P0/P1 없음. P2 두 건은 선택적 후속 정리(병합 차단 아님). 병합 전에 B5 시작 전 커밋 순서(V1·SubmissionMapper·CommentMapper 충돌)만 지킬 것.

@@ -111,6 +111,9 @@
 | GET | /groups/{groupId} | 그룹 상세(멤버만) |
 | PATCH | /groups/{groupId}/settings | 그룹 설정 변경(그룹장만) |
 | GET | /groups/{groupId}/members | 멤버 목록 |
+| PUT | /groups/{groupId}/members/me/profile | 내 그룹 프로필을 캐릭터로 설정·교체 |
+| PUT | /groups/{groupId}/members/me/profile-image | 내 그룹 프로필을 사진으로 설정·교체 |
+| DELETE | /groups/{groupId}/members/me/profile | 내 그룹 프로필 해제 |
 | GET | /invites/{code} | 참여 전 미리보기 |
 | POST | /groups/join | 코드로 가입 |
 | DELETE | /groups/{groupId}/members/me | 나가기 |
@@ -142,7 +145,13 @@
 
 ### GET /groups/{groupId}/members
 
-멤버 응답은 userId, nickname, characterKey, profileImageUrl, role, submissionCountThisMonth, stampedToday를 가진다. 사진이 없으면 `profileImageUrl`은 null이다. 그룹 내 프로필과 hasGroupProfile은 후속 범위다.
+멤버 응답은 userId, nickname, characterKey, profileImageUrl, hasGroupProfile, role, submissionCountThisMonth, stampedToday를 가진다. 사진이 없으면 `profileImageUrl`은 null이다. `hasGroupProfile`은 그룹 내 프로필 설정 여부다.
+
+### 그룹 내 프로필
+
+`PUT /groups/{groupId}/members/me/profile`은 JSON `{ "nickname": "과대표 하늘", "characterId": 3 }`을 받아 200 프로필 객체 `{ userId, nickname, characterKey, profileImageUrl }`를 반환한다. `PUT /groups/{groupId}/members/me/profile-image`는 multipart `file`(이미지 1개)과 `nickname`을 받아 같은 객체를 반환한다. 닉네임은 trim 후 2~10자, 이미지는 10MB 이하의 지원 형식이어야 한다. `DELETE /groups/{groupId}/members/me/profile`은 기본 프로필로 되돌리고 204를 반환하며 반복 호출할 수 있다. 없는 그룹은 404 `GROUP_NOT_FOUND`, 비멤버는 403 `NOT_GROUP_MEMBER`다.
+
+그룹 프로필은 닉네임과 캐릭터 또는 사진을 한 벌로 선택한다. 설정된 그룹에서는 멤버 목록, 그룹 목록·상세, 초대 미리보기, 피드·제출 상세, 댓글의 사람 표시가 그룹 프로필을 쓴다. 설정되지 않은 그룹은 기본 프로필을 쓴다. 기본 프로필을 변경해도 설정된 그룹 프로필은 유지된다. 작성자가 그룹을 나가면 남아 있는 피드·댓글에는 기본 프로필이 표시된다. 멤버십 삭제나 그룹 삭제로 남는 사진 파일의 정리는 B4 범위다.
 
 ### GET /invites/{code}
 

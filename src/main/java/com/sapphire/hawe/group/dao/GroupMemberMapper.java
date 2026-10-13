@@ -13,14 +13,27 @@ import java.util.List;
 
 @Mapper
 public interface GroupMemberMapper {
+    String DISPLAY_NICKNAME = "CASE WHEN gm.nickname_override IS NOT NULL THEN gm.nickname_override ELSE u.nickname END AS nickname";
+    String DISPLAY_CHARACTER = "CASE WHEN gm.nickname_override IS NOT NULL THEN gc.svg_key ELSE c.svg_key END AS character_key";
+    String DISPLAY_IMAGE = "CASE WHEN gm.nickname_override IS NOT NULL THEN gm.profile_image_url_override ELSE u.profile_image_url END AS profile_image_url";
+    String GROUP_CHARACTER_JOIN = "LEFT JOIN characters gc ON gc.id = gm.character_id_override ";
 
     @Insert("INSERT INTO group_members (group_id, user_id, role) VALUES (#{groupId}, #{userId}, #{role})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insert(GroupMember member);
 
-    @Select("SELECT id, group_id, user_id, role, joined_at FROM group_members "
+    @Select("SELECT id, group_id, user_id, role, joined_at, nickname_override, character_id_override, "
+            + "profile_image_url_override FROM group_members "
             + "WHERE group_id = #{groupId} AND user_id = #{userId}")
     GroupMember findByGroupIdAndUserId(@Param("groupId") Long groupId, @Param("userId") Long userId);
+
+    @Update("UPDATE group_members SET nickname_override = #{nickname,jdbcType=VARCHAR}, "
+            + "character_id_override = #{characterId,jdbcType=BIGINT}, "
+            + "profile_image_url_override = #{imageKey,jdbcType=VARCHAR} "
+            + "WHERE group_id = #{groupId} AND user_id = #{userId}")
+    int setGroupProfile(@Param("groupId") Long groupId, @Param("userId") Long userId,
+            @Param("nickname") String nickname, @Param("characterId") Long characterId,
+            @Param("imageKey") String imageKey);
 
     @Select("SELECT COUNT(*) > 0 FROM group_members WHERE group_id = #{groupId} AND user_id = #{userId}")
     boolean existsByGroupIdAndUserId(@Param("groupId") Long groupId, @Param("userId") Long userId);
@@ -34,7 +47,8 @@ public interface GroupMemberMapper {
     @Update("UPDATE group_members SET role = #{role} WHERE group_id = #{groupId} AND user_id = #{userId}")
     void updateRole(@Param("groupId") Long groupId, @Param("userId") Long userId, @Param("role") String role);
 
-    @Select("SELECT gm.user_id AS user_id, u.nickname AS nickname, u.profile_image_url, c.svg_key AS character_key, gm.role AS role, "
+    @Select("SELECT gm.user_id AS user_id, " + DISPLAY_NICKNAME + ", " + DISPLAY_IMAGE + ", "
+            + DISPLAY_CHARACTER + ", (gm.nickname_override IS NOT NULL) AS group_profile, gm.role AS role, "
             + "(SELECT COUNT(*) FROM submissions s JOIN missions m ON m.id = s.mission_id "
             + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id "
             + "AND m.mission_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) AS submission_count_this_month, "
@@ -44,6 +58,7 @@ public interface GroupMemberMapper {
             + "AND m2.slot_no = m.slot_no ORDER BY m2.published_at DESC, m2.id DESC LIMIT 1)) AS stamped_today "
             + "FROM group_members gm JOIN users u ON u.id = gm.user_id "
             + "LEFT JOIN characters c ON c.id = u.character_id "
+            + GROUP_CHARACTER_JOIN
             + "WHERE gm.group_id = #{groupId} ORDER BY gm.joined_at ASC, gm.id ASC LIMIT #{limit} OFFSET #{offset}")
     List<GroupMemberRow> findMembersByGroupId(@Param("groupId") Long groupId, @Param("offset") long offset,
             @Param("limit") int limit);

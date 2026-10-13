@@ -198,7 +198,8 @@ public class GroupService {
 
         List<GroupMemberResponse> content = rows.stream()
                 .map(row -> new GroupMemberResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
-                        row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl()), row.getRole(),
+                        row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl()),
+                        row.isGroupProfile(), row.getRole(),
                         row.getSubmissionCountThisMonth(), row.isStampedToday()))
                 .toList();
         return PageResponse.of(content, safePage, safeSize, total);

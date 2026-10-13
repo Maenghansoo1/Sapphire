@@ -67,6 +67,9 @@ erDiagram
     bigint user_id FK
     string role
     datetime joined_at
+    string nickname_override
+    bigint character_id_override FK
+    string profile_image_url_override
   }
   MISSIONS {
     bigint id PK
@@ -149,6 +152,7 @@ erDiagram
 
 **비고**
 - `USERS.profile_image_url` — 기본 프로필 사진 파일 key(`profiles/uuid.jpg`), 없으면 NULL. API 응답에서는 공개 URL로 변환한다.
+- `GROUP_MEMBERS.nickname_override`(`VARCHAR(50)`), `character_id_override`(`BIGINT`, `CHARACTERS.id` FK), `profile_image_url_override`(`VARCHAR(500)`) — 그룹별 닉네임과 캐릭터 또는 사진 파일 key. 모두 NULL이면 기본 프로필을 표시한다. 설정 시 닉네임과 아바타 값 중 정확히 하나를 서비스가 함께 저장한다. 그룹을 나간 작성자의 피드·댓글은 기본 프로필로 표시한다.
 - `USERS` 인증 방식 — 소셜 로그인 대신 **이메일/비밀번호 자체 로그인**(`email` + `password_hash`) 사용. 필수 약관 동의 시각을 저장
 - `POKES.type` — `poke`(콕찌르기) / `fling`(똥뿌리기)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)

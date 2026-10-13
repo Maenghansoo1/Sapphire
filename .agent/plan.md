@@ -1,194 +1,146 @@
-# 계약 반영 2차 / 8단계(백엔드): Me 나머지 — 닉네임 변경 · 프로필 사진 · 회원 탈퇴
+# B1. 그룹 내 프로필 (백엔드)
 
-> 범위: **백엔드만** (`src/`, `docs/BACKEND/`). Android/iOS 는 건드리지 않는다(17-1 프로필 편집·17-5 탈퇴 화면 연결은 8A 로 별도). 결정 근거: `docs/BACKEND/CONTRACT_DECISIONS.md` §5 (사용자 결정 완료) + 이번 계획에서 §5-4 미결 사항을 아래 "Key Points"대로 확정.
->
-> **범위에서 제외(사용자 결정, 이번 질의)**: **그룹 내 프로필**(`group_members` 의 `*_override` 컬럼, `PUT/DELETE /groups/{id}/members/me/profile*`, 모든 응답에 그룹 내 프로필 우선 적용)은 8단계에서 **뺀다**. 별도 단계로 분리한다. 기본 프로필 사진·닉네임 변경이 그룹 내 프로필이 있는 그룹에 어떻게 보일지는 그 단계에서 다룬다(지금은 그룹 내 프로필이 없으므로 항상 기본 프로필).
->
-> **전제**: 작업 트리에 7단계(반응·댓글, `comment/`·`reaction/` 패키지와 `SubmissionService` 변경)가 **커밋 전 상태로 남아 있다**. 8단계는 그 위에서 진행한다 — 7단계 파일(`CommentMapper`/`CommentService`/`SubmissionService`/`SubmissionMapper`)을 수정하는 부분은 현재 작업 트리 내용을 기준으로 할 것(되돌리거나 다시 쓰지 말 것). Android 쪽 변경(`android/`)도 uncommitted 로 있으나 이번 작업과 무관하니 건드리지 않는다.
+> 원본 계획: `docs/해야될거/1번_찬희/B1-group-profile.md` (결정 근거: `docs/BACKEND/CONTRACT_DECISIONS.md` §2-1 "그룹 내 프로필", §2-2 "그룹 내 프로필 (16-1)"). 아래는 현재 코드를 확인해 구체화한 구현 계획이다. 이전 `.agent/plan.md`(8단계)는 이 파일로 덮어쓴다.
+> 범위: 백엔드(`src/`, `docs/BACKEND/`)만. 앱(`android/`, `frontend/`)·알림·`ml/` 은 건드리지 않는다.
 
 ## Goal
 
-1. `PATCH /api/me/profile` — 기본 프로필 닉네임 변경(trim 후 2~10자). 응답은 `GET /api/me` 와 같은 모양.
-2. `PUT /api/me/profile-image`(multipart `file`, 이미지 ≤10MB jpg/png/webp), `DELETE /api/me/profile-image` — 기본 프로필 사진 등록·교체·삭제. 사진이 있으면 모든 사람 표시 응답의 `profileImageUrl` 에 URL 이 내려간다.
-3. `DELETE /api/me` — 회원 탈퇴(204). 내 제출물(+파일)·댓글을 삭제하고, 그룹에서 나가고, 계정을 지운다. 다른 멤버가 있는 그룹의 그룹장이면 409 `OWNER_MUST_TRANSFER`.
-4. 탈퇴한 사용자의 **남은 액세스/리프레시 토큰이 더 이상 통하지 않게** 한다(§5-4 미결 해결).
+그룹마다 **닉네임 + (캐릭터 또는 사진)** 한 벌의 "그룹 내 프로필"을 설정·교체·해제할 수 있다. 설정돼 있으면 그 그룹의 **사람 표시 응답 전부**(그룹 멤버 목록, 그룹 목록/상세의 멤버 미리보기, 초대 미리보기, 피드, 제출 상세, 댓글)가 그 프로필로 보이고, 없으면 기본 프로필(users 의 닉네임/캐릭터/사진)로 보인다.
+
+```text
+PUT    /api/groups/{groupId}/members/me/profile         JSON { "nickname": "과대표 하늘", "characterId": 3 }  → 200 프로필 객체
+PUT    /api/groups/{groupId}/members/me/profile-image   multipart: file(이미지) + nickname(text)              → 200 프로필 객체
+DELETE /api/groups/{groupId}/members/me/profile         → 204 (기본 프로필로 복귀, 사진 파일 삭제, 멱등)
+// 프로필 객체 (= 기존 group/dto/MemberProfileResponse)
+{ "userId": 3, "nickname": "과대표 하늘", "characterKey": "gomdol", "profileImageUrl": null }
+```
+`GET /api/groups/{groupId}/members` 항목에 `hasGroupProfile`(boolean) 추가.
 
 ## Findings
 
-### 이미 있는 것
-- `auth/controller/MeController` — `GET /api/me` → `AuthService.getMe(userId)`(`MeResponse(id, email, nickname, characterKey, profileImageUrl, createdAt)`; 지금 `profileImageUrl` 은 항상 `null`). 사용자 없으면 `TokenErrorCode.INVALID_TOKEN`(401).
-- `auth/dao/UserMapper`: `findByEmail`, `findById`, `existsByEmail`, `insert` (SELECT 컬럼 목록이 `id, email, password_hash, nickname, character_id, terms_agreed_at, privacy_agreed_at, created_at` 로 **두 곳에 반복**). `auth/domain/User`(일반 getter/setter). `AuthService` 생성자: `(UserMapper, PasswordEncoder, JwtTokenProvider, CharacterMapper)`. `AuthService.refresh` 는 이미 `findById == null` 이면 `INVALID_TOKEN`.
-- `auth/dto/RegisterRequest`: `@NotBlank @Size(min = 2, max = 10) String nickname`, compact constructor 에서 `trim()`. **닉네임 규칙은 이것과 같게** 쓴다(앞뒤 공백 제거 후 2~10자).
-- `character/`: `PATCH /api/me/character`(`CharacterService.changeMyCharacter`, `CharacterMapper.updateUserCharacterId`) — 이미 있음, 변경 없음. **계약 규칙: 캐릭터를 바꿔도 사진은 지워지지 않는다**(앱이 `DELETE /me/profile-image` 를 따로 호출) → `CharacterService` 를 건드리지 말 것.
-- `global/security/JwtAuthenticationFilter`: `@Component` 가 **아니며** `SecurityConfig.securityFilterChain` 안에서 `new JwtAuthenticationFilter(jwtTokenProvider, objectMapper)` 로 생성한다. 토큰이 유효하면 사용자 존재 확인 없이 인증을 세운다. `shouldNotFilter`: `/api/auth/**`, `GET /api/characters`. 테스트 `global/security/JwtAuthenticationFilterTests` 가 생성자를 직접 호출(23·39행).
-- `JwtTokenProvider.createAccessToken(userId, nickname)` — 닉네임이 **클레임으로만** 들어가고 서버 코드에서 읽는 곳이 없다 → 닉네임을 바꿔도 기존 토큰의 클레임이 낡을 뿐 문제 없음(앱이 `GET /me` 로 읽음).
-- `global/storage`: `FileStorage{store(dir, bytes, ext), delete(key), publicUrl(key)}`, `FileTypeDetector.detect(bytes)`(`Detected(mediaType "IMAGE"|"AUDIO", extension)`), `LocalFileStorage`(디렉터리명 `[a-z0-9_-]+`). `/files/**` GET 공개. multipart 한도 `max-file-size=10MB`, `max-request-size=12MB`. 7단계 `CommentService` 가 이미지 저장·롤백 시 삭제(`TransactionSynchronization.afterCompletion`)·삭제 시 커밋 후 파일 삭제(`afterCommit`+try/catch+log)를 구현했다 — **같은 패턴**을 따른다(현재 작업 트리의 `comment/service/CommentService.java` 참고).
-- 사람을 보여 주는 응답에서 `profileImageUrl` 이 하드코딩 `null` 인 곳(4곳, 모두 `u.nickname` + `characters.svg_key` 조인 쿼리를 쓴다):
-  1. `group/service/GroupService.memberProfiles → toMemberProfile`(약 276~281행; 데이터는 `GroupMapper.findMemberPreviewsByGroupIds` → `GroupMemberPreviewRow`) — 그룹 상세/미리보기/목록의 멤버 프로필.
-  2. `group/service/GroupService` 멤버 목록(약 196행 `new GroupMemberResponse(..., null, ...)`; 데이터는 `GroupMemberMapper.findMembersByGroupId` → `GroupMemberRow`).
-  3. `submission/service/SubmissionService.response`(`new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(), null)`; 데이터는 `SubmissionMapper.FIELDS/JOINS` → `SubmissionRow`).
-  4. `comment/service/CommentService` 의 `CommentResponse` 조립(약 125행; 데이터는 `CommentMapper.FIELDS` → `CommentRow`). (7단계 신규 파일)
-- DB `users`: `id, email, password_hash, nickname, character_id, terms_agreed_at, privacy_agreed_at, created_at` — **`profile_image_url` 컬럼이 없다.** 프로젝트 결정: **V1 을 직접 수정하고 로컬 DB 를 재생성**한다(V1 은 "최종 스키마"; 5·7단계에서 같은 방식 사용, `V2__seed_characters.sql` 은 그대로).
-- 사용자를 참조하는 FK 전부(`V1__initial_schema.sql`): `groups.owner_id`, `group_members.user_id`, `submissions.user_id`, `submission_guesses.user_id`(+`submission_id`→submissions), `comments.user_id`(+`submission_id`), `comment_mentions.mentioned_user_id`(+`comment_id`), `reactions.user_id`(+`submission_id`), `pokes.from_user_id/to_user_id`(+`mission_id`,`group_id` FK), `notifications.from_user_id(NULL 허용)/to_user_id`. `missions` 테이블은 사용자 FK 가 없다(대상 지정 미션은 `params` JSON 에 `targetUserId`·닉네임 스냅샷만 있고 FK 없음 → 탈퇴 시 그대로 둔다; `CalendarMapper` 는 서브쿼리가 null 이면 "친구"로 대체, `MissionService` 는 스냅샷 닉네임 사용 — 변경 불필요).
-- 탈퇴에 쓸 수 있는 기존 로직: `GroupService.leaveGroup(userId, groupId, successorUserId)` — 일반 멤버는 멤버십 삭제, **그룹장이면서 혼자인 그룹은 `deleteGroupCascade`(댓글·멘션·반응·추측·제출·콕·미션·슬롯·멤버·그룹 삭제)**, 그룹장이면서 다른 멤버가 있으면 `successorUserId == null` 일 때 409 `SUCCESSOR_REQUIRED`. 그룹을 `findByIdForUpdate` 로 잠근다. (`GroupMapper` 에 "사용자가 속한 group id 목록" 쿼리는 없다 — `findSummariesByUserId` 는 페이지용 요약.)
-- 7단계에서 만든 `GroupMapper.deleteCommentMentionsByGroupId` 등 그룹 단위 삭제 쿼리는 그대로 재사용 가능.
-- 앱 쪽 참고: Android `ApiClient` 는 401 `INVALID_TOKEN` 이면 세션 만료로 처리(로그아웃) → 탈퇴 후 토큰이 `INVALID_TOKEN` 으로 거절되는 것이 앱 기대 동작과 맞다. `ignoreUnknownKeys=true`.
+(모두 코드로 확인함. 작업 트리 clean, 7·8단계 커밋 완료 — `profile/` 패키지, `users.profile_image_url`, 4개 쿼리의 `u.profile_image_url` 존재.)
+
+- `group_members`(V1 라인 42~53): `id, group_id, user_id, role, joined_at`, `UNIQUE(group_id,user_id)`. 그룹 내 프로필 컬럼 없음. Flyway 는 `V1__initial_schema.sql`, `V2__seed_characters.sql` 두 개뿐(V1 직접 수정 방침).
+- 사람을 보여 주는 쿼리는 **정확히 4곳**(`grep "u.nickname|svg_key|profile_image_url"` 로 확인; `CalendarMapper` 의 `target_nickname` 은 대상 지정 미션 치환용이라 범위 밖):
+  1. `GroupMapper.findMemberPreviewsByGroupIds` (`group/dao/GroupMapper.java:57`) — `group_members gm JOIN users u LEFT JOIN characters c`. 사용처 `GroupService.listMyGroups`(L86~98), `GroupService` 그룹 상세/초대 미리보기(`memberProfiles` L278, `toMemberProfile` L283) → `GroupMemberPreviewRow`.
+  2. `GroupMemberMapper.findMembersByGroupId` (`GroupMemberMapper.java:37`) — 이미 `gm` 기반. `GroupMemberRow` → `GroupService.listMembers`(L190~206)에서 `new GroupMemberResponse(...)`; 이미지 key 는 여기서 `storage.publicUrl` 로 변환.
+  3. `SubmissionMapper.FIELDS/JOINS` (`submission/dao/SubmissionMapper.java:12`) — `submissions s JOIN missions m JOIN users u LEFT JOIN characters c`, `gm` 없음. `findDetailById`, `findFeedByMissionId` 가 사용. `SubmissionRow` → `SubmissionService.response`(L207~215)가 `MemberProfileResponse` 생성. `FIELDS/JOINS` 를 다른 곳에서 참조하지 않음(확인함).
+  4. `CommentMapper.FIELDS/JOINS` (`comment/dao/CommentMapper.java:13`) — `comments co JOIN users u LEFT JOIN characters c`. `m.group_id` 가 없어 `submissions s`, `missions m` 조인이 필요. `CommentRow` → `CommentService`(L125).
+- 3·4 의 작성자는 **이미 그룹을 나갔을 수 있다** → `gm` 은 반드시 `LEFT JOIN`, `gm` 행이 없거나 `nickname_override IS NULL` 이면 기본 프로필.
+- 캐릭터: `CharacterMapper.findById(Long)` → `ProfileCharacter(id, name, svg_key)`. `CharacterErrorCode.CHARACTER_NOT_FOUND`(404).
+- 오류 코드: `GroupErrorCode.GROUP_NOT_FOUND`(404), `NOT_GROUP_MEMBER`(403); `CommonErrorCode.FILE_TOO_LARGE`(413), `CommonErrorCode.VALIDATION_ERROR`(400); `SubmissionErrorCode.UNSUPPORTED_FILE_TYPE`(415).
+- 파일: `FileStorage.store(dir, bytes, ext)` / `delete(key)` / `publicUrl(key)`, `FileTypeDetector.detect(bytes)`(IMAGE 만 허용). **복사할 패턴**: `profile/service/ProfileService.uploadImage/deleteImage` — 검증(null/empty → 400, >10MB → 413, 비이미지 → 415) → `storage.store` → 롤백 시 새 파일 삭제(`afterCompletion != COMMITTED`) → 이전 파일은 `deleteAfterCommit`. `profile/controller/ProfileController.upload` — `@PutMapping(consumes = MULTIPART_FORM_DATA_VALUE)`, `@RequestParam(value="file", required=false) List<MultipartFile>`, 크기 != 1 이면 400.
+- 닉네임 규칙: `ProfileUpdateRequest` = `@NotBlank @Size(min=2,max=10)` + compact ctor 에서 trim.
+- `GlobalExceptionHandler` 가 `MissingServletRequestParameterException`/`HttpMediaTypeNotSupportedException`/`MaxUploadSizeExceededException`/`MultipartException` 이미 처리 → 별도 핸들러 불필요.
+- `GroupService.leaveGroup`/`deleteGroupCascade` 는 멤버십 행을 지우므로 그룹 내 프로필 컬럼도 함께 사라진다. 그룹 내 프로필 **사진 파일**은 고아가 된다 → B4 범위. 이번에는 `DELETE …/profile` 과 교체 시 파일 삭제만.
+- `GroupMember` 도메인은 `findByGroupIdAndUserId` 한 곳에서만 채워진다(서비스/테스트의 setter 호출은 영향 없음). `GroupMemberResponse` 는 main 에서 `GroupService:200` 한 곳에서만 생성, 테스트에서 직접 생성하는 곳 없음(grep 확인).
+- MyBatis 는 underscore→camelCase 매핑(기존 `character_key` → `characterKey`)이므로 새 별칭은 `group_profile`.
 
 ## Root Cause / Key Implementation Points
 
-1. **프로필 사진 저장 방식**: `users.profile_image_url varchar(500) NULL` 에 **파일 key**(예: `profiles/uuid.jpg`)를 저장하고, 응답에서 `storage.publicUrl(key)` 로 URL 을 만든다(`submissions.media_url`, `comments.image_url` 과 같은 방식). 새 마이그레이션이 아니라 V1 `users` 정의에 컬럼 추가.
-2. **새 기능 패키지 2개**(`CONTRACT_DECISIONS` §5-3: "새 기능 패키지에서"; 기존 `auth.MeController` 는 `GET /me` 전용으로 그대로 둔다 — 같은 클래스명을 쓰지 말 것):
-   - `com.sapphire.hawe.profile` — `ProfileController`(`PATCH /api/me/profile`, `PUT/DELETE /api/me/profile-image`), `ProfileService`, DTO.
-   - `com.sapphire.hawe.withdraw` — `WithdrawController`(`DELETE /api/me`), `WithdrawService`, `WithdrawMapper`(삭제용 SQL 전부), `WithdrawErrorCode`.
-   각 패키지는 `controller/service/dto/domain/dao` 5개 서브패키지 규칙을 따른다(필요한 것만 만든다).
-3. **`GET /me` 가 사진 URL 을 내려준다**: `AuthService.getMe` 가 `user.getProfileImageUrl()` 이 있으면 `storage.publicUrl(...)`, 없으면 `null`. → `AuthService` 생성자에 `FileStorage` 추가(테스트 `AuthServiceTests` 생성자 호출 수정). `PATCH /me/profile` 은 닉네임을 바꾼 뒤 **`authService.getMe(userId)` 를 재사용**해 응답을 만든다(중복 조립 금지).
-4. **사진 변경 트랜잭션**: `PUT`: 검증(이미지 매직바이트·크기) 통과 → `storage.store("profiles", bytes, ext)` → (롤백 시 새 파일 삭제 등록) → `UPDATE users SET profile_image_url=?` → 이전 key 가 있으면 **커밋 후** 삭제. `DELETE`: 컬럼을 NULL 로 → 이전 key 가 있으면 커밋 후 삭제. 사진이 없을 때 `DELETE` 도 멱등(204). 사용자 행이 없으면(영향 행 0 + `findById==null`) `INVALID_TOKEN`.
-5. **표시 응답 4곳에 `profileImageUrl` 반영**: 위 Findings 의 4개 쿼리에 `u.profile_image_url AS profile_image_url`(별칭은 camelCase 매핑 규칙대로 `profile_image_url`)을 추가하고 Row 클래스에 필드(`profileImageUrl`, key)를 더한 뒤, 서비스에서 `key == null ? null : storage.publicUrl(key)` 로 변환한다. `GroupService`, `CommentService` 는 `FileStorage` 주입이 필요할 수 있다(`SubmissionService` 는 이미 가짐; `CommentService` 도 이미 가짐). `FileStorage` 인터페이스에 default 메서드를 추가하지 말 것(Mockito 목에서 null 이 되어 테스트를 가림) — 서비스에서 인라인 null 체크.
-6. **탈퇴 처리 순서(한 트랜잭션, `WithdrawService.withdraw(userId)`)**:
-   1. 사용자 존재 확인(없으면 `INVALID_TOKEN`).
-   2. **그룹장 검사**: `groups.owner_id = userId` 이면서 멤버가 2명 이상인 그룹이 하나라도 있으면 → 409 `OWNER_MUST_TRANSFER`("그룹장인 그룹에서 먼저 나가 주세요"). 어떤 데이터도 지우기 전에 검사한다.
-   3. **삭제할 파일 key 수집**(DB 삭제 전): ① 내 제출물의 `media_url`(NULL 제외) ② **내 제출물에 달린 모든 댓글**의 `image_url` ③ 내가 쓴 댓글의 `image_url` ④ 내 `users.profile_image_url`. 중복 제거.
-   4. **그룹에서 나가기**: 내가 속한 모든 group id 를 읽어(예: `WithdrawMapper.findGroupIdsByUserId`) 각각 `groupService.leaveGroup(userId, groupId, null)`. (혼자인 그룹장 그룹은 이 호출이 그룹 전체를 cascade 삭제한다 — 그 안의 내 제출물·댓글 행도 함께 지워진다. 일반 멤버는 멤버십만 지운다.) 동시성 틈으로 `leaveGroup` 이 `SUCCESSOR_REQUIRED` 를 던지면(검사 후 다른 사람이 가입한 경우) **`OWNER_MUST_TRANSFER` 로 바꿔서 던진다**(트랜잭션은 롤백됨).
-   5. **남은 내 데이터 삭제**(순서 중요, FK 때문): 
-      - 내 제출물에 달린 **다른 사람 댓글의 멘션 행** → 그 댓글들 → 내 제출물에 달린 **반응** → 내 제출물의 **추측(`submission_guesses`)**
-      - 내가 쓴 댓글의 멘션 행, **나를 멘션한 다른 사람 댓글의 멘션 행**(`mentioned_user_id = 나`; 댓글은 그대로 두고 멘션 행만 삭제), 내가 쓴 댓글
-      - 내가 누른 반응, 내가 한 추측
-      - 내 제출물
-      - 내가 보내거나 받은 콕(`pokes.from_user_id = 나 OR to_user_id = 나`)
-      - 내가 보낸/받은 알림(`notifications.from_user_id = 나 OR to_user_id = 나`)
-   6. 마지막에 `users` 행 삭제.
-   7. **커밋 후 수집한 파일 삭제**(각 key `storage.delete`, 실패는 `log.warn` 만 — 응답은 204 유지; 한 파일 실패가 나머지 삭제를 막지 않게 key 별 try/catch).
-   - 같은 이메일로 다시 가입 가능(행이 지워지므로 자동).
-   - "기기 토큰·알림 설정" 은 9단계 테이블이 아직 없으므로 **이번에 다루지 않는다**(9단계에서 탈퇴 삭제 목록에 추가해야 함을 문서에 한 줄 기록).
-7. **탈퇴 후 토큰 무효화(§5-4 확정)**: 토큰 버전 컬럼을 두지 않는다. 대신 **`JwtAuthenticationFilter` 가 유효한 액세스 토큰마다 `UserMapper.existsById(userId)` 로 사용자 존재를 확인**하고 없으면 401 `TokenErrorCode.INVALID_TOKEN` 을 쓴다(`writeError` 재사용; 인증을 세우지 않는다). 리프레시는 이미 `AuthService.refresh` 가 `findById==null → INVALID_TOKEN` 이므로 추가 변경 없음. 비용: 인증 요청당 PK 조회 1회(허용). 필터 생성자 `JwtAuthenticationFilter(JwtTokenProvider, ObjectMapper, UserMapper)` 로 바꾸고 `SecurityConfig` 가 `UserMapper` 를 주입받아 넘긴다(필터는 `@Component` 로 만들지 말 것 — 주석의 이유 그대로). 이로써 탈퇴한 사용자의 남은 토큰으로 FK 오류(500)가 나는 경로도 막힌다.
-   - 비밀번호 변경 후 토큰 무효화(§1-4)는 **이번 범위가 아님**(`PATCH /me/password` 자체가 2차).
-8. **API 응답/에러 계약**
-   ```json
-   // PATCH /api/me/profile   Request
-   { "nickname": "하늘" }
-   // Response 200 — GET /api/me 와 같은 모양
-   { "id": 1, "email": "sky@email.com", "nickname": "하늘", "characterKey": "mongsil",
-     "profileImageUrl": null, "createdAt": "2026-06-02T10:00:00+09:00" }
-   ```
-   - 닉네임: `@NotBlank @Size(min=2,max=10)` + compact constructor `trim()` → 위반 400 `VALIDATION_ERROR`. 그룹 내 프로필이 있는 그룹에는 반영되지 않는다(아직 그룹 내 프로필이 없으므로 항상 모두 반영).
-   ```json
-   // PUT /api/me/profile-image   multipart/form-data, 파트 file     Response 200
-   { "profileImageUrl": "http://host/files/profiles/uuid.jpg" }
-   // DELETE /api/me/profile-image  → 204
-   // DELETE /api/me                → 204
-   ```
-   - 사진 오류: 415 `UNSUPPORTED_FILE_TYPE`(이미지가 아님/가짜 확장자/오디오 — 기존 `SubmissionErrorCode.UNSUPPORTED_FILE_TYPE` 재사용), 413 `FILE_TOO_LARGE`(기존 `CommonErrorCode`), `file` 파트 없음/빈 파일 → 400 `VALIDATION_ERROR`.
-   - 탈퇴 오류: 409 `OWNER_MUST_TRANSFER`(신규 `WithdrawErrorCode`, 메시지 "그룹장인 그룹에서 먼저 나가 주세요"). 인증 없음 401.
-   - `WithdrawErrorCode`/신규 코드는 기존 `GroupErrorCode`/`SubmissionErrorCode` 와 같은 구조(`ErrorCode` 구현: `code()/message()/httpStatus()`).
+1. **스키마(V1 직접 수정)** — `group_members` 에 추가:
+   - `nickname_override varchar(50) DEFAULT NULL`
+   - `character_id_override bigint(20) DEFAULT NULL` + `KEY fk_group_members_character (character_id_override)` + `CONSTRAINT fk_group_members_character FOREIGN KEY (character_id_override) REFERENCES characters (id)` (`characters` 테이블이 V1 에서 `group_members` 보다 **앞에** 생성되는지 확인하고, 뒤라면 FK 를 그 뒤로 옮기거나 `ALTER TABLE` 로 추가 — 파일 내 순서 확인 필수)
+   - `profile_image_url_override varchar(500) DEFAULT NULL` (파일 key)
+   - 불변식(서비스가 보장, DB CHECK 없음): `nickname_override` NULL ⇒ 나머지 둘도 NULL. NOT NULL 이면 `character_id_override` / `profile_image_url_override` 중 **정확히 하나만** NOT NULL.
+2. **표시 프로필 규칙(4개 쿼리 공통, 한 묶음)**: `gm.nickname_override IS NOT NULL` 이면 `(nickname_override, gc.svg_key, profile_image_url_override)`, 아니면 `(u.nickname, c.svg_key, u.profile_image_url)`. 세 값을 같은 조건으로 고른다(닉네임만 그룹 값·사진은 기본 값 같은 혼합 금지). 사진형 override 는 `character_id_override` 가 NULL 이라 `gc.svg_key` 가 NULL → `characterKey` null + `profileImageUrl` 값. 정상.
+   - `GroupMemberMapper` 인터페이스에 public 상수 문자열을 **한 곳에만** 정의하고 나머지 3곳이 `GroupMemberMapper.XXX` 로 참조:
+     ```java
+     String DISPLAY_NICKNAME   = "CASE WHEN gm.nickname_override IS NOT NULL THEN gm.nickname_override ELSE u.nickname END AS nickname";
+     String DISPLAY_CHARACTER  = "CASE WHEN gm.nickname_override IS NOT NULL THEN gc.svg_key ELSE c.svg_key END AS character_key";
+     String DISPLAY_IMAGE      = "CASE WHEN gm.nickname_override IS NOT NULL THEN gm.profile_image_url_override ELSE u.profile_image_url END AS profile_image_url";
+     String GROUP_CHARACTER_JOIN = "LEFT JOIN characters gc ON gc.id = gm.character_id_override ";
+     ```
+     (상수 이름은 자유. 전제 별칭: `gm`=group_members, `u`=users, `c`=기본 characters, `gc`=그룹 characters. 네 쿼리 모두 이 별칭과 충돌하지 않음을 확인함.)
+3. **API**: 신규 `GroupProfileController`(`/api/groups/{groupId}/members/me`) + `GroupProfileService` — `GroupController`/`GroupService` 를 더 키우지 않는다. 공통 선행 검사: `groupMapper.findById` null → 404 `GROUP_NOT_FOUND`, `groupMemberMapper.findByGroupIdAndUserId` null → 403 `NOT_GROUP_MEMBER` (이 호출이 이전 override 값 조회도 겸함). 변경은 모두 `@Transactional`, 이전 사진 파일 삭제는 커밋 후.
+   - `PUT …/profile`: 닉네임은 DTO 검증, `characterMapper.findById(characterId)` null → 404 `CHARACTER_NOT_FOUND`. `setGroupProfile(groupId, userId, nickname, characterId, null)`. 이전 `profileImageUrlOverride` 가 있었으면 커밋 후 삭제. 응답 `characterKey = character.getSvgKey()`, `profileImageUrl = null`.
+   - `PUT …/profile-image`: 닉네임(trim, 2~10자, null/공백/범위 밖 → 400 `VALIDATION_ERROR`) → 파일 검증(ProfileService.uploadImage 와 동일, 디렉터리 `"group-profiles"`) → `storage.store` + 롤백 시 삭제 등록 → `setGroupProfile(groupId, userId, nickname, null, key)` → 이전 key 커밋 후 삭제. 응답 `characterKey = null`, `profileImageUrl = storage.publicUrl(key)`.
+   - `DELETE …/profile`: `setGroupProfile(groupId, userId, null, null, null)`; 이전 key 있으면 커밋 후 삭제; 이미 프로필이 없어도 204(멱등).
+   - 응답 DTO 는 새로 만들지 않고 `group/dto/MemberProfileResponse` 재사용.
+4. **`hasGroupProfile`**: `GroupMemberRow` 에 `boolean groupProfile`(별칭 `group_profile` = `gm.nickname_override IS NOT NULL`), `GroupMemberResponse` 레코드에 `hasGroupProfile` 추가(JSON 필드 순서는 계약 예시대로 `profileImageUrl` 뒤·`role` 앞), `GroupService.listMembers` 생성 호출 수정.
+5. 모든 엔드포인트는 `members/me` — 본인 프로필만 다룬다. 다른 사람 프로필 수정 API 없음.
+6. 기본 프로필 변경(`PATCH /me/profile`, `PATCH /me/character`, `/me/profile-image`)이 그룹 프로필 있는 그룹에 반영되지 않는 것은 쿼리 규칙(2)이 보장 → 추가 코드 없음.
 
 ## Files / Functions to Change
 
 | 파일 | 변경 |
 |---|---|
-| `src/main/resources/db/migration/V1__initial_schema.sql` | `users` 에 `` `profile_image_url` varchar(500) DEFAULT NULL `` 추가(`character_id` 다음 정도). V2 는 건드리지 않는다. |
-| `auth/domain/User.java` | `String profileImageUrl` + getter/setter(저장 값은 key). |
-| `auth/dao/UserMapper.java` | 두 SELECT 에 `profile_image_url` 추가, `@Select boolean existsById(@Param("id") Long id)` 추가(`SELECT COUNT(*) > 0 FROM users WHERE id = #{id}`), `@Update int updateNickname(id, nickname)`, `@Update int updateProfileImageUrl(id, profileImageUrl)`(NULL 허용), `@Delete int deleteById(id)` — 탈퇴 삭제 SQL 을 한 곳에 모으려면 `deleteById` 는 `WithdrawMapper` 에 둬도 된다(둘 중 하나로 일관되게). |
-| `auth/service/AuthService.java` | 생성자에 `FileStorage` 추가, `getMe` 에서 `profileImageUrl` 변환. |
-| `global/security/JwtAuthenticationFilter.java` | 생성자에 `UserMapper` 추가, 토큰 검증 직후 `existsById` 확인 → 없으면 `BusinessException(TokenErrorCode.INVALID_TOKEN)` 로 `writeError`. |
-| `global/security/SecurityConfig.java` | `UserMapper` 주입(생성자 또는 `securityFilterChain` 파라미터), 필터 생성 시 전달. |
-| `profile/controller/ProfileController.java` (신규) | `PATCH /api/me/profile`(`@Valid @RequestBody`), `PUT /api/me/profile-image`(`consumes = MULTIPART_FORM_DATA_VALUE`, `@RequestParam("file") MultipartFile`, 200), `DELETE /api/me/profile-image`(204). |
-| `profile/dto/ProfileUpdateRequest.java`, `ProfileImageResponse.java` (신규) | `record ProfileUpdateRequest(@NotBlank @Size(min=2,max=10) String nickname)` + trim 하는 compact ctor; `record ProfileImageResponse(String profileImageUrl)`. |
-| `profile/service/ProfileService.java` (신규) | `updateNickname(userId, request)` → `userMapper.updateNickname`(+ 사용자 없음 처리) → `authService.getMe(userId)`; `uploadImage(userId, MultipartFile)`; `deleteImage(userId)`. 파일 처리/커밋 후 삭제는 Key Point 4. |
-| `withdraw/controller/WithdrawController.java` (신규) | `DELETE /api/me` → 204. |
-| `withdraw/service/WithdrawService.java` (신규) | Key Point 6. 의존: `UserMapper`, `WithdrawMapper`, `GroupService`, `FileStorage`. `@Transactional`. |
-| `withdraw/service/WithdrawErrorCode.java` (신규) | `OWNER_MUST_TRANSFER(CONFLICT, "그룹장인 그룹에서 먼저 나가 주세요")`. |
-| `withdraw/dao/WithdrawMapper.java` (신규) | 애노테이션 SQL: `findGroupIdsByUserId`, `existsOwnedGroupWithOtherMembers`(또는 id 목록), 파일 key 수집 쿼리 4개(`findSubmissionMediaKeys`, `findCommentImageKeysOnMySubmissions`, `findMyCommentImageKeys`, 프로필은 `UserMapper.findById` 로 읽어도 됨), 삭제 쿼리들(Key Point 6-5 순서대로: 내 제출물 댓글의 멘션·댓글·반응·추측, 내 댓글 멘션·나를 멘션한 멘션 행·내 댓글, 내 반응, 내 추측, 내 제출물, 콕, 알림), `deleteUserById`. 다중 테이블 DELETE 는 기존 `GroupMapper` 의 `DELETE cm FROM ... JOIN ...` 스타일을 따른다. |
-| `group/dao/GroupMemberPreviewRow.java`, `GroupMapper.java`(`findMemberPreviewsByGroupIds`) | `u.profile_image_url` 추가 + Row 필드. |
-| `group/dao/GroupMemberRow.java`, `GroupMemberMapper.java`(`findMembersByGroupId`) | 〃 |
-| `group/service/GroupService.java` | `toMemberProfile` 과 멤버 목록 변환에서 `profileImageUrl` 변환 사용(`FileStorage` 주입 필요하면 생성자에 추가 — **`GroupService` 를 직접 `new` 하는 테스트 생성자 호출을 함께 수정**). `leaveGroup`/`deleteGroupCascade` 로직은 변경하지 않는다. |
-| `submission/dao/SubmissionMapper.java`(`FIELDS`), `SubmissionRow.java`, `submission/service/SubmissionService.java`(`response`) | `u.profile_image_url` 추가 후 변환. |
-| `comment/dao/CommentMapper.java`(`FIELDS`), `CommentRow.java`, `comment/service/CommentService.java` | 〃 |
+| `src/main/resources/db/migration/V1__initial_schema.sql` | `group_members` 컬럼 3개 + KEY/FK (Key Point 1). `V2` 불변. 새 마이그레이션 금지 |
+| `group/domain/GroupMember.java` | `nicknameOverride`, `characterIdOverride`, `profileImageUrlOverride` 필드 + getter/setter |
+| `group/dao/GroupMemberMapper.java` | ① 표시 CASE 상수 4개(Key Point 2) ② `findByGroupIdAndUserId` SELECT 에 새 컬럼 3개 추가 ③ `@Update int setGroupProfile(@Param groupId, userId, nickname, characterId, imageKey)` — `UPDATE group_members SET nickname_override=#{nickname}, character_id_override=#{characterId}, profile_image_url_override=#{imageKey} WHERE group_id=#{groupId} AND user_id=#{userId}` (null 파라미터는 `jdbcType` 문제 없는지 확인, 필요 시 `#{x,jdbcType=VARCHAR}`/`BIGINT`) ④ `findMembersByGroupId` 를 상수 사용으로 교체 + `GROUP_CHARACTER_JOIN` + `(gm.nickname_override IS NOT NULL) AS group_profile` (기존 `u.nickname AS nickname, u.profile_image_url, c.svg_key AS character_key` 대체). 기존 `LEFT JOIN characters c ON c.id = u.character_id` 는 유지 |
+| `group/dao/GroupMemberRow.java` | `boolean groupProfile` + `isGroupProfile/setGroupProfile` |
+| `group/dao/GroupMapper.java` (`findMemberPreviewsByGroupIds`) | `GroupMemberMapper` 상수 사용 + `GROUP_CHARACTER_JOIN`. `GroupMemberPreviewRow` 는 변경 없음(별칭 동일) |
+| `submission/dao/SubmissionMapper.java` (`FIELDS/JOINS`) | `FIELDS` 의 `u.nickname, u.profile_image_url, c.svg_key AS character_key` 를 표시 상수로 교체. `JOINS` 에 `LEFT JOIN group_members gm ON gm.group_id = m.group_id AND gm.user_id = s.user_id ` + `GROUP_CHARACTER_JOIN` 추가 (`LEFT JOIN characters c` 뒤). `SubmissionRow` 변경 없음 |
+| `comment/dao/CommentMapper.java` (`FIELDS/JOINS`) | `FROM comments co JOIN submissions s ON s.id = co.submission_id JOIN missions m ON m.id = s.mission_id JOIN users u ON u.id = co.user_id LEFT JOIN characters c ON c.id = u.character_id LEFT JOIN group_members gm ON gm.group_id = m.group_id AND gm.user_id = co.user_id ` + `GROUP_CHARACTER_JOIN`; FIELDS 에 표시 상수. 작성자는 **댓글 작성자** `co.user_id` 기준(제출 작성자 아님). `CommentRow` 변경 없음 |
+| `group/dto/GroupMemberResponse.java` | `boolean hasGroupProfile` 추가 |
+| `group/service/GroupService.java` (`listMembers`) | `row.isGroupProfile()` 전달 |
+| `group/dto/GroupProfileRequest.java` (신규) | `record GroupProfileRequest(@NotBlank @Size(min=2,max=10) String nickname, @NotNull Long characterId)` + compact ctor 로 nickname trim |
+| `group/service/GroupProfileService.java` (신규) | Key Point 3. 의존: `GroupMapper`, `GroupMemberMapper`, `CharacterMapper`, `FileStorage`. `ProfileService` 의 파일 검증·롤백/커밋 후 삭제 로직을 **복사해 쓴다**(공통 유틸로 추출하는 리팩터링은 하지 않는다) |
+| `group/controller/GroupProfileController.java` (신규) | `@RequestMapping("/api/groups/{groupId}/members/me")`: `@PutMapping("/profile")`(JSON, `@Valid @RequestBody GroupProfileRequest`), `@PutMapping(value="/profile-image", consumes=MULTIPART_FORM_DATA_VALUE)`(`file` 는 `ProfileController.upload` 와 같은 List 패턴, `nickname` 은 `@RequestParam(value="nickname", required=false)` 후 서비스에서 검증), `@DeleteMapping("/profile")` → 204. `@AuthenticationPrincipal Long userId`. 기존 `GroupController` 의 `DELETE /{groupId}/members/me`(나가기)와 경로가 다르므로(`…/me/profile`) 충돌 없음 |
 | 테스트 | 아래 "Tests Required" |
-| 문서 | 아래 "Documentation" |
-
-### Documentation (코드와 같은 변경에서 갱신)
-- `docs/BACKEND/API_DESIGN.md`: **Me 절 신설**(`GET /me`, `PATCH /me/profile`, `DELETE /me`, 프로필 사진 PUT/DELETE; `PATCH /me/password` 는 "2차" 로 표기), §8 "프로필 사진 (설계만, 미구현)" → 구현됨으로, 프로필 사진 응답·오류·`DELETE` 204 반영. 탈퇴 시 삭제 범위 요약.
-- `docs/BACKEND/BACKEND_DB.md`: `users.profile_image_url`(key 저장) 추가.
-- `docs/BACKEND/CONTRACT_DECISIONS.md`: §5 상태를 "백엔드 반영됨 (그룹 내 프로필은 별도 단계, 앱은 8A)" 로; §5-4 미결 중 토큰 처리(필터가 사용자 존재 확인)·"삭제된 사용자의 작품에 달린 다른 사람 댓글·반응은 작품과 함께 삭제" 를 확정으로 정리; 9단계가 탈퇴 삭제 목록(기기 토큰·알림 설정)에 항목을 추가해야 한다는 한 줄.
-- `docs/BACKEND/CONTRACT_WORK_PLAN.md`: 8단계 행에 비고 한 줄(백엔드 완료·그룹 내 프로필은 분리·앱 8A 대기).
-- `docs/FEATURE/PROJECT_OVERVIEW.md` §10 "현재 진행 상태": 이번에 건드리는 김에 **인증/그룹/미션·제출/콕/반응·댓글/Me 행을 현재 구현 상태로 갱신**(지금은 "미션·제출·집계 API: 설계만" 등 낡아 있음). 다른 내용은 건드리지 않는다.
-- 신규 `docs/BACKEND/postman/HAWE_ME.postman_collection.json` (`HAWE_POKE.postman_collection.json` 형식, UTF-8, 한글 깨짐 없음): 닉네임 변경, 사진 PUT/DELETE, 탈퇴.
+| 문서 | `docs/BACKEND/API_DESIGN.md`(그룹 내 프로필 3개·`hasGroupProfile`·표시 프로필 규칙·나간 멤버 규칙), `BACKEND_DB.md`(group_members 컬럼), `CONTRACT_DECISIONS.md`(§1 목록·§2 헤더의 "그룹 내 프로필은 2차" 문구 정리, §2-2 상태 "반영됨", §5 헤더의 "그룹 내 프로필은 별도 단계" 정리), `CONTRACT_WORK_PLAN.md` 진행 표시, `docs/BACKEND/postman/HAWE_GROUP.postman_collection.json` 에 요청 3개 추가(JSON 유효성·한글 깨짐 확인) |
 
 ## Implementation Steps
 
-1. **스키마**: V1 `users` 에 `profile_image_url` 추가. **로컬 DB 재생성 필요**(Flyway checksum 변경): 로컬 개발 DB(`localhost:3306/hawe`)만, 먼저 `mysqldump`/`mariadb-dump` 로 `%TEMP%` 에 백업 → `DROP DATABASE hawe; CREATE DATABASE hawe CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` → 테스트로 Flyway 재적용. 백업 경로와 재생성 전 행 수를 보고서에 적는다. `flyway clean/repair` 설정을 코드에 넣지 말 것.
-2. `User`/`UserMapper`/`AuthService.getMe` 에 `profile_image_url`, `existsById`, 업데이트 쿼리 추가 + `AuthServiceTests` 생성자 수정.
-3. **표시 응답 4곳**에 프로필 사진 반영(Mapper SELECT·Row·Service 변환) + 관련 테스트 생성자/목 수정.
-4. **토큰 무효화**: `JwtAuthenticationFilter`+`SecurityConfig` 수정, `JwtAuthenticationFilterTests` 수정/추가.
-5. **프로필 패키지**: 닉네임 변경, 사진 PUT/DELETE.
-6. **탈퇴 패키지**: `WithdrawMapper`, `WithdrawService`, 컨트롤러, 오류 코드.
-7. 테스트 작성 → `.\mvnw.cmd clean test -q` 통과.
-8. 문서·Postman 갱신.
+1. `V1__initial_schema.sql` 수정(테이블 생성 순서 확인). 그 후 **로컬 DB 백업 → DROP/CREATE `hawe` → 테스트로 Flyway 재적용**: `mysqldump hawe > %TEMP%\hawe_backup_B1.sql` 후 DB 재생성. 백업 경로와 백업 시점 주요 테이블 행 수를 보고서에 적는다. `flyway clean/repair` 를 코드·설정에 넣지 않는다.
+2. `GroupMember` 필드, `GroupMemberMapper`(상수·`setGroupProfile`·`findByGroupIdAndUserId`) 추가.
+3. 4개 쿼리에 표시 규칙 적용(`GroupMemberMapper.findMembersByGroupId`, `GroupMapper.findMemberPreviewsByGroupIds`, `SubmissionMapper`, `CommentMapper`) — 이 시점에 기존 테스트가 전부 통과해야 한다(프로필이 없는 경우 결과 동일).
+4. `GroupMemberRow.groupProfile` → `GroupMemberResponse.hasGroupProfile` → `GroupService.listMembers`.
+5. `GroupProfileRequest`, `GroupProfileService`, `GroupProfileController`.
+6. 테스트 작성 → `.\mvnw.cmd clean test -q`.
+7. 문서·Postman 갱신.
 
 ## Constraints
 
-- 범위는 **백엔드 + 문서**. `android/`, `ios/`, `frontend/`, `V2__seed_characters.sql` 은 건드리지 않는다. 그룹 내 프로필 관련 코드(컬럼·API·응답 우선 적용)를 **만들지 않는다**.
-- `PATCH /me/password`, 알림/FCM/기기 토큰/알림 설정 테이블은 만들지 않는다(9단계·2차).
-- 새 마이그레이션(V3)을 만들지 말고 V1 을 직접 수정한다(프로젝트 결정).
-- `CharacterService`/`PATCH /me/character` 동작 변경 금지(사진을 지우지 않는다).
-- `GroupService.leaveGroup`/`deleteGroupCascade` 시그니처·동작 변경 금지(탈퇴가 `leaveGroup` 을 재사용). `GroupService` 의 변경은 프로필 사진 변환과 `FileStorage` 주입에 한정.
-- `FileStorage` 인터페이스에 메서드를 추가하지 않는다. 파일 삭제는 항상 **커밋 후**, 실패는 로그만(응답을 깨지 말 것).
-- 패키지 규칙(`controller/service/dto/domain/dao`만), 기존 스타일(애노테이션 MyBatis, 한 줄 getter/setter Row, 짧은 서비스 메서드), 주석 최소. 커밋/푸시 금지, `CLAUDE.md`/`AGENTS.md` 수정 금지.
+- 백엔드+문서만. 앱·알림·`CharacterService`/기본 프로필 API 변경 금지.
+- 새 마이그레이션(V3) 금지, V1 직접 수정.
+- 표시 CASE 는 **한 곳**(`GroupMemberMapper` 상수)에만 정의. 복붙 금지. 닉네임/캐릭터/사진 3값은 항상 한 묶음.
+- `GroupService.leaveGroup`/`deleteGroupCascade` 동작 변경 금지(고아 사진 파일은 B4).
+- 대상 지정 미션의 `[대상]` 치환(`MissionService`, `CalendarMapper.target_nickname`)은 이번에 바꾸지 않는다.
+- 공통 유틸 추출·기존 서비스 리팩터링 금지(범위 확장 금지). 패키지 규칙(5개 서브패키지: controller/service/dto/domain/dao) 준수.
+- 커밋/푸시 금지, `CLAUDE.md`·`AGENTS.md` 수정 금지. 사용자 커밋 사이에 작업 트리가 바뀔 수 있으니 시작 전 `git status` 확인.
 
 ## Edge Cases
 
-- 닉네임: 앞뒤 공백 제거 후 2~10자(" a " → "a" 1자 → 400), 공백뿐/누락/null → 400, 같은 닉네임으로 변경(영향 행 0) → 200 정상(JDBC 가 0을 보고해도 오류로 보지 말 것 — 사용자 존재는 `findById`/`existsById` 로 확인), 중복 닉네임 허용(유니크 아님).
-- 프로필 사진: 이미지가 아닌 파일·가짜 확장자·오디오 → 415; 10MB 초과 → 413; `file` 파트 없음/0바이트 → 400; 파트가 2개 이상이면 400(또는 첫 번째만 쓰되 일관되게 문서화); 교체 시 이전 파일이 커밋 후 삭제되고, 트랜잭션 롤백이면 새 파일이 삭제되고 이전 파일은 남는다; 사진 삭제 후 `GET /me` 의 `profileImageUrl` 은 `null`; 사진이 없는데 DELETE → 204. 사진이 있어도 `characterKey` 는 유지되어 `GET /me` 에 계속 내려간다.
-- 사진이 있는 사용자의 프로필이 그룹 멤버 목록·미리보기·피드·댓글 응답에 `profileImageUrl`(전체 URL) 로 나오고, 없으면 `null`(JSON `null` 유지; 댓글 응답은 `@JsonInclude(NON_NULL)` 이 없으므로 `"profileImageUrl": null`, 제출 응답 `SubmissionResponse` 는 `NON_NULL` 이라도 `author` 안의 `MemberProfileResponse` 는 영향 없음 — 기존 동작 확인 후 유지).
-- 탈퇴: 
-  - 혼자인 그룹의 그룹장 → 그룹 전체 삭제 후 탈퇴 성공(그 그룹의 미션·제출·콕 등도 사라짐).
-  - 일반 멤버로만 속함 → 멤버십 삭제, 남은 그룹 데이터 보존, **내 제출물·댓글은 삭제**(그룹에 남기지 않음 — 그룹 나가기와 다름).
-  - 다른 멤버가 있는 그룹의 그룹장 → 409 `OWNER_MUST_TRANSFER`, **어떤 데이터도 삭제되지 않음**(여러 그룹 중 하나만 걸려도 전체 롤백/사전 거절).
-  - 그룹이 하나도 없는 사용자 → 정상.
-  - 내 제출물에 다른 멤버의 댓글·반응·추측이 달려 있음 → 모두 삭제, 댓글 이미지 파일도 삭제.
-  - 다른 멤버가 쓴 댓글이 나를 멘션 → 댓글은 남고 멘션 행만 삭제.
-  - 내가 보낸/받은 콕·알림 삭제(`pokes.mission_id` FK 때문에 콕이 있는 채로 미션/제출만 지우면 안 됨 — 순서 확인).
-  - 같은 이메일 재가입 가능, 재가입 계정은 새 id.
-  - 두 번 호출/이미 삭제된 계정의 토큰 → 필터에서 401 `INVALID_TOKEN`.
-  - 동시 가입으로 `leaveGroup` 이 `SUCCESSOR_REQUIRED` → `OWNER_MUST_TRANSFER` 로 변환, 전체 롤백.
-- 필터: 탈퇴한 사용자의 액세스 토큰으로 어떤 보호된 API 를 호출해도 401 `INVALID_TOKEN`; 존재하는 사용자는 기존과 동일; `/api/auth/**`·`GET /api/characters` 는 여전히 필터 제외.
-- 대상 지정 미션의 대상이 탈퇴한 경우: 미션 `params` 의 스냅샷은 그대로 두며 `CalendarMapper` 서브쿼리는 null → "친구" 처리(변경 없음, 회귀 확인).
+- 그룹 내 프로필 없음 → 기본 프로필(8단계 사진 포함). `nickname_override` 만 있고 캐릭터/사진이 둘 다 NULL 인 행은 만들지 않는다.
+- 사진→캐릭터, 캐릭터→사진 전환 시 이전 사진 파일은 커밋 후 삭제, 트랜잭션 롤백 시 새로 저장한 파일 삭제.
+- 같은 사진형→사진형 교체: 이전 key 삭제(새 key 와 다름 — `store` 가 매번 새 key 생성).
+- 작성자가 그룹을 **나간 뒤** 피드/댓글: `gm` 행이 없어 기본 프로필로 보인다(그룹 내 프로필은 멤버십과 함께 사라진 것으로 본다). 재가입하면 새 행이라 프로필 없음. 문서에 명시.
+- 같은 그룹 내 닉네임 중복 허용, 기본 닉네임과 같아도 허용.
+- 닉네임 1자/11자/공백뿐/누락 → 400. 존재하지 않는 `characterId` → 404 `CHARACTER_NOT_FOUND`, `characterId` 누락 → 400. 비멤버 403, 그룹 없음 404, 토큰 없음 401, 비이미지 415, 10MB 초과 413, 파일 없음/0바이트/둘 이상 → 400, JSON 으로 `profile-image` PUT → 415.
+- 검증 실패(닉네임·파일) 시 DB 갱신과 파일 저장이 일어나지 않아야 한다(닉네임을 파일 저장 **전에** 검증).
+- 사용자가 여러 그룹에서 각각 다른 그룹 프로필 사용 — 그룹 A 설정이 그룹 B 응답에 새지 않는다(조인이 `m.group_id`/`gm.group_id` 로 한정됨).
+- `GET /api/invites/{code}` 미리보기도 멤버들의 그룹 내 프로필로 표시(비멤버가 보지만 앱 기대).
+- 피드 정렬·페이징·`COUNT`: `LEFT JOIN group_members` 는 `UNIQUE(group_id,user_id)` 라 행 중복 없음 — 테스트로 확인.
 
 ## Regression Risks
 
-- **`JwtAuthenticationFilter` 가 매 요청 DB 를 조회** → 존재하지 않는 사용자 id 로 토큰을 만들어 호출하는 테스트가 있으면 실패한다. 현재 `CommentControllerTests`/`ReactionControllerTests`/`PokeControllerTests`/`SubmissionControllerTests` 는 실제로 INSERT 한 사용자 id 로 토큰을 만들지만, **전체 테스트를 돌려 확인하고** 실패하는 테스트가 있으면 그 테스트가 실제 사용자 행을 만들도록 고친다(필터 쪽을 완화하지 말 것). `JwtAuthenticationFilterTests` 는 `UserMapper` 목을 넘기도록 수정.
-- **생성자 시그니처 변경**: `AuthService`(+`FileStorage`), `JwtAuthenticationFilter`(+`UserMapper`), `GroupService`(+`FileStorage`, 필요한 경우) — 직접 `new` 하는 단위 테스트(`AuthServiceTests`, `JwtAuthenticationFilterTests`, `GroupContractServiceTests`/`GroupServiceTests` 류)를 모두 찾아 수정. `@SpringBootTest` 기반은 영향 없음.
-- **쿼리 SELECT 컬럼 추가**: `UserMapper` 두 SELECT 와 Row 매핑(camelCase 변환) 누락 시 `profileImageUrl` 이 항상 null 로 보이는 조용한 버그 → 매퍼 테스트로 값 왕복 검증.
-- **V1 수정 → 이미 V1 을 적용한 DB 는 Flyway checksum 불일치.** 로컬 DB 재생성 필수. 공유 개발 DB 는 별도 조치 필요(보고서에 명시).
-- 탈퇴 삭제 SQL 의 FK 순서 오류는 **런타임 FK 위반(500)** 으로만 드러남 → 통합 테스트에서 모든 종속 테이블에 행이 있는 사용자로 탈퇴를 실제로 수행해 검증.
-- 파일 삭제를 트랜잭션 안에서 하면 롤백 시 파일만 사라진다 → 반드시 커밋 후.
-- 7단계 미커밋 파일과 같은 파일을 수정(아래 Merge Conflicts). 7단계 코드를 되돌리지 말 것.
+- 4개 쿼리 SELECT/JOIN 변경 → 기존 `GroupMapperTests`, `GroupContractMapperTests`, `GroupContractServiceTests`, `GroupServiceTests`, `SubmissionServiceTests`/`SubmissionIntegrationTests`/`SubmissionControllerTests`, `CommentMapperTests`/`CommentControllerTests`/`CommentServiceTests`, `ProfileControllerTests` 가 그대로 통과해야 한다.
+- 컬럼 별칭 충돌: `CommentMapper` 는 새로 `s`, `m` 별칭을 추가하므로 FIELDS 안의 기존 별칭(`co`, `u`, `c`)과 겹치지 않는지 확인. `SubmissionMapper` 의 `s.is_late AS late`, `m.template` 등 기존 컬럼 유지.
+- `GroupMemberResponse` 레코드 시그니처 변경 → 컴파일 오류 위치 전부 수정.
+- V1 수정 → 로컬 Flyway checksum 불일치(로컬 DB 재생성 필수; 공유 DB 는 별도 — 팀에 알릴 것).
+- `null` 파라미터 MyBatis 바인딩(`setGroupProfile`) — MariaDB 에서 `jdbcType` 오류 가능성, 테스트(DELETE 경로)로 확인.
 
 ## Tests Required
 
-- `auth/dao/UserMapperTests`(기존 확장, 실 MariaDB): `profile_image_url` 저장·조회, `updateNickname`, `updateProfileImageUrl`(NULL 포함), `existsById`.
-- `auth/service/AuthServiceTests`(기존 수정): 생성자 변경 반영 + `getMe` 가 키가 있으면 `publicUrl` 결과를, 없으면 `null` 을 반환.
-- `global/security/JwtAuthenticationFilterTests`(기존 수정+추가): 존재하는 사용자 → 인증 세워짐; **존재하지 않는 사용자의 유효한 액세스 토큰 → 401 `INVALID_TOKEN` JSON**, 인증 미설정, 체인 미진행; `/api/auth/**`·`GET /api/characters` 는 DB 조회 없이 통과.
-- `profile/service/ProfileServiceTests`(Mockito): 닉네임 변경이 `getMe` 결과를 반환; 사진 PUT 의 검증 실패(비이미지 415 / 0바이트 400 / 10MB 초과 413)에서 저장·DB 갱신이 일어나지 않음; 교체 시 이전 key 삭제 예약; DELETE 멱등.
-- `profile/controller/ProfileControllerTests`(MockMvc 통합, `SubmissionControllerTests` 스타일 — 임시 업로드 디렉터리 `@DynamicPropertySource`, 실제 INSERT 한 사용자 + `tokens.createAccessToken`): 401(토큰 없음); `PATCH` 정상/trim/1자 400/누락 400; `PUT` 이미지 200 + `profileImageUrl` 이 `/files/profiles/...` 로 실제 접근 가능 + `GET /me` 반영 + 그룹 멤버 목록·피드·댓글 응답에 `profileImageUrl` 반영(그룹·제출·댓글을 만들어 확인); 교체 시 이전 파일이 임시 디렉터리에서 사라짐; `DELETE` 후 `null`; 비이미지 415, `file` 없음 400; JSON 으로 PUT 하면 415 `UNSUPPORTED_MEDIA_TYPE`.
-- `withdraw/service/WithdrawServiceTests`(Mockito): 그룹장 검사가 삭제보다 먼저 실행(`OWNER_MUST_TRANSFER` 시 삭제 쿼리 호출 없음, `InOrder`), 모든 그룹에 `leaveGroup(userId, groupId, null)` 호출, `SUCCESSOR_REQUIRED` → `OWNER_MUST_TRANSFER` 변환, 삭제 쿼리 순서(InOrder), 파일 삭제는 커밋 후(트랜잭션 동기화 활용 방식에 맞게 검증), 파일 삭제 실패해도 예외 전파 없음.
-- `withdraw/dao/WithdrawMapperTests`(실 MariaDB, `@SpringBootTest @Transactional`): 각 종속 테이블에 내 행·남의 행을 섞어 넣고 삭제 쿼리 후 **내 것만 사라지고 남의 것은 남는지** 검증(특히 나를 멘션한 남의 댓글은 남고 멘션 행만 삭제, 내 제출물에 달린 남의 댓글은 삭제).
-- `withdraw/controller/WithdrawControllerTests`(MockMvc 통합): ① 그룹 2명(내가 일반 멤버) + 내 제출·댓글·반응·콕·(가능하면 알림 행) → `DELETE /api/me` 204, 사용자·제출·댓글 사라짐, 상대의 제출·그룹 유지, 제출/댓글 이미지·프로필 사진 파일이 임시 디렉터리에서 삭제, 이후 같은 토큰으로 `GET /api/me` → 401 `INVALID_TOKEN`, 같은 이메일로 재가입 201 ② 다른 멤버가 있는 그룹의 그룹장 → 409 `OWNER_MUST_TRANSFER` 이고 사용자·데이터 그대로 ③ 혼자인 그룹장 → 204 + 그룹 삭제 ④ 인증 없음 401.
-- 그룹 응답 테스트(기존 `GroupContract*`, `GroupServiceTests` 류)·`SubmissionServiceTests`·`CommentServiceTests` 가 새 필드/생성자 변경 후에도 통과하는지 확인하고, 필요하면 `profileImageUrl` 변환 케이스(키 있음/없음)를 한 곳씩 추가.
+- `GroupMemberMapperTests`(실 MariaDB; 기존 `GroupMapperTests` 패턴): `setGroupProfile` 후 `findMembersByGroupId`/`findMemberPreviewsByGroupIds`/`findByGroupIdAndUserId` — ① 프로필 없음=기본값, `group_profile=false` ② 캐릭터형: 그룹 닉네임+그룹 캐릭터 key, 이미지 null ③ 사진형: 그룹 닉네임+이미지 key, characterKey null, 기본 사진이 있어도 그룹 사진이 우선 ④ 해제(모두 NULL) 후 기본값 복귀 ⑤ 다른 그룹 영향 없음.
+- `GroupProfileServiceTests`(Mockito): 그룹 없음/비멤버/캐릭터 없음/닉네임 검증/파일 검증 실패 시 저장·갱신 없음, 사진→캐릭터 전환 시 이전 key 삭제 예약, 캐릭터→사진 전환, DELETE 멱등(프로필 없을 때도 예외 없음), 응답 매핑(characterKey/publicUrl).
+- `GroupProfileControllerTests`(`@SpringBootTest @AutoConfigureMockMvc`, 임시 업로드 디렉터리 — `ProfileControllerTests` 패턴: `hawe.storage.local-dir` 를 `DynamicPropertySource` 로 지정, JdbcTemplate 로 데이터 직접 INSERT, 정리는 finally): 401/403/404/400/415/413 각각, PUT 후 `GET /groups/{id}/members`(+`hasGroupProfile=true`), `GET /groups`, `GET /invites/{code}`, 피드 `GET /missions/{id}/submissions`, `GET /submissions/{id}`, 댓글 목록에서 표시 프로필 확인, DELETE 후 기본 프로필 복귀·사진 파일 삭제 확인, **다른 그룹에는 새지 않음**, `PATCH /me/profile` 이 그룹 프로필 있는 그룹에 반영되지 않음, 작성자가 그룹을 나간 뒤 피드는 기본 프로필.
+- 기존 위 회귀 테스트 전체 통과.
 
 ## Validation Steps
 
-1. `.\mvnw.cmd clean test -q` (Java 25, 로컬 MariaDB 필요) — 전체 통과, 테스트 수·실패 0 기록. 별도 lint/typecheck 명령은 없다.
-2. `rg "profileImageUrl|\), null\)" src/main` 로 `MemberProfileResponse(..., null)`/`GroupMemberResponse(..., null, ...)` 형태의 하드코딩 `null` 이 남은 곳이 없는지 확인(4곳 모두 변환 사용).
-3. `rg "new JwtAuthenticationFilter\(" src` — 모든 호출부가 3-인자.
-4. Postman JSON 을 `ConvertFrom-Json` 으로 파싱, 한글 대체 문자(�) 없음 확인.
-5. `git diff --check` — 공백 오류 없음(LF/CRLF 경고는 무시).
-6. 서버 기동 수동 HTTP 스모크가 가능하면 수행(가입→로그인→사진 PUT→`GET /me`→탈퇴→같은 토큰 401), 못 했으면 보고서에 "미검증" 명시 + MockMvc 대체 범위 기재.
-7. 보고서(`.agent/report.md`)에 포함: 변경 파일과 동작, 검증 결과, DB 재생성 여부·백업 경로·재생성 전 행 수, 남은 위험(공유 DB checksum, 그룹 삭제 시 파일 고아 — 혼자인 그룹 cascade 로 지워지는 **남의 아닌 내** 파일은 수집해 삭제하지만 그룹 전체 정리는 기존 후속 항목), 범위 밖으로 둔 것(그룹 내 프로필, `PATCH /me/password`, 9단계 기기 토큰 정리, 앱 8A).
+1. `.\mvnw.cmd clean test -q` 통과 — 총 테스트 수·실패 0 을 보고서에 기록.
+2. `rg "nickname_override|DISPLAY_"` 로 CASE 가 `GroupMemberMapper` 한 곳에 정의되고 나머지 3곳은 참조만 하는지 확인.
+3. Postman JSON 파싱(예: `python -c "import json;json.load(open(...,encoding='utf-8'))"`) + 한글 확인.
+4. `git diff --check`.
+5. 가능하면 서버 기동 스모크(그룹 생성 → 프로필 PUT → 피드/멤버 확인). 못 하면 보고서에 "미검증" 명시.
+6. 보고서(`.agent/report.md`)에 DB 백업 경로·행 수, 나간 멤버 표시 규칙, 범위 밖(B4 파일 정리, 앱 A3), 미검증 항목 기재.
 
 ## Potential Merge Conflicts
 
-- **7단계 미커밋 변경과 겹침**: `submission/service/SubmissionService.java`, `submission/dao/SubmissionMapper.java`, `SubmissionRow.java`, `comment/dao/CommentMapper.java`, `CommentRow.java`, `comment/service/CommentService.java`, `V1__initial_schema.sql`(reactions 유니크 키 + 이번 users 컬럼), `docs/BACKEND/{API_DESIGN,BACKEND_DB,CONTRACT_DECISIONS,CONTRACT_WORK_PLAN}.md`. 같은 작업 트리이므로 코드 충돌은 없지만 **7단계가 커밋되기 전에 8단계 diff 가 섞인다** → 사용자가 7단계를 먼저 커밋하거나, 보고서에서 8단계 변경 파일 목록을 7단계와 분리해서 적을 것.
-- `group/service/GroupService.java`, `GroupMapper.java`, `GroupMemberMapper.java`: 이후 "그룹 내 프로필" 단계가 같은 파일·쿼리를 다시 건드린다(표시 프로필 우선 적용) — 이번엔 `profile_image_url` 컬럼 추가에 한정해 변경을 최소로 유지.
-- `global/security/SecurityConfig.java`, `JwtAuthenticationFilter.java`: 9단계(알림)·`PATCH /me/password` 단계(토큰 무효화)가 인증 경로를 건드릴 수 있음.
-- 앱(Android/iOS)은 건드리지 않으므로 앱 병렬 작업과 겹치지 않는다. 단, 8A 에서 `GET /me`·멤버/피드/댓글의 `profileImageUrl` 이 실제 URL 로 채워지는 것을 앱이 처리하는지 확인할 것.
+- `GroupMapper`/`GroupMemberMapper`/`GroupService`: 우준 B7(그룹 목록 `todayMissions`, 멤버 지표)·B2·B4 와 겹침 → 순차 진행, 고치는 쪽은 시작 직전 pull·직후 push.
+- `SubmissionMapper`/`SubmissionRow`/`CommentMapper`: 우준 B5·B10 과 겹침 → **B5 시작 전에 B1 커밋**.
+- `V1__initial_schema.sql`: 우준 B9(`missions` 컬럼), B3, B10 연동, B11 도 수정 → V1 을 고칠 때마다 팀에 알리고 모두 로컬 DB 재생성.
+- `docs/BACKEND/*`, `HAWE_GROUP.postman_collection.json`.
+- 앱 `GroupMember.groupProfile`(Android `GroupProfileScreen`)은 A3(경환)에서 연결 — 이번 범위 밖.

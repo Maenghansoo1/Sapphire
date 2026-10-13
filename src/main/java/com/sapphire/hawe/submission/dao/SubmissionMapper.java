@@ -1,6 +1,7 @@
 package com.sapphire.hawe.submission.dao;
 
 import java.util.List;
+import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -9,10 +10,14 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface SubmissionMapper {
-    String FIELDS = "s.id, s.mission_id, m.group_id, s.user_id, u.nickname, u.profile_image_url, c.svg_key AS character_key, "
+    String FIELDS = "s.id, s.mission_id, m.group_id, s.user_id, "
+            + GroupMemberMapper.DISPLAY_NICKNAME + ", " + GroupMemberMapper.DISPLAY_IMAGE + ", "
+            + GroupMemberMapper.DISPLAY_CHARACTER + ", "
             + "m.template, s.media_url, s.media_type, s.caption, s.answer_data, s.submitted_at, s.is_late AS late ";
     String JOINS = "FROM submissions s JOIN missions m ON m.id = s.mission_id "
-            + "JOIN users u ON u.id = s.user_id LEFT JOIN characters c ON c.id = u.character_id ";
+            + "JOIN users u ON u.id = s.user_id LEFT JOIN characters c ON c.id = u.character_id "
+            + "LEFT JOIN group_members gm ON gm.group_id = m.group_id AND gm.user_id = s.user_id "
+            + GroupMemberMapper.GROUP_CHARACTER_JOIN;
 
     @Insert("INSERT INTO submissions (mission_id, user_id, media_url, caption, submitted_at, is_late, "
             + "media_type, answer_data) VALUES (#{missionId}, #{userId}, #{mediaUrl}, #{caption}, "

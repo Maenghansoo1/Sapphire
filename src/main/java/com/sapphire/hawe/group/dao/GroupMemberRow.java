@@ -13,6 +13,10 @@ public class GroupMemberRow {
     private String role;
     private long submissionCountThisMonth;
     private boolean stampedToday;
+    private boolean groupProfile;
+
+    public boolean isGroupProfile() { return groupProfile; }
+    public void setGroupProfile(boolean groupProfile) { this.groupProfile = groupProfile; }
 
     public Long getUserId() {
         return userId;

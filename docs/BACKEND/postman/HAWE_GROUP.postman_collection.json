@@ -2950,6 +2950,38 @@
           ]
         }
       ]
+    },
+    {
+      "name": "6. 그룹 내 프로필",
+      "description": "정상 시나리오에서 groupId와 tokenA를 만든 뒤 실행합니다. 사진 요청의 file을 로컬 이미지 파일로 지정하세요.",
+      "item": [
+        {
+          "name": "캐릭터 그룹 프로필 설정",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenA}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"과대표 하늘\",\"characterId\":1}" },
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/members/me/profile"
+          }
+        },
+        {
+          "name": "사진 그룹 프로필 설정",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenA}}" }],
+            "body": { "mode": "formdata", "formdata": [{ "key": "nickname", "value": "과대표 하늘", "type": "text" }, { "key": "file", "type": "file", "src": "" }] },
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/members/me/profile-image"
+          }
+        },
+        {
+          "name": "그룹 프로필 해제",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenA}}" }],
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/members/me/profile"
+          }
+        }
+      ]
     }
   ]
 }

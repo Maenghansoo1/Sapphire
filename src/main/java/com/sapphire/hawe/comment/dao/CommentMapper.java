@@ -1,6 +1,7 @@
 package com.sapphire.hawe.comment.dao;
 
 import java.util.List;
+import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -10,10 +11,15 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface CommentMapper {
-    String FIELDS = "co.id, co.submission_id, co.user_id, u.nickname, u.profile_image_url, c.svg_key AS character_key, "
+    String FIELDS = "co.id, co.submission_id, co.user_id, "
+            + GroupMemberMapper.DISPLAY_NICKNAME + ", " + GroupMemberMapper.DISPLAY_IMAGE + ", "
+            + GroupMemberMapper.DISPLAY_CHARACTER + ", "
             + "co.content, co.image_url, co.created_at ";
-    String JOINS = "FROM comments co JOIN users u ON u.id = co.user_id "
-            + "LEFT JOIN characters c ON c.id = u.character_id ";
+    String JOINS = "FROM comments co JOIN submissions s ON s.id = co.submission_id "
+            + "JOIN missions m ON m.id = s.mission_id JOIN users u ON u.id = co.user_id "
+            + "LEFT JOIN characters c ON c.id = u.character_id "
+            + "LEFT JOIN group_members gm ON gm.group_id = m.group_id AND gm.user_id = co.user_id "
+            + GroupMemberMapper.GROUP_CHARACTER_JOIN;
 
     @Insert("INSERT INTO comments (submission_id, user_id, content, image_url, created_at) "
             + "VALUES (#{submissionId}, #{userId}, #{content}, #{imageUrl}, #{createdAt})")

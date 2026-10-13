@@ -1,19 +1,32 @@
-# Git 병합 충돌 해결 보고
+﻿# B1 group profile implementation report
 
-## 변경 파일과 해결 내용
+## Files changed
 
-- `docs/FEATURE/PROJECT_OVERVIEW.md` §10의 충돌을 해결했다. 로컬의 최신 백엔드 구현 상태를 유지하고, 원격의 Android·iOS 달력·활동 요약 API 연결 상태와 iOS Mac 빌드 확인 대기를 반영했다. 프론트엔드 전체 상태는 단계별 서버 연결 진행 중으로 정리했다.
-- 파일을 `git add`하여 해결된 것으로 표시했다. 원격의 `docs/BACKEND/CONTRACT_DECISIONS.md` 및 iOS 변경 9개는 자동 병합된 상태를 유지했다. 커밋·푸시는 하지 않았다.
+- Schema and backend: `src/main/resources/db/migration/V1__initial_schema.sql`; `src/main/java/com/sapphire/hawe/group/{controller,service,dto,domain,dao}`; `src/main/java/com/sapphire/hawe/{submission,comment}/dao`.
+- Tests: `src/test/java/com/sapphire/hawe/group/{controller,service,dao}/GroupProfile*Tests.java` and `GroupMemberMapperTests.java`.
+- Contract docs and Postman: `docs/BACKEND/API_DESIGN.md`, `BACKEND_DB.md`, `CONTRACT_DECISIONS.md`, `CONTRACT_WORK_PLAN.md`, `postman/HAWE_GROUP.postman_collection.json`.
+- `.agent/plan.md` was already modified when this task started and was not edited.
 
-## 검증
+## Changes
 
-- `git diff --name-only --diff-filter=U` 및 `git ls-files -u`: 결과 없음. 미해결 충돌 파일 0개.
-- 관련 문서와 iOS 파일의 충돌 표시 검색: 없음.
-- `git diff --cached --check`: 통과. 병합된 문서 diff를 확인했다.
-- 코드 파일은 이번 충돌 해결에서 수정하지 않았다. iOS 빌드는 Windows 환경에서 실행하지 못했다. 별도 lint/typecheck 명령은 없다.
+- Added nullable group member nickname, character, and image overrides to V1, including a character FK.
+- Added self-service character and image profile PUT endpoints and an idempotent DELETE endpoint. Image uploads validate content and size, delete new files after transaction rollback, and delete replaced files after commit.
+- Applied one shared display-profile SQL rule to member lists, group/guest previews, submissions, and comments. `GET /groups/{groupId}/members` now returns `hasGroupProfile`.
+- A former member's submission or comment displays the basic user profile because the group member join is optional.
+- Updated API/database/contract docs and added three Postman requests.
 
-## 남은 상태·위험
+## Validation
 
-- 병합은 아직 진행 중이며 최종 병합 커밋은 사용자가 해야 한다.
-- iOS 달력·활동 요약 연결은 문서와 코드에서 확인했으나 Mac 빌드 검증은 남아 있다.
-- 시작 시 스테이징되어 있던 원격 변경과 `.agent/plan.md`는 수정하지 않았다. 이번 문서 병합은 로컬 백엔드 구현 현황과 원격 iOS 진행 현황을 함께 보존했다.
+- Local database had 0 rows in `users`, `groups`, `group_members`, `missions`, `submissions`, and `comments` before reset. Backed up on 2026-10-13 to `C:\Users\kimch\AppData\Local\Temp\hawe_backup_B1_20261013.sql` (19,194 bytes), then recreated local `hawe`. Flyway V1/V2 reapplied successfully.
+- `mvnw.cmd clean test -q` using Java 25: 170 tests, 0 failures, 0 errors, 0 skipped. New integration tests ran against MariaDB.
+- `mvnw.cmd package -q -DskipTests`: passed; `target/hawe-0.0.1-SNAPSHOT.jar` created. Java compilation served as typecheck. No separate lint command is configured.
+- Postman JSON parsed successfully, Korean request text checked, and three requests are in folder 6.
+- `git diff --check`: passed. The four queries reference CASE expressions defined only in `GroupMemberMapper`.
+- A live-server manual smoke test was not run; MockMvc covered the HTTP flow.
+
+## Risks and scope
+
+- V1 changed, so other local databases that already applied V1 need a backup and controlled reset. Shared databases need separate migration coordination.
+- Images left by membership or group deletion remain for B4 cleanup. Android connection remains for A3.
+- Likely merge conflicts: V1 schema, group mappers/service, submission/comment mappers, backend contracts, and Postman collection.
+- Plan adjustment: repository guidance's `docs/FEATURE_SPEC.md` and `docs/BACKEND_DB.md` paths do not exist; used current `docs/FEATURE/` and `docs/BACKEND/` documents. Existing `.agent/plan.md` change was preserved.

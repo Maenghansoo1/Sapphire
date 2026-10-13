@@ -54,9 +54,11 @@ public interface GroupMapper {
     @Select("SELECT COUNT(*) FROM missions WHERE group_id = #{groupId}")
     long countMissionsByGroupId(@Param("groupId") Long groupId);
 
-    @Select("<script>SELECT gm.group_id, gm.user_id, u.nickname, u.profile_image_url, c.svg_key AS character_key "
+    @Select("<script>SELECT gm.group_id, gm.user_id, " + GroupMemberMapper.DISPLAY_NICKNAME + ", "
+            + GroupMemberMapper.DISPLAY_IMAGE + ", " + GroupMemberMapper.DISPLAY_CHARACTER + " "
             + "FROM group_members gm JOIN users u ON u.id = gm.user_id "
-            + "LEFT JOIN characters c ON c.id = u.character_id WHERE gm.group_id IN "
+            + "LEFT JOIN characters c ON c.id = u.character_id " + GroupMemberMapper.GROUP_CHARACTER_JOIN
+            + "WHERE gm.group_id IN "
             + "<foreach collection='groupIds' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
             + "ORDER BY gm.group_id, gm.joined_at, gm.id</script>")
     List<GroupMemberPreviewRow> findMemberPreviewsByGroupIds(@Param("groupIds") List<Long> groupIds);
