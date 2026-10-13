@@ -74,7 +74,7 @@ public class MissionPublisher {
             LocalDateTime publishedAt = scheduled.isBefore(group.getCreatedAt()) ? group.getCreatedAt() : scheduled;
             long seed = MissionTemplateSelector.seed(groupId, date, slotNo);
             MissionTemplate template = MissionTemplateSelector.select(groupId, date, slotNo,
-                    group.getDailyMissionCount(), yesterdayMedia);
+                    group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates());
             boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
             GeneratedMission generated = generator.generate(template, seed,
                     missions.findLatestContentByGroupId(groupId), withTarget);

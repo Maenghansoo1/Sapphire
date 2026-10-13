@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 public class SubmissionRow {
     private Long id, missionId, groupId, userId;
     private String nickname, characterKey, profileImageUrl, template, mediaUrl, mediaType, caption, answerData;
+    private Integer numberValue;
+    private String choiceValue;
     private LocalDateTime submittedAt;
     private boolean late;
     public Long getId() { return id; }
@@ -31,6 +33,10 @@ public class SubmissionRow {
     public void setCaption(String caption) { this.caption = caption; }
     public String getAnswerData() { return answerData; }
     public void setAnswerData(String answerData) { this.answerData = answerData; }
+    public Integer getNumberValue() { return numberValue; }
+    public void setNumberValue(Integer numberValue) { this.numberValue = numberValue; }
+    public String getChoiceValue() { return choiceValue; }
+    public void setChoiceValue(String choiceValue) { this.choiceValue = choiceValue; }
     public LocalDateTime getSubmittedAt() { return submittedAt; }
     public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
     public boolean isLate() { return late; }

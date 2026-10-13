@@ -36,7 +36,7 @@ class MissionTemplateTests {
     @Test
     void listTemplatesWrapsCatalogInContent() throws Exception {
         MissionService service = new MissionService(null, null, null, null, null,
-                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), new ObjectMapper(), null);
+                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, MissionTemplateSelector.MVP_POOL), new ObjectMapper(), null);
         var response = service.listTemplates();
         assertEquals(13, response.content().size());
         assertEquals("TEXT_ACROSTIC", response.content().get(3).template());

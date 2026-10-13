@@ -12,12 +12,16 @@ public class SubmissionInsertRow {
     private final boolean late;
     private final String mediaType;
     private final String answerData;
+    private final Integer numberValue;
+    private final String choiceValue;
 
     public SubmissionInsertRow(Long missionId, Long userId, String mediaUrl, String caption,
-            LocalDateTime submittedAt, boolean late, String mediaType, String answerData) {
+            LocalDateTime submittedAt, boolean late, String mediaType, String answerData,
+            Integer numberValue, String choiceValue) {
         this.missionId = missionId; this.userId = userId; this.mediaUrl = mediaUrl;
         this.caption = caption; this.submittedAt = submittedAt; this.late = late;
         this.mediaType = mediaType; this.answerData = answerData;
+        this.numberValue = numberValue; this.choiceValue = choiceValue;
     }
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -29,4 +33,6 @@ public class SubmissionInsertRow {
     public boolean isLate() { return late; }
     public String getMediaType() { return mediaType; }
     public String getAnswerData() { return answerData; }
+    public Integer getNumberValue() { return numberValue; }
+    public String getChoiceValue() { return choiceValue; }
 }

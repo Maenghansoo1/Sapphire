@@ -1,5 +1,6 @@
 package com.sapphire.hawe.mission.service;
 
+import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
 import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.auth.domain.User;
 import com.sapphire.hawe.global.config.MissionProperties;
@@ -53,7 +54,7 @@ class MissionServiceTests {
     @BeforeEach
     void setUp() {
         service = new MissionService(missions, groups, members, slots, users,
-                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), new ObjectMapper(), pokes);
+                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, MissionTemplateSelector.MVP_POOL), new ObjectMapper(), pokes);
     }
 
     @Test

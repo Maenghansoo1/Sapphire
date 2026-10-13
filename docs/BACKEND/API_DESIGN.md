@@ -177,6 +177,7 @@
 
 - 미션/제출 API 명세: `docs/BACKEND/MISSIONS_API.md`
 - 미션 템플릿 목록: `docs/FEATURE/MISSIONS.md`
+- B5(2026-10-13): 새 틀 6종(한 단어·한 줄 후기·밸런스·슬라이더 3종) 제출 규칙은 `MISSIONS_API.md` §3-2, 집계 결과 `GET /missions/{missionId}/result`는 §5, 발행 풀 설정 `hawe.mission.enabled-templates`는 §6-1
 
 ---
 

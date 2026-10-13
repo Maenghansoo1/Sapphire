@@ -5,7 +5,8 @@ import org.springframework.http.HttpStatus;
 
 public enum MissionErrorCode implements ErrorCode {
     MISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "미션을 찾을 수 없습니다"),
-    MISSION_CLOSED(HttpStatus.CONFLICT, "종료된 미션입니다");
+    MISSION_CLOSED(HttpStatus.CONFLICT, "종료된 미션입니다"),
+    RESULT_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "집계가 없는 미션입니다");
 
     private final HttpStatus httpStatus;
     private final String message;

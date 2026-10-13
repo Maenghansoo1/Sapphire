@@ -199,7 +199,7 @@ hawe.mission.max-daily-count=1
 
 ## 3. 제출
 
-6단계 1차 구현됨. 같은 슬롯의 다음 미션이 발행되면 이전 미션 제출은 409 `MISSION_CLOSED`로 거부한다. 사진·그림·글의 MVP 7종 틀만 받는다.
+6단계 1차 구현됨, B5(2026-10-13)에서 새 틀 6종(`TEXT_ONE_WORD`·`TEXT_REVIEW`·`TEXT_BALANCE`·`SLIDER_*`)까지 받는다. 같은 슬롯의 다음 미션이 발행되면 이전 미션 제출은 409 `MISSION_CLOSED`로 거부한다. 2차 틀과 예전 음성 틀은 받지 않는다. 새 틀이 실제로 발행되는지는 발행 풀 설정이 정한다(§6-1).
 
 | Method | Path | 설명 |
 |---|---|---|
@@ -226,9 +226,9 @@ hawe.mission.max-daily-count=1
 |---|---|---|---|
 | `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_SKETCH`, `DRAW_A_TO_B` | `file`(이미지) | `caption` | 파일 헤더로 이미지 판정, ≤ 10MB |
 | `TEXT_ACROSTIC` | `text` | - | 정확히 3줄, 각 줄이 `params.word`의 해당 글자로 시작 |
-| `TEXT_ONE_WORD` | `text`(단어, ≤ 20자) | `caption`(이유, ≤ 100자) | 공백 불가 |
-| `TEXT_REVIEW` | `number`(1~5), `text`(≤ 100자) | - | - |
-| `TEXT_BALANCE` | `choice` | `caption` | `A`/`B` |
+| `TEXT_ONE_WORD` | `text`(단어, ≤ 20자) | `caption`(이유, ≤ 100자) | 단어 안에 공백·줄바꿈 불가 |
+| `TEXT_REVIEW` | `number`(1~5), `text`(≤ 100자) | - | 별점은 정수 |
+| `TEXT_BALANCE` | `choice` | `caption`(≤ 200자) | 정확히 `A` 또는 `B`(대문자) |
 | `TEXT_FILL_BLANK` | `text`(≤ 100자) | - | 공백 불가 |
 | `SLIDER_POSITION`, `SLIDER_TASTE` | `number`(0~100) | - | 정수 |
 | `SLIDER_CONSENSUS` | `number`, `guess` | - | 둘 다 0~100 정수 |
@@ -236,7 +236,14 @@ hawe.mission.max-daily-count=1
 - 시간 제한이 있는 틀(`DRAW_SKETCH`의 `seconds`)은 **클라이언트가 시간을 강제**한다. 서버는 그림 제작 시간을 신뢰할 수 있는 방식으로 알 수 없으므로 검증하지 않는다.
 - 파일 제한: 이미지 ≤ 10MB (`jpg`/`png`/`webp`). 그 밖의 형식(예전 음성 형식 포함)은 415 `UNSUPPORTED_FILE_TYPE`. 서버가 파일 헤더로 종류와 확장자를 판정하며 원본 파일명·Content-Type은 신뢰하지 않는다. 로컬 저장 키로 저장한 파일은 인증 없이 `/files/<key>`로 공개된다.
 
-**1차 구현 규칙:** 사진·그림 5종은 `file` 필수·`caption` 선택이다. `TEXT_FILL_BLANK`는 공백 제거 후 1~100 grapheme, `TEXT_ACROSTIC`은 정확히 3줄이며 `params.word`가 3글자일 때 각 줄은 해당 글자로 시작해야 한다. 글 틀에서 `caption`은 받지 않는다. 위 표의 나머지 틀은 1차에서 `INVALID_SUBMISSION`으로 거부한다.
+**1차 구현 규칙:** 사진·그림 5종은 `file` 필수·`caption` 선택이다. `TEXT_FILL_BLANK`는 공백 제거 후 1~100 grapheme, `TEXT_ACROSTIC`은 정확히 3줄이며 `params.word`가 3글자일 때 각 줄은 해당 글자로 시작해야 한다. 삼행시·빈칸 채우기에서 `caption`은 받지 않는다.
+
+**B5 구현 규칙 (새 틀 6종):**
+- 글자 수는 grapheme(이모지·결합 문자를 한 글자로) 기준, `caption`은 코드포인트 기준이다. 글은 앞뒤 공백을 지우고 센다.
+- 숫자 필드(`number`, `guess`)는 부호·소수점·공백 없는 정수 문자열만 받는다(`50.0`, ` 5`, `-1`, `+5`, 빈 값은 400). 그다음 틀의 범위를 확인한다.
+- 새 틀의 `caption`은 앞뒤 공백을 지우고, 비면 저장하지 않는다(`null`).
+- 새 틀은 파일을 받지 않는다(`file`이 오면 요구하지 않는 필드).
+- 저장 위치: `number` → `submissions.number_value`, `choice` → `choice_value`, `text` → `answer_data.text`, `guess` → `answer_data.guess`. 스키마는 바꾸지 않았다(V1에 이미 있던 컬럼).
 
 ### 3-3. 응답
 
@@ -250,7 +257,23 @@ hawe.mission.max-daily-count=1
   "submittedAt": "2026-09-28T21:00:00+09:00", "isLate": false }
 ```
 
-글 제출은 `text`가 포함되고 `mediaUrl`·`mediaType`은 생략된다. 사진·그림은 `mediaUrl`과 `mediaType: "IMAGE"`가 포함된다. 음성 제거로 `duration`·`waveform` 필드는 응답에서 없어졌다. 미구현 틀의 제출 응답은 후속 단계에서 정의한다.
+글 제출은 `text`가 포함되고 `mediaUrl`·`mediaType`은 생략된다. 사진·그림은 `mediaUrl`과 `mediaType: "IMAGE"`가 포함된다. 음성 제거로 `duration`·`waveform` 필드는 응답에서 없어졌다.
+
+새 틀(B5)은 해당 틀에서만 아래 필드가 들어간다(`text` 다음, `reactions` 앞).
+
+| 필드 | 틀 |
+|---|---|
+| `number` | `TEXT_REVIEW`(별점), `SLIDER_*`(위치) |
+| `choice` | `TEXT_BALANCE` |
+| `guess` | `SLIDER_CONSENSUS` |
+| `text` | `TEXT_ONE_WORD`(단어), `TEXT_REVIEW`(한 줄 후기) |
+| `caption` | `TEXT_ONE_WORD`(이유), `TEXT_BALANCE`(이유) — 보냈을 때만 |
+
+```json
+{ "id": 101, "missionId": 12, "author": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
+  "template": "SLIDER_CONSENSUS", "number": 80, "guess": 60, "reactions": [], "commentCount": 0,
+  "submittedAt": "2026-10-13T21:00:00+09:00", "isLate": false }
+```
 
 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `ALREADY_SUBMITTED` (409), `INVALID_SUBMISSION` (400), `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413)
 
@@ -317,7 +340,15 @@ V 유형 틀(`TEXT_BALANCE`, `SLIDER_POSITION`, `SLIDER_TASTE`, `SLIDER_CONSENSU
                { "userId": 1, "nickname": "몽실이", "guess": 80, "diff": 17.5 } ],
   "winnerUserIds": [2] }
 ```
-- 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423), `RESULT_NOT_SUPPORTED` (400) — V 유형이 아닌 틀
+- 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423), `RESULT_NOT_SUPPORTED` (400) — V 유형이 아닌 틀. 검사 순서도 이 순서다.
+
+**B5 구현 규칙 (2026-10-13 구현됨):**
+- 지난 미션(이미 다음 미션이 열린 것)의 결과도 볼 수 있다. 마감 뒤 늦은 제출도 결과에 들어간다.
+- `totalCount`는 제출 수. `choices`는 0표여도 항상 `A`·`B` 두 항목이다.
+- `average`(제출된 `number` 평균), `diffFromAverage`(= 내 값 − 평균), `diff`(= |`guess` − 평균|)는 정확한 값으로 계산·비교하고 **응답에서만 소수 첫째 자리로 반올림**한다(HALF_UP, 음수는 0에서 먼 쪽. 예: 평균 62.25 → 62.3, −32.75 → −32.8).
+- `distribution`·`ranking`의 `nickname`은 피드와 같은 표시 닉네임(그룹 내 프로필 우선)이다. `distribution`은 제출 순서다.
+- `ranking`은 `diff` 오름차순, 같으면 제출 순서(제출 시각 → id). `winnerUserIds`는 가장 작은 `diff`와 같은 사람 전부(동률이면 여러 명)다.
+- `SLIDER_CONSENSUS` 응답에는 `myNumber`·`distribution`이 없다(위 예시대로).
 
 ---
 
@@ -349,6 +380,11 @@ AI 응답에 대한 서버 검증 (AI가 규칙을 어길 수 있으므로 프�
 
 MVP 발행 풀은 `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_SKETCH`, `DRAW_A_TO_B`, `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`의 7종이다. 매체는 PHOTO/TEXT/DRAW 3종이다. `GET /mission-templates`는 1차 틀 13종 전체를 반환한다. (2026-10-12 음성 제거 전에는 풀 8종·매체 4종·목록 16종이었다.)
 
+**발행 풀 설정 (B5, 2026-10-13):** 발행 풀은 `hawe.mission.enabled-templates`(쉼표로 구분한 틀 이름)로 정한다. 기본값은 위 MVP 7종이고, 비어 있으면 서버가 시작하지 않는다.
+- 새 틀 6종(`TEXT_ONE_WORD`, `TEXT_REVIEW`, `TEXT_BALANCE`, `SLIDER_POSITION`, `SLIDER_TASTE`, `SLIDER_CONSENSUS`)은 서버가 제출·결과를 받을 수 있다. 하지만 **앱(A4)이 그 화면을 배포한 뒤에** 이 설정에 추가한다. 그 전에 켜면 구 앱이 미션을 열 수 없다.
+- 매체는 풀에 틀이 있는 것만 돈다. 순서는 `PHOTO, TEXT, DRAW, SLIDER` 고정 목록에서 거른 뒤 섞는다. 슬라이더 틀을 넣으면 매체가 4종이 된다.
+- 풀은 설정에 쓴 순서·중복과 상관없이 틀 정의 순서로 쓴다. 그래서 기본 설정에서는 B5 이전과 **같은 틀**이 골라진다(회귀 테스트로 고정).
+
 | # | 규칙 | 강도 |
 |---|---|---|
 | 1 | 후보는 1차 틀(§1-2)만 쓴다 | 필수 |
@@ -364,10 +400,10 @@ MVP 발행 풀은 `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_SKETCH`, `D
 
 **계산 방식 (결정적, 동시성 문제 없음):**
 ```
-mediaOrder = shuffle(매체 3종, seed = seed(groupId, 날짜, 0))
-N >= 2 : 슬롯 k의 매체 = mediaOrder[(k-1) % 3]
+mediaOrder = shuffle(풀에 있는 매체, seed = seed(groupId, 날짜, 0))   // 기본 풀이면 3종
+N >= 2 : 슬롯 k의 매체 = mediaOrder[(k-1) % 매체 수]
 N == 1 : mediaOrder에서 어제 미션들이 쓴 매체를 뺀 첫 번째 (모두 빠지면 mediaOrder[0])
-틀     : 그 매체의 MVP 풀 틀 중 하나를 seed(groupId, 날짜, slotNo)로 선택
+틀     : 그 매체의 풀 틀 중 하나를 seed(groupId, 날짜, slotNo)로 선택
 ```
 - 읽는 DB 데이터는 **어제의 미션뿐**이다. 오늘 슬롯끼리는 서로 조회하지 않으므로, 같은 시각에 여러 슬롯이 동시에 발행되어도 결과가 같고 경쟁이 없다.
 - 같은 `(그룹, 날짜, 슬롯)`을 다시 실행해도 같은 결과가 나온다 (멱등). `(group_id, mission_date, slot_no)` UNIQUE 제약이 중복 저장을 막는다.

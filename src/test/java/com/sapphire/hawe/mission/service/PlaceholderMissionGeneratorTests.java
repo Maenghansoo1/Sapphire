@@ -5,6 +5,7 @@ import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,6 +41,32 @@ class PlaceholderMissionGeneratorTests {
                 }
             }
             assertTrue(contents.size() >= 3);
+        }
+    }
+
+    @Test void newTemplatesHaveValidVariants() {
+        for (MissionTemplate template : List.of(MissionTemplate.TEXT_ONE_WORD, MissionTemplate.TEXT_REVIEW,
+                MissionTemplate.TEXT_BALANCE, MissionTemplate.SLIDER_POSITION, MissionTemplate.SLIDER_TASTE,
+                MissionTemplate.SLIDER_CONSENSUS)) {
+            Set<String> contents = new HashSet<>();
+            for (long seed = 0; seed < 100; seed++) {
+                var result = generator.generate(template, seed, null, false);
+                assertEquals(result, generator.generate(template, seed, null, false));
+                assertEquals(template.paramsSchema().keySet(), result.params().keySet());
+                assertTrue(result.category().length() <= 50 && !result.category().isBlank());
+                assertFalse(result.content().contains("[대상]"));
+                if (template == MissionTemplate.TEXT_BALANCE)
+                    assertNotEquals(result.params().get("optionA"), result.params().get("optionB"));
+                if (template.media().equals("SLIDER")) {
+                    String left = (String) result.params().get("left");
+                    String right = (String) result.params().get("right");
+                    assertNotEquals(left, right);
+                    assertTrue(!left.isBlank() && left.length() <= 20 && !right.isBlank() && right.length() <= 20);
+                }
+                assertNotEquals(result.content(), generator.generate(template, seed, result.content(), false).content());
+                contents.add(result.content());
+            }
+            assertTrue(contents.size() >= 3, template.name());
         }
     }
 }

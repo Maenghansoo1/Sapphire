@@ -2,7 +2,7 @@
   "info": {
     "name": "HA'WE - SUBMISSION API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "가입 → 그룹 생성 → 현재 미션 → 제출 → 피드 → 상세. 새 run 값을 지정하거나 기존 변수를 비웁니다. 5/5a 중 현재 미션 틀에 맞는 요청 하나만 실행합니다(음성 제출은 음성 기능 제거로 삭제). TEXT_ACROSTIC은 params.word에 맞는 3줄을 입력합니다."
+    "description": "가입 → 그룹 생성 → 현재 미션 → 제출 → 피드 → 상세. 새 run 값을 지정하거나 기존 변수를 비웁니다. 5~5g 중 현재 미션 틀에 맞는 요청 하나만 실행합니다(음성 제출은 음성 기능 제거로 삭제). TEXT_ACROSTIC은 params.word에 맞는 3줄을 입력합니다. 5b~5g(새 틀 6종)는 서버 설정 hawe.mission.enabled-templates 에 그 틀을 넣었거나 DB에서 미션 template 을 바꿨을 때만 쓸 수 있습니다. 8은 밸런스·슬라이더 미션에서 내가 제출한 뒤에 열립니다."
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
@@ -94,6 +94,94 @@
       }
     },
     {
+      "name": "5b. 한 단어 일기 (TEXT_ONE_WORD) — 단어 ≤ 20자, 이유 선택",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "text", "type": "text", "value": "설렘" },
+          { "key": "caption", "type": "text", "value": "주말이 다가와서" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "5c. 한 줄 후기 (TEXT_REVIEW) — 별점 1~5 + 한 줄",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "number", "type": "text", "value": "5" },
+          { "key": "text", "type": "text", "value": "오늘 떡볶이 최고" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "5d. 밸런스 게임 (TEXT_BALANCE) — A 또는 B, 이유 선택",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "choice", "type": "text", "value": "A" },
+          { "key": "caption", "type": "text", "value": "더위를 덜 타서" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "5e. 내 위치는? (SLIDER_POSITION) — 0~100",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "number", "type": "text", "value": "70" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "5f. 취향 막대 (SLIDER_TASTE) — 0~100",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "number", "type": "text", "value": "35" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
+      "name": "5g. 다수결 예측 (SLIDER_CONSENSUS) — 내 위치 + 그룹 평균 예측",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "formdata", "formdata": [
+          { "key": "number", "type": "text", "value": "80" },
+          { "key": "guess", "type": "text", "value": "60" }
+        ] },
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
+      }
+    },
+    {
       "name": "6. 피드",
       "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions?page=0&size=20" }
@@ -102,6 +190,11 @@
       "name": "7. 제출 상세",
       "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "url": "{{baseUrl}}/api/submissions/{{submissionId}}" }
+    },
+    {
+      "name": "8. 집계 결과 (밸런스·슬라이더 미션, 내가 제출한 뒤)",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/missions/{{missionId}}/result" }
     }
   ]
 }

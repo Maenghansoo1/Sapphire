@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -65,12 +66,9 @@ public class SubmissionService {
         if (submissions.existsByMissionIdAndUserId(missionId, userId))
             throw new BusinessException(SubmissionErrorCode.ALREADY_SUBMITTED);
 
-        String template = mission.getTemplate();
-        boolean image = Set.of("PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "DRAW_SKETCH", "DRAW_A_TO_B")
-                .contains(template);
-        boolean text = "TEXT_FILL_BLANK".equals(template) || "TEXT_ACROSTIC".equals(template);
-        if (!image && !text) invalid("지원하지 않는 미션 틀입니다");
-        Set<String> allowed = text ? Set.of("text") : Set.of("file", "caption");
+        String template = Objects.requireNonNullElse(mission.getTemplate(), "");
+        Set<String> allowed = allowedFields(template);
+        if (allowed == null) invalid("지원하지 않는 미션 틀입니다");
         for (String key : fields.keySet()) if (!allowed.contains(key)) invalid("요구하지 않는 필드: " + key);
         for (String key : files.keySet()) if (!allowed.contains(key) || !"file".equals(key))
             invalid("요구하지 않는 필드: " + key);
@@ -82,41 +80,70 @@ public class SubmissionService {
         String answerData = null;
         String mediaType = null;
         String key = null;
-        if (text) {
-            String raw = one(fields, "text");
-            if (raw == null || raw.length() > 1000) invalid("글을 올바르게 입력해 주세요");
-            String normalized = raw.replace("\r\n", "\n").strip();
-            if (normalized.isEmpty()) invalid("글을 입력해 주세요");
-            if ("TEXT_FILL_BLANK".equals(template) && graphemes(normalized) > 100)
-                invalid("글은 100자 이하로 입력해 주세요");
-            if ("TEXT_ACROSTIC".equals(template)) validateAcrostic(normalized, mission.getParams());
-            answerData = json.writeValueAsString(Map.of("text", normalized));
-        } else {
-            MultipartFile file = files.getFirst("file");
-            if (file == null || file.isEmpty()) invalid("파일을 첨부해 주세요");
-            long max = 10L * 1024 * 1024;
-            if (file.getSize() > max) throw new BusinessException(CommonErrorCode.FILE_TOO_LARGE);
-            byte[] bytes;
-            try { bytes = file.getBytes(); }
-            catch (IOException e) { throw new IllegalStateException("파일을 읽을 수 없습니다", e); }
-            if (bytes.length == 0) invalid("파일을 첨부해 주세요");
-            if (bytes.length > max) throw new BusinessException(CommonErrorCode.FILE_TOO_LARGE);
-            FileTypeDetector.Detected detected = FileTypeDetector.detect(bytes);
-            mediaType = "IMAGE";
-            if (detected == null || !mediaType.equals(detected.mediaType()))
-                throw new BusinessException(SubmissionErrorCode.UNSUPPORTED_FILE_TYPE);
-            key = storage.store("submissions", bytes, detected.extension());
-            String storedKey = key;
-            if (TransactionSynchronizationManager.isSynchronizationActive())
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override public void afterCompletion(int status) {
-                        if (status != STATUS_COMMITTED) storage.delete(storedKey);
-                    }
-                });
+        Integer number = null;
+        String choice = null;
+        switch (template) {
+            case "TEXT_ACROSTIC", "TEXT_FILL_BLANK" -> {
+                String normalized = requiredText(fields);
+                if ("TEXT_FILL_BLANK".equals(template) && graphemes(normalized) > 100)
+                    invalid("글은 100자 이하로 입력해 주세요");
+                if ("TEXT_ACROSTIC".equals(template)) validateAcrostic(normalized, mission.getParams());
+                answerData = json.writeValueAsString(Map.of("text", normalized));
+            }
+            case "TEXT_ONE_WORD" -> {
+                String word = requiredText(fields);
+                if (word.codePoints().anyMatch(Character::isWhitespace)) invalid("띄어쓰기 없이 한 단어로 입력해 주세요");
+                if (graphemes(word) > 20) invalid("단어는 20자 이하로 입력해 주세요");
+                caption = optionalCaption(caption);
+                if (caption != null && caption.codePointCount(0, caption.length()) > 100)
+                    invalid("이유는 100자 이하로 입력해 주세요");
+                answerData = json.writeValueAsString(Map.of("text", word));
+            }
+            case "TEXT_REVIEW" -> {
+                number = integer(fields, "number", 1, 5, "별점은 1~5 중에서 골라 주세요");
+                String review = requiredText(fields);
+                if (graphemes(review) > 100) invalid("후기는 100자 이하로 입력해 주세요");
+                answerData = json.writeValueAsString(Map.of("text", review));
+            }
+            case "TEXT_BALANCE" -> {
+                choice = one(fields, "choice");
+                if (!"A".equals(choice) && !"B".equals(choice)) invalid("A와 B 중 하나를 골라 주세요");
+                caption = optionalCaption(caption);
+            }
+            case "SLIDER_POSITION", "SLIDER_TASTE" -> number = integer(fields, "number", 0, 100, "0~100 사이로 골라 주세요");
+            case "SLIDER_CONSENSUS" -> {
+                number = integer(fields, "number", 0, 100, "내 위치를 0~100 사이로 골라 주세요");
+                int guess = integer(fields, "guess", 0, 100, "예상 평균을 0~100 사이로 골라 주세요");
+                answerData = json.writeValueAsString(Map.of("guess", guess));
+            }
+            case "PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "DRAW_SKETCH", "DRAW_A_TO_B" -> {
+                MultipartFile file = files.getFirst("file");
+                if (file == null || file.isEmpty()) invalid("파일을 첨부해 주세요");
+                long max = 10L * 1024 * 1024;
+                if (file.getSize() > max) throw new BusinessException(CommonErrorCode.FILE_TOO_LARGE);
+                byte[] bytes;
+                try { bytes = file.getBytes(); }
+                catch (IOException e) { throw new IllegalStateException("파일을 읽을 수 없습니다", e); }
+                if (bytes.length == 0) invalid("파일을 첨부해 주세요");
+                if (bytes.length > max) throw new BusinessException(CommonErrorCode.FILE_TOO_LARGE);
+                FileTypeDetector.Detected detected = FileTypeDetector.detect(bytes);
+                mediaType = "IMAGE";
+                if (detected == null || !mediaType.equals(detected.mediaType()))
+                    throw new BusinessException(SubmissionErrorCode.UNSUPPORTED_FILE_TYPE);
+                key = storage.store("submissions", bytes, detected.extension());
+                String storedKey = key;
+                if (TransactionSynchronizationManager.isSynchronizationActive())
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override public void afterCompletion(int status) {
+                            if (status != STATUS_COMMITTED) storage.delete(storedKey);
+                        }
+                    });
+            }
+            default -> throw new IllegalStateException("Unhandled template: " + template);
         }
         LocalDateTime now = SeoulTime.now();
         SubmissionInsertRow row = new SubmissionInsertRow(missionId, userId, key, caption, now,
-                now.isAfter(mission.getDeadlineAt()), mediaType, answerData);
+                now.isAfter(mission.getDeadlineAt()), mediaType, answerData, number, choice);
         try { submissions.insert(row); }
         catch (DuplicateKeyException e) {
             if (key != null) storage.delete(key);
@@ -178,6 +205,44 @@ public class SubmissionService {
     private static String one(MultiValueMap<String, String> fields, String key) { return fields.getFirst(key); }
     private static void invalid(String message) { throw new BusinessException(SubmissionErrorCode.INVALID_SUBMISSION, message); }
 
+    /** 틀마다 받는 필드 (MISSIONS_API §3-2). null 이면 제출을 받지 않는 틀(예전 음성 틀·2차 틀). */
+    private static Set<String> allowedFields(String template) {
+        return switch (template) {
+            case "PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "DRAW_SKETCH", "DRAW_A_TO_B" -> Set.of("file", "caption");
+            case "TEXT_ACROSTIC", "TEXT_FILL_BLANK" -> Set.of("text");
+            case "TEXT_ONE_WORD" -> Set.of("text", "caption");
+            case "TEXT_REVIEW" -> Set.of("number", "text");
+            case "TEXT_BALANCE" -> Set.of("choice", "caption");
+            case "SLIDER_POSITION", "SLIDER_TASTE" -> Set.of("number");
+            case "SLIDER_CONSENSUS" -> Set.of("number", "guess");
+            default -> null;
+        };
+    }
+
+    private static String requiredText(MultiValueMap<String, String> fields) {
+        String raw = one(fields, "text");
+        if (raw == null || raw.length() > 1000) invalid("글을 올바르게 입력해 주세요");
+        String normalized = raw.replace("\r\n", "\n").strip();
+        if (normalized.isEmpty()) invalid("글을 입력해 주세요");
+        return normalized;
+    }
+
+    /** 새 틀의 선택 설명: 앞뒤 공백을 지우고, 비었으면 저장하지 않는다. */
+    private static String optionalCaption(String caption) {
+        if (caption == null) return null;
+        String stripped = caption.strip();
+        return stripped.isEmpty() ? null : stripped;
+    }
+
+    /** 0 이상의 정수만 받는다(부호·소수·공백 불가). */
+    private static int integer(MultiValueMap<String, String> fields, String key, int min, int max, String message) {
+        String raw = one(fields, key);
+        if (raw == null || !raw.matches("[0-9]{1,3}")) invalid(message);
+        int value = Integer.parseInt(raw);
+        if (value < min || value > max) invalid(message);
+        return value;
+    }
+
     private static int graphemes(String text) {
         BreakIterator iterator = BreakIterator.getCharacterInstance();
         iterator.setText(text);
@@ -207,15 +272,17 @@ public class SubmissionService {
     private SubmissionResponse response(SubmissionRow row, List<ReactionSummary> reactions, int commentCount) {
         if (row == null) throw new IllegalStateException("Inserted submission was not found");
         String text = null;
+        Integer guess = null;
         if (row.getAnswerData() != null) try {
             Map<?, ?> answer = json.readValue(row.getAnswerData(), Map.class);
             if (answer.get("text") instanceof String value) text = value;
+            if (answer.get("guess") instanceof Number value) guess = value.intValue();
         } catch (Exception ignored) { }
         return new SubmissionResponse(row.getId(), row.getMissionId(),
                 new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
                         row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())),
                 row.getTemplate(), row.getMediaUrl() == null ? null : storage.publicUrl(row.getMediaUrl()),
-                row.getMediaType(), row.getCaption(), text, reactions, commentCount,
-                SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
+                row.getMediaType(), row.getCaption(), text, row.getNumberValue(), row.getChoiceValue(), guess,
+                reactions, commentCount, SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
     }
 }

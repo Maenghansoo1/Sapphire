@@ -5,6 +5,7 @@ import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
+import com.sapphire.hawe.submission.dao.SubmissionInsertRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
 import com.sapphire.hawe.reaction.dao.ReactionMapper;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.util.LinkedMultiValueMap;
@@ -157,6 +159,110 @@ class SubmissionServiceTests {
         assertTrue(page.content().get(1).reactions().isEmpty());
         verify(reactions, times(1)).findBySubmissionIds(List.of(10L, 11L));
         verify(comments, times(1)).countBySubmissionIds(List.of(10L, 11L));
+    }
+
+    private static LinkedMultiValueMap<String, String> form(String... pairs) {
+        LinkedMultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+        for (int i = 0; i < pairs.length; i += 2) map.add(pairs[i], pairs[i + 1]);
+        return map;
+    }
+    private static final LinkedMultiValueMap<String, MultipartFile> NO_FILES = new LinkedMultiValueMap<>();
+
+    /** 제출이 통과하면 저장하려던 행을 돌려준다. */
+    private SubmissionInsertRow saved(String template, MultiValueMap<String, String> fields) {
+        mission.setTemplate(template);
+        clearInvocations(submissions);
+        doAnswer(invocation -> { invocation.getArgument(0, SubmissionInsertRow.class).setId(99L); return null; })
+                .when(submissions).insert(any());
+        SubmissionRow row = feedRow(99L);
+        row.setTemplate(template);
+        when(submissions.findDetailById(99L)).thenReturn(row);
+        service.submit(3L, 1L, fields, NO_FILES);
+        ArgumentCaptor<SubmissionInsertRow> inserted = ArgumentCaptor.forClass(SubmissionInsertRow.class);
+        verify(submissions).insert(inserted.capture());
+        return inserted.getValue();
+    }
+    private void rejects(String template, List<MultiValueMap<String, String>> bad) {
+        mission.setTemplate(template);
+        for (MultiValueMap<String, String> fields : bad)
+            assertEquals("INVALID_SUBMISSION", error(fields, NO_FILES), template + " " + fields);
+        byte[] jpg = {(byte) 0xff, (byte) 0xd8, (byte) 0xff};
+        assertEquals("INVALID_SUBMISSION", error(form(), files(jpg)), template + " file");
+    }
+
+    @Test void oneWordStoresWordAndOptionalReason() {
+        SubmissionInsertRow row = saved("TEXT_ONE_WORD", form("text", " 설렘 ", "caption", "  "));
+        assertEquals("{\"text\":\"설렘\"}", row.getAnswerData());
+        assertNull(row.getCaption());
+        assertNull(row.getNumberValue());
+        assertNull(row.getChoiceValue());
+        assertEquals("주말이라서", saved("TEXT_ONE_WORD", form("text", "😀".repeat(20), "caption", " 주말이라서 ")).getCaption());
+        rejects("TEXT_ONE_WORD", List.of(form("text", "두 단어"), form("text", "줄\n바꿈"), form("text", "😀".repeat(21)),
+                form("text", " "), form("caption", "이유만"), form("text", "단어", "caption", "가".repeat(101)),
+                form("text", "단어", "number", "3"), form("text", "단어", "text", "단어")));
+    }
+
+    @Test void reviewStoresStarsAndLine() {
+        SubmissionInsertRow row = saved("TEXT_REVIEW", form("number", "5", "text", "최고의 떡볶이"));
+        assertEquals(5, row.getNumberValue());
+        assertEquals("{\"text\":\"최고의 떡볶이\"}", row.getAnswerData());
+        assertEquals(1, saved("TEXT_REVIEW", form("number", "1", "text", "😀".repeat(100))).getNumberValue());
+        rejects("TEXT_REVIEW", List.of(form("number", "0", "text", "별로"), form("number", "6", "text", "최고"),
+                form("number", "5.0", "text", "최고"), form("number", " 5", "text", "최고"), form("number", "", "text", "최고"),
+                form("text", "별점 없음"), form("number", "4"), form("number", "4", "text", "😀".repeat(101)),
+                form("number", "4", "text", "좋아요", "caption", "이유")));
+    }
+
+    @Test void balanceStoresChoiceAndOptionalReason() {
+        SubmissionInsertRow row = saved("TEXT_BALANCE", form("choice", "B", "caption", " 시원해서 "));
+        assertEquals("B", row.getChoiceValue());
+        assertEquals("시원해서", row.getCaption());
+        assertNull(row.getAnswerData());
+        assertNull(saved("TEXT_BALANCE", form("choice", "A")).getCaption());
+        rejects("TEXT_BALANCE", List.of(form("choice", "a"), form("choice", "C"), form("choice", "AB"), form(),
+                form("choice", "A", "caption", "가".repeat(201)), form("choice", "A", "text", "이유")));
+    }
+
+    @Test void slidersStoreAWholeNumberFromZeroToHundred() {
+        for (String template : List.of("SLIDER_POSITION", "SLIDER_TASTE")) {
+            assertEquals(0, saved(template, form("number", "0")).getNumberValue());
+            SubmissionInsertRow row = saved(template, form("number", "100"));
+            assertEquals(100, row.getNumberValue());
+            assertNull(row.getAnswerData());
+            rejects(template, List.of(form("number", "-1"), form("number", "101"), form("number", "50.0"),
+                    form("number", " 5"), form("number", ""), form("number", "abc"), form("number", "+5"),
+                    form("number", "1000"), form(), form("number", "50", "guess", "50"), form("number", "5", "number", "6")));
+        }
+    }
+
+    @Test void consensusStoresPositionAndGuess() {
+        SubmissionInsertRow row = saved("SLIDER_CONSENSUS", form("number", "70", "guess", "55"));
+        assertEquals(70, row.getNumberValue());
+        assertEquals("{\"guess\":55}", row.getAnswerData());
+        rejects("SLIDER_CONSENSUS", List.of(form("number", "70"), form("guess", "55"), form("number", "70", "guess", "101"),
+                form("number", "70", "guess", "x"), form("number", "70", "guess", "55", "text", "왜")));
+    }
+
+    @Test void scalarAnswersComeBackInTheResponse() {
+        when(submissions.existsByMissionIdAndUserId(1L, 3L)).thenReturn(true);
+        SubmissionRow row = feedRow(50L);
+        row.setTemplate("SLIDER_CONSENSUS");
+        row.setNumberValue(70);
+        row.setAnswerData("{\"guess\":55}");
+        when(submissions.findDetailById(50L)).thenReturn(row);
+        var response = service.detail(3L, 50L);
+        assertEquals(70, response.number());
+        assertEquals(55, response.guess());
+        assertNull(response.choice());
+        assertNull(response.text());
+        row.setTemplate("TEXT_BALANCE");
+        row.setNumberValue(null);
+        row.setChoiceValue("A");
+        row.setAnswerData(null);
+        response = service.detail(3L, 50L);
+        assertEquals("A", response.choice());
+        assertNull(response.number());
+        assertNull(response.guess());
     }
 
     private static SubmissionRow feedRow(Long id) {

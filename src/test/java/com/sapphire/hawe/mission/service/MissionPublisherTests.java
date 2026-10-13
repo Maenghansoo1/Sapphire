@@ -40,7 +40,7 @@ class MissionPublisherTests {
     @BeforeEach
     void setUp() {
         publisher = new MissionPublisher(missions, groups, members, slots,
-                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1), generator,
+                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, MissionTemplateSelector.MVP_POOL), generator,
                 new ObjectMapper());
         lenient().when(members.findUserIdsByGroupId(11L)).thenReturn(List.of(7L));
     }
@@ -84,6 +84,24 @@ class MissionPublisherTests {
         ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
         verify(missions).insert(inserted.capture());
         assertEquals(created, inserted.getValue().getPublishedAt());
+    }
+
+    @Test
+    void publishesOnlyFromTheConfiguredPool() {
+        publisher = new MissionPublisher(missions, groups, members, slots,
+                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, List.of(MissionTemplate.SLIDER_TASTE)),
+                generator, new ObjectMapper());
+        LocalDateTime now = LocalDateTime.of(2026, 10, 13, 10, 0);
+        when(groups.findById(11L)).thenReturn(group(now.minusDays(2)));
+        when(generator.generate(eq(MissionTemplate.SLIDER_TASTE), anyLong(), isNull(), eq(false)))
+                .thenReturn(new GeneratedMission("민트초코, 내 취향은 어디쯤?", "일상",
+                        Map.of("topic", "민트초코", "left", "별로", "right", "최고")));
+
+        publisher.publishIfDue(11L, now);
+
+        ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
+        verify(missions).insert(inserted.capture());
+        assertEquals("SLIDER_TASTE", inserted.getValue().getTemplate());
     }
 
     @Test

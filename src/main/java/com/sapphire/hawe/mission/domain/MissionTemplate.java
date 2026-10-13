@@ -7,7 +7,7 @@ public enum MissionTemplate {
     PHOTO_GALLERY("PHOTO", "갤러리 발굴", Map.of("condition", "string"), Map.of("file", "image(required)")),
     PHOTO_COLOR("PHOTO", "색깔 사냥", Map.of("color", "string"), Map.of("file", "image(required)")),
     TEXT_ACROSTIC("TEXT", "삼행시", Map.of("word", "string(3)"), Map.of("text", "string(required)")),
-    TEXT_ONE_WORD("TEXT", "한 단어 일기", Map.of(), Map.of("text", "string(required)", "caption", "string(required)")),
+    TEXT_ONE_WORD("TEXT", "한 단어 일기", Map.of(), Map.of("text", "string(required)", "caption", "string(optional)")),
     TEXT_REVIEW("TEXT", "한 줄 후기", Map.of(), Map.of("number", "int(1..5, required)", "text", "string(required)")),
     TEXT_BALANCE("TEXT", "밸런스 게임", Map.of("optionA", "string", "optionB", "string"), Map.of("choice", "A|B(required)", "caption", "string(optional)")),
     TEXT_FILL_BLANK("TEXT", "빈칸 채우기", Map.of("sentence", "string(one ___)", "targetUserId", "long(server-assigned)"), Map.of("text", "string(required)")),
