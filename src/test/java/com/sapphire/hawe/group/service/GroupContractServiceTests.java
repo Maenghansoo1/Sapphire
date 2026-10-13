@@ -17,6 +17,7 @@ import com.sapphire.hawe.group.domain.GroupMember;
 import com.sapphire.hawe.group.dto.GroupCreateRequest;
 import com.sapphire.hawe.group.dto.GroupSettingsUpdateRequest;
 import com.sapphire.hawe.group.dto.JoinRequest;
+import com.sapphire.hawe.mission.dto.TodayMissionSummary;
 import com.sapphire.hawe.mission.service.MissionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -132,7 +133,29 @@ class GroupContractServiceTests {
         when(missionService.summarizeCurrent(List.of(11L), 8L)).thenReturn(Map.of());
         var page = service.listMyGroups(8L, 0, 20);
         assertEquals(1, page.content().getFirst().memberCount());
+        assertNull(page.content().getFirst().todayMission());
+        assertEquals(List.of(), page.content().getFirst().todayMissions());
+        assertFalse(page.content().getFirst().submittedToday());
         verify(groups, times(2)).findMemberPreviewsByGroupIds(List.of(11L));
+    }
+
+    @Test
+    void groupListShowsEveryOpenMissionAndKeepsFirstSlotFields() {
+        GroupSummaryRow row = new GroupSummaryRow();
+        row.setId(11L);
+        row.setName("Home");
+        row.setRelationType("FRIEND");
+        when(groups.findSummariesByUserId(8L, 0L, 20)).thenReturn(List.of(row));
+        var first = new TodayMissionSummary(10L, "PHOTO", "창밖을 찍어줘", 1, false);
+        var second = new TodayMissionSummary(12L, "TEXT", "삼행시를 지어줘", 2, true);
+        when(missionService.summarizeCurrent(List.of(11L), 8L)).thenReturn(Map.of(11L, List.of(first, second)));
+
+        var summary = service.listMyGroups(8L, 0, 20).content().getFirst();
+
+        assertEquals(List.of(first, second), summary.todayMissions());
+        // 예전 필드는 첫 슬롯 기준 그대로 (2번에 냈어도 1번을 안 냈으면 false)
+        assertEquals(first, summary.todayMission());
+        assertFalse(summary.submittedToday());
     }
 
     @Test

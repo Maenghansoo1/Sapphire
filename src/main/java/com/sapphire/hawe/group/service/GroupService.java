@@ -89,7 +89,7 @@ public class GroupService {
         long total = groupMapper.countByUserId(userId);
 
         Map<Long, List<MemberProfileResponse>> membersByGroup = new HashMap<>();
-        Map<Long, TodayMissionSummary> missionsByGroup = Map.of();
+        Map<Long, List<TodayMissionSummary>> missionsByGroup = Map.of();
         if (!rows.isEmpty()) {
             List<Long> groupIds = rows.stream().map(GroupSummaryRow::getId).toList();
             missionsByGroup = missionService.summarizeCurrent(groupIds, userId);
@@ -98,14 +98,15 @@ public class GroupService {
                         .add(toMemberProfile(member));
             }
         }
-        Map<Long, TodayMissionSummary> currentMissions = missionsByGroup;
+        Map<Long, List<TodayMissionSummary>> currentMissions = missionsByGroup;
         List<GroupSummaryResponse> content = rows.stream().map(row -> {
             List<MemberProfileResponse> members = membersByGroup.getOrDefault(row.getId(), List.of());
             int maxMembers = "COUPLE".equals(row.getRelationType()) ? 2 : 6;
-            TodayMissionSummary todayMission = currentMissions.get(row.getId());
+            List<TodayMissionSummary> todayMissions = currentMissions.getOrDefault(row.getId(), List.of());
+            TodayMissionSummary todayMission = todayMissions.isEmpty() ? null : todayMissions.getFirst();
             return new GroupSummaryResponse(row.getId(), row.getName(), row.getRelationType(),
                     members.size(), maxMembers, members, row.getStartDate(),
-                    todayMission != null && todayMission.submittedByMe(), todayMission);
+                    todayMission != null && todayMission.submittedByMe(), todayMission, todayMissions);
         }).toList();
         return PageResponse.of(content, safePage, safeSize, total);
     }

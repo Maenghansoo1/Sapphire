@@ -1,6 +1,7 @@
 package com.sapphire.hawe.group.dao;
 
 import com.sapphire.hawe.group.domain.GroupMember;
+import com.sapphire.hawe.mission.dao.MissionMapper;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -47,15 +48,15 @@ public interface GroupMemberMapper {
     @Update("UPDATE group_members SET role = #{role} WHERE group_id = #{groupId} AND user_id = #{userId}")
     void updateRole(@Param("groupId") Long groupId, @Param("userId") Long userId, @Param("role") String role);
 
+    // submission_count_this_month = 이번 달 제출한 날 수 (하루에 여러 개 내도 1), stamped_today = 현재 미션 중 하나라도 제출
     @Select("SELECT gm.user_id AS user_id, " + DISPLAY_NICKNAME + ", " + DISPLAY_IMAGE + ", "
             + DISPLAY_CHARACTER + ", (gm.nickname_override IS NOT NULL) AS group_profile, gm.role AS role, "
-            + "(SELECT COUNT(*) FROM submissions s JOIN missions m ON m.id = s.mission_id "
+            + "(SELECT COUNT(DISTINCT m.mission_date) FROM submissions s JOIN missions m ON m.id = s.mission_id "
             + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id "
             + "AND m.mission_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) AS submission_count_this_month, "
             + "EXISTS (SELECT 1 FROM submissions s JOIN missions m ON m.id = s.mission_id "
-            + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id "
-            + "AND m.id = (SELECT m2.id FROM missions m2 WHERE m2.group_id = m.group_id "
-            + "AND m2.slot_no = m.slot_no ORDER BY m2.published_at DESC, m2.id DESC LIMIT 1)) AS stamped_today "
+            + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id AND " + MissionMapper.CURRENT
+            + ") AS stamped_today "
             + "FROM group_members gm JOIN users u ON u.id = gm.user_id "
             + "LEFT JOIN characters c ON c.id = u.character_id "
             + GROUP_CHARACTER_JOIN

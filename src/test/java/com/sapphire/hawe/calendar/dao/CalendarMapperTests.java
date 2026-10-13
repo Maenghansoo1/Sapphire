@@ -2,6 +2,7 @@ package com.sapphire.hawe.calendar.dao;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +27,7 @@ class CalendarMapperTests {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired CalendarMapper calendar;
+    @Autowired SqlSessionTemplate sqlSession;
 
     private Long me;
     private Long idle;
@@ -83,6 +85,30 @@ class CalendarMapperTests {
 
         assertTrue(rows.get(0).isClosed());
         assertFalse(rows.get(1).isClosed());
+    }
+
+    @Test
+    void eachSlotClosesOnItsOwnAndRemovedSlotsCloseNextDay() {
+        Long owner = insertUser("owner");
+        Long daily = insertGroup(owner);
+        join(daily, owner, "2026-02-01 08:00:00");
+        jdbc.update("UPDATE `groups` SET daily_mission_count = 2 WHERE id = ?", daily);
+        Long feb1Slot1 = insertMission(daily, "2026-02-01", "2026-02-01 09:00:00", "PHOTO_NOW", "1일 1번", "{}");
+        Long feb1Slot2 = insertSlotMission(daily, "2026-02-01", 2, "2026-02-01 14:00:00");
+        Long feb2Slot1 = insertMission(daily, "2026-02-02", "2026-02-02 09:00:00", "PHOTO_NOW", "2일 1번", "{}");
+        LocalDate from = LocalDate.of(2026, 2, 1);
+        LocalDate to = LocalDate.of(2026, 2, 28);
+
+        // 2일 1번이 열려도 1일 2번은 2번 슬롯의 다음 미션이 열리기 전까지 열려 있다
+        assertEquals(List.of(true, false, false), calendar.findMissionsInMonth(daily, owner, from, to).stream()
+                .map(CalendarMissionRow::isClosed).toList());
+        assertEquals(List.of(feb1Slot1, feb1Slot2, feb2Slot1), calendar.findMissionsInMonth(daily, owner, from, to)
+                .stream().map(CalendarMissionRow::getMissionId).toList());
+        // 하루 1개로 줄이면 없어진 2번 슬롯의 미션은 다음 날 발행(2일 1번)으로 닫힌다
+        jdbc.update("UPDATE `groups` SET daily_mission_count = 1 WHERE id = ?", daily);
+        sqlSession.clearCache();  // JdbcTemplate 로 바꾼 값이 같은 조회에 보이게
+        assertEquals(List.of(true, true, false), calendar.findMissionsInMonth(daily, owner, from, to).stream()
+                .map(CalendarMissionRow::isClosed).toList());
     }
 
     @Test
@@ -156,6 +182,13 @@ class CalendarMapperTests {
         jdbc.update("INSERT INTO missions (group_id, content, category, mission_date, template, params, published_at, deadline_at) "
                 + "VALUES (?, ?, 'TEST', ?, ?, ?, ?, ? + INTERVAL 14 HOUR)",
                 groupId, content, date, template, params, publishedAt, publishedAt);
+        return jdbc.queryForObject("SELECT MAX(id) FROM missions WHERE group_id = ?", Long.class, groupId);
+    }
+
+    private Long insertSlotMission(Long groupId, String date, int slotNo, String publishedAt) {
+        jdbc.update("INSERT INTO missions (group_id, content, category, mission_date, template, params, slot_no, "
+                + "published_at, deadline_at) VALUES (?, '슬롯 미션', 'TEST', ?, 'TEXT_ACROSTIC', '{}', ?, ?, "
+                + "? + INTERVAL 8 HOUR)", groupId, date, slotNo, publishedAt, publishedAt);
         return jdbc.queryForObject("SELECT MAX(id) FROM missions WHERE group_id = ?", Long.class, groupId);
     }
 

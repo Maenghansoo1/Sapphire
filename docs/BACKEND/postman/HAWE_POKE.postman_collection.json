@@ -2,20 +2,22 @@
   "info": {
     "name": "HA'WE - POKE API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "그룹 멤버 토큰과 groupId, 미제출 대상의 toUserId를 입력하세요. 현재 미션이 발행된 그룹에서 조회 → 콕 → 중복 콕 → 똥 → 재조회 순서로 실행합니다. 알림 발송은 9단계에서 연결합니다."
+    "description": "그룹 멤버 토큰과 groupId, 미제출 대상의 toUserId를 입력하세요. 현재 미션이 발행된 그룹에서 조회 → 콕 → 중복 콕 → 똥 → 재조회 순서로 실행합니다. missionId 를 빼면 첫 슬롯 미션에 보냅니다. 6은 하루 미션이 2개 이상인 그룹에서만 201입니다(B7). 알림 발송은 9단계에서 연결합니다."
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
     { "key": "token", "value": "" },
     { "key": "groupId", "value": "" },
     { "key": "toUserId", "value": "" },
-    { "key": "missionId", "value": "" }
+    { "key": "missionId", "value": "" },
+    { "key": "missionId2", "value": "" }
   ],
   "item": [
     {
       "name": "1. 현재 미션 확인 (pokedByMe 초기값 [])",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-        "if (pm.response.code === 200 && pm.response.json().missions.length) pm.collectionVariables.set('missionId', pm.response.json().missions[0].missionId);"
+        "if (pm.response.code === 200 && pm.response.json().missions.length) pm.collectionVariables.set('missionId', pm.response.json().missions[0].missionId);",
+        "if (pm.response.code === 200 && pm.response.json().missions.length > 1) pm.collectionVariables.set('missionId2', pm.response.json().missions[1].missionId);"
       ] } }],
       "request": {
         "method": "GET",
@@ -65,6 +67,30 @@
         "method": "GET",
         "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "url": "{{baseUrl}}/api/groups/{{groupId}}/missions/today"
+      }
+    },
+    {
+      "name": "6. 두 번째 슬롯 미션에 콕 (missionId 지정, 하루 2개 이상 그룹만 201)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"toUserId\":{{toUserId}},\"type\":\"poke\",\"missionId\":{{missionId2}}}" },
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/pokes"
+      }
+    },
+    {
+      "name": "7. 현재 미션이 아닌 missionId (409 NO_OPEN_MISSION)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"toUserId\":{{toUserId}},\"type\":\"fling\",\"missionId\":0}" },
+        "url": "{{baseUrl}}/api/groups/{{groupId}}/pokes"
       }
     }
   ]

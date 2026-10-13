@@ -43,7 +43,8 @@ public class PokeService {
         if (!groupMemberMapper.existsByGroupIdAndUserId(groupId, targetId)) {
             throw new BusinessException(PokeErrorCode.TARGET_NOT_GROUP_MEMBER);
         }
-        Long missionId = pokeMapper.findCurrentMissionId(groupId);
+        Long missionId = request.missionId() == null ? pokeMapper.findCurrentMissionId(groupId)
+                : pokeMapper.isCurrentMissionOfGroup(request.missionId(), groupId) ? request.missionId() : null;
         if (missionId == null) {
             throw new BusinessException(PokeErrorCode.NO_OPEN_MISSION);
         }

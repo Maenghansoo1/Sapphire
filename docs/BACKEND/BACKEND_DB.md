@@ -168,7 +168,7 @@ erDiagram
 - `MISSIONS.published_at` / `deadline_at` — 발행 시점의 실제 발행·마감 시각을 고정 저장. 이후 그룹 설정이 바뀌어도 이미 열린 미션의 시각과 지각 판정(`SUBMISSIONS.is_late`)은 바뀌지 않는다
 - 유일성 제약 — `GROUP_MISSION_SLOTS (group_id, slot_no)`: 슬롯 재정의는 슬롯당 1행, `MISSIONS (group_id, mission_date, slot_no)`: 그룹·날짜·슬롯당 미션 1개(중복 발행 방지), `SUBMISSIONS (mission_id, user_id)`: 미션당 1인 1회 제출(`ALREADY_SUBMITTED`)
 - `NOTIFICATIONS`는 `from_user_id`(발신자, 시스템 알림은 NULL) / `to_user_id`(수신자)로 분리
-- 도장(참잘했어요/벌점)은 별도 테이블 없이 `SUBMISSIONS` 존재 여부로 계산 (해당 그룹·날짜에 제출 기록이 있으면 참잘했어요, 없으면 벌점). **하루 미션이 여러 개일 때의 기준은 미정**이며 임시로 "하나라도 제출하면"을 유지한다 (`MISSIONS_API.md` §11)
+- 도장(참잘했어요/벌점)은 별도 테이블 없이 `SUBMISSIONS` 존재 여부로 계산 (해당 그룹·날짜에 제출 기록이 있으면 참잘했어요, 없으면 벌점). 하루 미션이 여러 개면 **미션별 도장**이다 (B7 결정, `MISSIONS_API.md` §11-8)
 
 ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경 상세"를 참고.
 
@@ -269,7 +269,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - **V3 적용 전에 확인:** 데이터가 없다는 것은 현재 개발 DB 기준이다. V1/V2가 적용된 다른 DB(팀원 로컬, 서버 등)가 있다면 그곳도 비어 있는지 확인한다. 데이터가 있다면 NOT NULL 컬럼 값 채우기(`template='PHOTO_NOW'`, `params='{}'`, 그룹 시각 기반 `published_at`/`deadline_at`), 기존 그룹 시각의 슬롯 1번 행 이전, UNIQUE 중복 정리(가장 작은 `id` 유지)를 `groups` 컬럼 삭제 **전에** 해야 한다.
 - 이미 적용된 `V1`/`V2` 파일은 수정하지 않는다 (Flyway 체크섬 불일치). 변경은 새 `V3` 파일로 한다.
 - 코드 영향
-  - 메인 코드의 `GroupMapper.findSummariesByUserId`, `GroupMemberMapper.findMembersByGroupId`는 `submissions`/`missions`를 `mission_id`, `user_id`, `group_id`, `mission_date`로만 읽으므로 컬럼 변경에는 영향이 없다. 다만 하루 미션이 여러 개가 되면 `submissionCountThisMonth`(제출 행 수)의 의미가 달라진다 (`MISSIONS_API.md` §11).
+  - 메인 코드의 `GroupMapper.findSummariesByUserId`, `GroupMemberMapper.findMembersByGroupId`는 `submissions`/`missions`를 `mission_id`, `user_id`, `group_id`, `mission_date`로만 읽으므로 컬럼 변경에는 영향이 없다. `submissionCountThisMonth`는 B7에서 제출 행 수 대신 이번 달 제출한 날 수로 바꿨다 (`MISSIONS_API.md` §11-9).
   - **`GroupMapperTests`(`summariesAndMembersMapSubmissionValues`)가 `submissions`에 `image_url`로, `missions`에 `template`/`params`/`published_at`/`deadline_at` 없이 직접 INSERT하므로 V3 적용 후 실패한다.** V3와 함께 테스트의 INSERT를 새 컬럼 기준으로 고쳐야 한다. (`comments.image_url`은 다른 테이블이라 이번 변경 대상이 아니다.)
   - 그룹 모듈(`Group` 도메인, `GroupMapper`의 INSERT/UPDATE/SELECT, `GroupCreateRequest`, `GroupSettingsUpdateRequest`, `GroupResponse`, `GroupService`)은 삭제되는 `missionPublishTime`/`missionDeadlineTime` 대신 `daily_mission_count`와 슬롯 지정을 다루도록 별도 수정이 필요하다. `relation_type`도 생성·수정·조회 DTO에 포함해야 한다. `GroupMapperTests`의 `insertGroup`도 시각 세팅을 제거해야 한다.
 - 추가 인덱스는 필요 없다. `missions`의 UNIQUE 제약이 그룹별 날짜 조회의 인덱스 역할을 하고, `submissions`의 UNIQUE 제약이 피드 조회(`mission_id`)의 인덱스 역할을 하며, `user_id`와 `group_mission_slots.group_id`는 FK 인덱스가 있다.
@@ -335,7 +335,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - `POST /api/submissions/{id}/reactions` — 스티커 반응
 
 ### 재촉 기능
-- `POST /api/groups/{groupId}/pokes` — 콕찌르기/똥뿌리기 (`toUserId`, `type`). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별한다. `pokes.mission_id`는 현재 미션 FK이며 `(from_user_id, to_user_id, mission_id, type)`에 UNIQUE 제약을 둔다. 응답은 `missionId`를 포함하고 현재 미션의 `members[].pokedByMe`는 요청자가 보낸 종류를 표시한다. 알림 발송은 9단계에서 연결한다.
+- `POST /api/groups/{groupId}/pokes` — 콕찌르기/똥뿌리기 (`toUserId`, `type`, 선택 `missionId` — 없으면 첫 슬롯의 현재 미션). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별한다. `pokes.mission_id`는 현재 미션 FK이며 `(from_user_id, to_user_id, mission_id, type)`에 UNIQUE 제약을 둔다. 응답은 `missionId`를 포함하고 현재 미션의 `members[].pokedByMe`는 요청자가 보낸 종류를 표시한다. 알림 발송은 9단계에서 연결한다.
 
 ### 마이페이지
 - `GET /api/me/calendar?month=2026-09` — 이번 달 도장 현황 (그룹 통합)

@@ -30,6 +30,9 @@ import java.util.Set;
 @Service
 public class MissionPublisher {
 
+    /** 문장이 겹치지 않게 피할 그 전 날까지의 최근 미션 수 (같은 날 먼저 열린 슬롯은 따로 더한다). */
+    static final int RECENT_CONTENTS = 5;
+
     private final MissionMapper missions;
     private final GroupMapper groups;
     private final GroupMemberMapper members;
@@ -76,8 +79,10 @@ public class MissionPublisher {
             MissionTemplate template = MissionTemplateSelector.select(groupId, date, slotNo,
                     group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates());
             boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
-            GeneratedMission generated = generator.generate(template, seed,
-                    missions.findLatestContentByGroupId(groupId), withTarget);
+            // 슬롯 순서대로 같은 트랜잭션에서 저장하므로 앞 슬롯 문장도 여기에 보인다
+            List<String> recent = missions.findRecentContentsByGroupId(groupId,
+                    RECENT_CONTENTS + group.getDailyMissionCount() - 1);
+            GeneratedMission generated = generator.generate(template, seed, recent, withTarget);
             Map<String, Object> params = new HashMap<>(generated.params());
             if (withTarget) {
                 List<Long> userIds = members.findUserIdsByGroupId(groupId);

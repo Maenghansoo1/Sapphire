@@ -16,6 +16,7 @@ import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.mission.dao.MissionMemberRow;
 import com.sapphire.hawe.mission.dao.MissionSummaryRow;
+import com.sapphire.hawe.mission.dto.TodayMissionSummary;
 import com.sapphire.hawe.poke.dao.PokeMapper;
 import com.sapphire.hawe.poke.dao.PokedRow;
 import org.junit.jupiter.api.BeforeEach;
@@ -204,17 +205,34 @@ class MissionServiceTests {
         row.setParams("{\"targetUserId\":3}");
         row.setSubmittedCount(2);
         row.setSubmittedByMe(true);
-        when(missions.findCurrentSummariesByGroupIds(List.of(11L), 7L)).thenReturn(List.of(row));
+        MissionSummaryRow second = new MissionSummaryRow();
+        second.setGroupId(11L);
+        second.setMissionId(12L);
+        second.setTemplate("PHOTO_NOW");
+        second.setContent("창밖을 찍어줘");
+        MissionSummaryRow otherGroup = new MissionSummaryRow();
+        otherGroup.setGroupId(13L);
+        otherGroup.setMissionId(14L);
+        otherGroup.setTemplate("DRAW_SKETCH");
+        when(missions.findCurrentSummariesByGroupIds(List.of(11L, 13L, 15L), 7L))
+                .thenReturn(List.of(row, second, otherGroup));
         User target = new User();
         target.setNickname("잎사귀");
         when(users.findById(3L)).thenReturn(target);
 
-        var summary = service.summarizeCurrent(List.of(11L), 7L).get(11L);
+        var summaries = service.summarizeCurrent(List.of(11L, 13L, 15L), 7L);
 
+        // 쿼리가 준 슬롯 순서 그대로, 그룹별로 묶는다. 현재 미션이 없는 그룹은 없다
+        assertEquals(List.of(10L, 12L), summaries.get(11L).stream().map(TodayMissionSummary::missionId).toList());
+        assertEquals(List.of(14L), summaries.get(13L).stream().map(TodayMissionSummary::missionId).toList());
+        assertFalse(summaries.containsKey(15L));
+        var summary = summaries.get(11L).getFirst();
         assertEquals("TEXT", summary.media());
         assertEquals("잎사귀은 ___ 할 것 같다", summary.content());
         assertEquals(2, summary.submittedCount());
         assertTrue(summary.submittedByMe());
+        assertEquals("PHOTO", summaries.get(11L).get(1).media());
+        assertFalse(summaries.get(11L).get(1).submittedByMe());
     }
 
     @Test

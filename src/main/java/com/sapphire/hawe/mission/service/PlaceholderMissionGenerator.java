@@ -11,15 +11,24 @@ import java.util.Random;
 @Component
 public class PlaceholderMissionGenerator implements MissionGenerator {
 
+    /** 최근에 쓰지 않은 변형을 시드 순서대로 고르고, 모두 썼으면 가장 오래전에 쓴 변형을 고른다. */
     @Override
-    public GeneratedMission generate(MissionTemplate template, long seed, String previousContent, boolean withTarget) {
+    public GeneratedMission generate(MissionTemplate template, long seed, List<String> recentContents, boolean withTarget) {
+        List<String> recent = recentContents == null ? List.of() : recentContents;
         List<GeneratedMission> variants = variants(template, withTarget);
         int index = new Random(seed).nextInt(variants.size());
+        GeneratedMission leastRecent = null;
+        int leastRecentAt = -1;
         for (int offset = 0; offset < variants.size(); offset++) {
             GeneratedMission candidate = variants.get((index + offset) % variants.size());
-            if (!candidate.content().equals(previousContent)) return candidate;
+            int usedAt = recent.indexOf(candidate.content());
+            if (usedAt < 0) return candidate;
+            if (usedAt > leastRecentAt) {
+                leastRecent = candidate;
+                leastRecentAt = usedAt;
+            }
         }
-        throw new IllegalStateException("No distinct placeholder mission");
+        return leastRecent;
     }
 
     private List<GeneratedMission> variants(MissionTemplate template, boolean withTarget) {

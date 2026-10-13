@@ -75,16 +75,24 @@ class CalendarServiceTests {
     }
 
     @Test
-    void missionsOnSameDayShareOneDay() {
+    void missionsOnSameDayShareOneDayWithAStampEach() {
         givenMember(11L, 7L);
-        when(calendarMapper.findMissionsInMonth(any(), any(), any(), any())).thenReturn(List.of(
-                row(101L, "2026-10-01", "PHOTO_NOW", "첫 번째"),
-                row(102L, "2026-10-01", "TEXT_ACROSTIC", "두 번째")));
+        CalendarMissionRow submitted = row(101L, "2026-10-01", "PHOTO_NOW", "첫 번째");
+        submitted.setSubmittedByMe(true);
+        submitted.setClosed(true);
+        CalendarMissionRow missed = row(102L, "2026-10-01", "TEXT_ACROSTIC", "두 번째");
+        missed.setClosed(true);
+        missed.setMemberWhenPublished(true);
+        CalendarMissionRow open = row(103L, "2026-10-01", "DRAW_SKETCH", "세 번째");
+        open.setMemberWhenPublished(true);
+        when(calendarMapper.findMissionsInMonth(any(), any(), any(), any())).thenReturn(List.of(submitted, missed, open));
 
         CalendarResponse response = service.getCalendar(7L, 11L, OCTOBER);
 
+        // 하루 여러 개면 도장도 미션마다 따로 (하루에 하나로 합치지 않는다)
         assertEquals(1, response.days().size());
-        assertEquals(2, response.days().getFirst().missions().size());
+        assertEquals(java.util.Arrays.asList(Stamp.GOOD, Stamp.PENALTY, null),
+                response.days().getFirst().missions().stream().map(CalendarMission::stamp).toList());
     }
 
     @Test

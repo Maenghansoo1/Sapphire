@@ -53,7 +53,7 @@ class PokeServiceTests {
             return null;
         }).when(pokeMapper).insert(any(Poke.class));
 
-        var response = service.sendPoke(7L, 11L, new PokeRequest(8L, "fling"));
+        var response = service.sendPoke(7L, 11L, new PokeRequest(8L, "fling", null));
 
         assertEquals(1L, response.id());
         assertEquals(8L, response.toUserId());
@@ -69,14 +69,14 @@ class PokeServiceTests {
 
     @Test
     void missingGroupReturnsNotFound() {
-        assertFailsWith(GroupErrorCode.GROUP_NOT_FOUND, new PokeRequest(8L, "poke"));
+        assertFailsWith(GroupErrorCode.GROUP_NOT_FOUND, new PokeRequest(8L, "poke", null));
     }
 
     @Test
     void senderOutsideGroupCannotPoke() {
         when(groupMapper.findById(11L)).thenReturn(group(11L));
 
-        assertFailsWith(GroupErrorCode.NOT_GROUP_MEMBER, new PokeRequest(8L, "poke"));
+        assertFailsWith(GroupErrorCode.NOT_GROUP_MEMBER, new PokeRequest(8L, "poke", null));
     }
 
     @Test
@@ -84,7 +84,7 @@ class PokeServiceTests {
         when(groupMapper.findById(11L)).thenReturn(group(11L));
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
 
-        assertFailsWith(PokeErrorCode.CANNOT_POKE_SELF, new PokeRequest(7L, "poke"));
+        assertFailsWith(PokeErrorCode.CANNOT_POKE_SELF, new PokeRequest(7L, "poke", null));
     }
 
     @Test
@@ -92,7 +92,7 @@ class PokeServiceTests {
         when(groupMapper.findById(11L)).thenReturn(group(11L));
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
 
-        assertFailsWith(PokeErrorCode.TARGET_NOT_GROUP_MEMBER, new PokeRequest(8L, "poke"));
+        assertFailsWith(PokeErrorCode.TARGET_NOT_GROUP_MEMBER, new PokeRequest(8L, "poke", null));
     }
 
     @Test
@@ -103,14 +103,38 @@ class PokeServiceTests {
         when(pokeMapper.findCurrentMissionId(11L)).thenReturn(10L);
         when(pokeMapper.existsSubmission(10L, 8L)).thenReturn(true);
 
-        assertFailsWith(PokeErrorCode.TARGET_ALREADY_SUBMITTED, new PokeRequest(8L, "poke"));
+        assertFailsWith(PokeErrorCode.TARGET_ALREADY_SUBMITTED, new PokeRequest(8L, "poke", null));
     }
 
     @Test
     void noCurrentMissionReturnsConflict() {
         allowMembers();
         when(pokeMapper.findCurrentMissionId(11L)).thenReturn(null);
-        assertFailsWith(PokeErrorCode.NO_OPEN_MISSION, new PokeRequest(8L, "poke"));
+        assertFailsWith(PokeErrorCode.NO_OPEN_MISSION, new PokeRequest(8L, "poke", null));
+    }
+
+    @Test
+    void chosenMissionMustBeCurrentInTheGroup() {
+        allowMembers();
+        when(pokeMapper.isCurrentMissionOfGroup(12L, 11L)).thenReturn(true);
+
+        var response = service.sendPoke(7L, 11L, new PokeRequest(8L, "poke", 12L));
+
+        assertEquals(12L, response.missionId());
+        verify(pokeMapper).existsSubmission(12L, 8L);
+        verify(pokeMapper).existsPoke(7L, 8L, 12L, "poke");
+        verify(pokeMapper, never()).findCurrentMissionId(11L);
+        ArgumentCaptor<Poke> saved = ArgumentCaptor.forClass(Poke.class);
+        verify(pokeMapper).insert(saved.capture());
+        assertEquals(12L, saved.getValue().getMissionId());
+    }
+
+    @Test
+    void closedOrOtherGroupsMissionReturnsConflict() {
+        allowMembers();
+        when(pokeMapper.isCurrentMissionOfGroup(9L, 11L)).thenReturn(false);
+        assertFailsWith(PokeErrorCode.NO_OPEN_MISSION, new PokeRequest(8L, "poke", 9L));
+        verify(pokeMapper, never()).findCurrentMissionId(11L);
     }
 
     @Test
@@ -118,7 +142,7 @@ class PokeServiceTests {
         allowMembers();
         when(pokeMapper.findCurrentMissionId(11L)).thenReturn(10L);
         when(pokeMapper.existsPoke(7L, 8L, 10L, "poke")).thenReturn(true);
-        assertFailsWith(PokeErrorCode.ALREADY_POKED, new PokeRequest(8L, "poke"));
+        assertFailsWith(PokeErrorCode.ALREADY_POKED, new PokeRequest(8L, "poke", null));
     }
 
     @Test
@@ -127,7 +151,7 @@ class PokeServiceTests {
         when(pokeMapper.findCurrentMissionId(11L)).thenReturn(10L);
         doThrow(new DuplicateKeyException("duplicate")).when(pokeMapper).insert(any(Poke.class));
         BusinessException error = assertThrows(BusinessException.class,
-                () -> service.sendPoke(7L, 11L, new PokeRequest(8L, "poke")));
+                () -> service.sendPoke(7L, 11L, new PokeRequest(8L, "poke", null)));
         assertEquals(PokeErrorCode.ALREADY_POKED, error.errorCode());
     }
 

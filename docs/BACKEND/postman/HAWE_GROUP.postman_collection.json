@@ -414,7 +414,8 @@
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
                   "pm.test(\"1 group, not submitted\", () => { const j = pm.response.json(); pm.expect(j.totalElements).to.eql(1); pm.expect(j.content[0].submittedToday).to.eql(false); });",
-                  "pm.test(\"todayMission summary field\", () => pm.expect(pm.response.json().content[0]).to.have.property(\"todayMission\"));"
+                  "pm.test(\"todayMission summary field\", () => pm.expect(pm.response.json().content[0]).to.have.property(\"todayMission\"));",
+                  "pm.test(\"todayMissions list (B7)\", () => pm.expect(pm.response.json().content[0].todayMissions).to.be.an(\"array\"));"
                 ]
               }
             }

@@ -38,7 +38,11 @@ public final class MissionTemplateSelector {
         return select(groupId, date, slotNo, dailyMissionCount, yesterdayMedia, MVP_POOL);
     }
 
-    /** 풀은 설정 순서와 상관없이 enum 순서로 쓴다(기본 풀이면 예전 결과와 같다). 매체는 풀에 틀이 있는 것만 돈다. */
+    /**
+     * 풀은 설정 순서와 상관없이 enum 순서로 쓴다(기본 풀이면 예전 결과와 같다). 매체는 풀에 틀이 있는 것만 돈다.
+     * 하루 여러 개면 매체를 슬롯 순서대로 돌리고, 슬롯이 매체보다 많아 같은 매체가 다시 오면 그 매체의 다음 틀을 쓴다
+     * (매체에 틀이 하나뿐일 때만 같은 날 같은 틀이 나온다). 오늘 다른 슬롯의 DB 결과는 읽지 않는다.
+     */
     public static MissionTemplate select(long groupId, LocalDate date, int slotNo,
             int dailyMissionCount, Set<String> yesterdayMedia, Collection<MissionTemplate> pool) {
         List<MissionTemplate> templates = pool.stream().distinct().sorted().toList();
@@ -46,13 +50,22 @@ public final class MissionTemplateSelector {
         List<String> mediaOrder = new ArrayList<>(MEDIA.stream()
                 .filter(media -> templates.stream().anyMatch(template -> template.media().equals(media))).toList());
         Collections.shuffle(mediaOrder, new Random(seed(groupId, date, 0)));
-        String media = dailyMissionCount == 1
-                ? mediaOrder.stream().filter(candidate -> !yesterdayMedia.contains(candidate))
-                        .findFirst().orElse(mediaOrder.getFirst())
-                : mediaOrder.get((slotNo - 1) % mediaOrder.size());
-        List<MissionTemplate> candidates = templates.stream()
-                .filter(template -> template.media().equals(media)).toList();
-        return candidates.get(new Random(seed(groupId, date, slotNo)).nextInt(candidates.size()));
+        if (dailyMissionCount == 1) {
+            String media = mediaOrder.stream().filter(candidate -> !yesterdayMedia.contains(candidate))
+                    .findFirst().orElse(mediaOrder.getFirst());
+            List<MissionTemplate> candidates = ofMedia(templates, media);
+            return candidates.get(new Random(seed(groupId, date, slotNo)).nextInt(candidates.size()));
+        }
+        int position = (slotNo - 1) % mediaOrder.size();
+        int round = (slotNo - 1) / mediaOrder.size();
+        List<MissionTemplate> candidates = ofMedia(templates, mediaOrder.get(position));
+        // 시작 틀은 그 매체가 처음 나오는 슬롯의 시드로 정한다 → 첫 바퀴는 예전 결과와 같다
+        int start = new Random(seed(groupId, date, position + 1)).nextInt(candidates.size());
+        return candidates.get((start + round) % candidates.size());
+    }
+
+    private static List<MissionTemplate> ofMedia(List<MissionTemplate> templates, String media) {
+        return templates.stream().filter(template -> template.media().equals(media)).toList();
     }
 
     public static boolean needsTarget(MissionTemplate template, long seed) {

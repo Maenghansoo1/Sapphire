@@ -35,7 +35,7 @@ class PlaceholderMissionGeneratorTests {
                         assertTrue(((String) result.params().get("word")).matches("[가-힣]{3}"));
                     if (template == MissionTemplate.DRAW_SKETCH || template == MissionTemplate.DRAW_A_TO_B)
                         assertEquals(withTarget, result.content().contains("[대상]"));
-                    assertNotEquals(result.content(), generator.generate(template, seed, result.content(),
+                    assertNotEquals(result.content(), generator.generate(template, seed, List.of(result.content()),
                             withTarget).content());
                     contents.add(result.content());
                 }
@@ -63,10 +63,26 @@ class PlaceholderMissionGeneratorTests {
                     assertNotEquals(left, right);
                     assertTrue(!left.isBlank() && left.length() <= 20 && !right.isBlank() && right.length() <= 20);
                 }
-                assertNotEquals(result.content(), generator.generate(template, seed, result.content(), false).content());
+                assertNotEquals(result.content(), generator.generate(template, seed, List.of(result.content()), false).content());
                 contents.add(result.content());
             }
             assertTrue(contents.size() >= 3, template.name());
+        }
+    }
+
+    @Test void avoidsRecentSentencesAndReusesTheLeastRecentWhenAllWereUsed() {
+        for (MissionTemplate template : MissionTemplate.values()) {
+            for (long seed = 0; seed < 50; seed++) {
+                var first = generator.generate(template, seed, List.of(), false);
+                var second = generator.generate(template, seed, List.of(first.content()), false);
+                var third = generator.generate(template, seed, List.of(second.content(), first.content()), false);
+                assertEquals(3, Set.of(first.content(), second.content(), third.content()).size(), template.name());
+                // 변형 3개를 모두 최근에 썼으면 가장 오래전에 쓴 것을 다시 쓴다 (예외 없음, 바로 앞 문장은 피함)
+                assertEquals(first, generator.generate(template, seed,
+                        List.of(third.content(), second.content(), first.content()), false));
+                assertEquals(second, generator.generate(template, seed,
+                        List.of("다른 틀 문장", first.content(), third.content(), second.content(), "또 다른 문장"), false));
+            }
         }
     }
 }

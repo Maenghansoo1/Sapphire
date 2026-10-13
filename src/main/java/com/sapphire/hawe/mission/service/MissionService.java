@@ -31,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -97,12 +98,14 @@ public class MissionService {
         return new MissionTemplateListResponse(content);
     }
 
-    public Map<Long, TodayMissionSummary> summarizeCurrent(List<Long> groupIds, Long userId) {
+    /** 그룹별 현재 미션 요약, 슬롯 순서. 현재 미션이 없는 그룹은 결과에 들어가지 않는다. */
+    public Map<Long, List<TodayMissionSummary>> summarizeCurrent(List<Long> groupIds, Long userId) {
         if (groupIds.isEmpty()) return Map.of();
-        Map<Long, TodayMissionSummary> summaries = new HashMap<>();
+        Map<Long, List<TodayMissionSummary>> summaries = new HashMap<>();
         for (MissionSummaryRow row : missionMapper.findCurrentSummariesByGroupIds(groupIds, userId)) {
-            summaries.put(row.getGroupId(), new TodayMissionSummary(row.getMissionId(),
-                    media(row.getTemplate()), displayContent(row.getContent(), resolveParams(row.getParams())),
+            summaries.computeIfAbsent(row.getGroupId(), ignored -> new ArrayList<>()).add(new TodayMissionSummary(
+                    row.getMissionId(), media(row.getTemplate()),
+                    displayContent(row.getContent(), resolveParams(row.getParams())),
                     row.getSubmittedCount(), row.isSubmittedByMe()));
         }
         return summaries;

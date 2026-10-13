@@ -121,11 +121,11 @@
 
 ### GET /groups
 
-응답의 각 그룹은 id, name, relationType, memberCount, maxMembers, members, startDate, submittedToday, todayMission을 가진다. members의 각 항목은 userId, nickname, characterKey, profileImageUrl(null)이다. 목록은 내가 참여한 순서, 멤버는 그룹 참여 순서로 정렬한다. todayMission은 현재 미션의 `{missionId, media, content, submittedCount, submittedByMe}` 요약이며 미발행이면 null이다. submittedToday는 `todayMission.submittedByMe`와 같고 미발행이면 false다.
+응답의 각 그룹은 id, name, relationType, memberCount, maxMembers, members, startDate, submittedToday, todayMission, todayMissions를 가진다. members의 각 항목은 userId, nickname, characterKey, profileImageUrl(null)이다. 목록은 내가 참여한 순서, 멤버는 그룹 참여 순서로 정렬한다. todayMission은 현재 미션의 `{missionId, media, content, submittedCount, submittedByMe}` 요약이며 미발행이면 null이다. 하루 미션이 여러 개면 todayMission은 첫 슬롯(현재 미션 중 가장 작은 slotNo)이고, todayMissions(B7)는 현재 미션 요약 전부를 slotNo 순으로 담는다(없으면 빈 배열). submittedToday는 `todayMission.submittedByMe`와 같고 미발행이면 false다.
 
 ### POST /groups
 
-요청 예시: {"name":"우리 둘","relationType":"COUPLE","startDate":"2026-06-02"}. 201 응답은 상세와 같은 형태다. name은 trim 후 1~16자. relationType 생략 시 CASUAL. startDate는 COUPLE에서만 허용하며 서울 기준 미래 날짜는 400 VALIDATION_ERROR. dailyMissionCount와 missionSlots는 기존 선택 필드로 유지한다.
+요청 예시: {"name":"우리 둘","relationType":"COUPLE","startDate":"2026-06-02"}. 201 응답은 상세와 같은 형태다. name은 trim 후 1~16자. relationType 생략 시 CASUAL. startDate는 COUPLE에서만 허용하며 서울 기준 미래 날짜는 400 VALIDATION_ERROR. dailyMissionCount(1~5, 기본 1)와 missionSlots는 기존 선택 필드로 유지한다.
 
 ### GET /groups/{groupId}
 
@@ -142,11 +142,11 @@
 
 ### PATCH /groups/{groupId}/settings
 
-부분 수정: name, relationType, startDate, dailyMissionCount, missionSlots. 응답은 상세와 같다. name은 trim 후 1~16자이며 빈 이름은 400. startDate는 결과 관계가 COUPLE일 때만 보낼 수 있다. 다른 관계로 바꾸면 저장된 날짜는 지운다. 새 관계의 정원보다 현재 인원이 많으면 409 GROUP_FULL. missionSlots는 전체 교체이며 기존 기본 시각 규칙을 따른다. 에러: 403 NOT_GROUP_OWNER.
+부분 수정: name, relationType, startDate, dailyMissionCount, missionSlots. 응답은 상세와 같다. name은 trim 후 1~16자이며 빈 이름은 400. startDate는 결과 관계가 COUPLE일 때만 보낼 수 있다. 다른 관계로 바꾸면 저장된 날짜는 지운다. 새 관계의 정원보다 현재 인원이 많으면 409 GROUP_FULL. missionSlots는 전체 교체이며 기존 기본 시각 규칙을 따른다. dailyMissionCount는 1~5(`hawe.mission.max-daily-count`)이고, 줄이면 없어진 슬롯에 이미 열린 미션은 그날 유지되다가 다음 날 첫 발행에서 닫힌다(`MISSIONS_API.md` §2). 에러: 403 NOT_GROUP_OWNER.
 
 ### GET /groups/{groupId}/members
 
-멤버 응답은 userId, nickname, characterKey, profileImageUrl, hasGroupProfile, role, submissionCountThisMonth, stampedToday를 가진다. 사진이 없으면 `profileImageUrl`은 null이다. `hasGroupProfile`은 그룹 내 프로필 설정 여부다.
+멤버 응답은 userId, nickname, characterKey, profileImageUrl, hasGroupProfile, role, submissionCountThisMonth, stampedToday를 가진다. 사진이 없으면 `profileImageUrl`은 null이다. `hasGroupProfile`은 그룹 내 프로필 설정 여부다. `submissionCountThisMonth`는 이번 달 제출한 날 수(하루에 여러 개 내도 1), `stampedToday`는 현재 미션 중 하나라도 제출했는지다(B7).
 
 ### 그룹 내 프로필
 
@@ -178,6 +178,7 @@
 - 미션/제출 API 명세: `docs/BACKEND/MISSIONS_API.md`
 - 미션 템플릿 목록: `docs/FEATURE/MISSIONS.md`
 - B5(2026-10-13): 새 틀 6종(한 단어·한 줄 후기·밸런스·슬라이더 3종) 제출 규칙은 `MISSIONS_API.md` §3-2, 집계 결과 `GET /missions/{missionId}/result`는 §5, 발행 풀 설정 `hawe.mission.enabled-templates`는 §6-1
+- B7(2026-10-13): 하루 미션 여러 개(1~5) — 설정·현재 미션 규칙은 `MISSIONS_API.md` §2, 같은 날 틀·문장 겹침 방지는 §6·§6-1, 결정 사항은 §11
 
 ---
 
@@ -233,12 +234,12 @@
 
 ```json
 // Request
-{ "toUserId": 7, "type": "poke" }   // type: "poke" | "fling"
+{ "toUserId": 7, "type": "poke", "missionId": 10 }   // type: "poke" | "fling", missionId: 선택
 
 // Response 201
 { "id": 1, "toUserId": 7, "type": "poke", "missionId": 10, "sentAt": "2026-09-28T15:41:48+09:00" }
 ```
-현재 미션은 그룹의 가장 작은 슬롯 번호에서 가장 최근 발행된 미션이다. 현재 미션이 없으면 보낼 수 없다. 같은 보낸 사람·받는 사람·미션·종류마다 한 번만 보낼 수 있으므로 `poke`와 `fling`은 각각 한 번 가능하다. 알림 발송은 9단계에서 연결한다.
+`missionId`를 보내지 않으면 그룹의 현재 미션 중 가장 작은 슬롯 번호의 미션에 보낸다. 보내면(B7) 그 미션이 그 그룹의 현재 미션이어야 한다. 현재 미션이 없거나 보낸 `missionId`가 현재 미션이 아니면 409 `NO_OPEN_MISSION`. 같은 보낸 사람·받는 사람·미션·종류마다 한 번만 보낼 수 있으므로 `poke`와 `fling`은 미션마다 각각 한 번 가능하다. 알림 발송은 9단계에서 연결한다.
 
 에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `CANNOT_POKE_SELF` (400), `TARGET_NOT_GROUP_MEMBER` (404), `NO_OPEN_MISSION` (409), `TARGET_ALREADY_SUBMITTED` (409), `ALREADY_POKED` (409), `VALIDATION_ERROR` (400).
 

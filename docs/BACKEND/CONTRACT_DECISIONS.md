@@ -150,12 +150,15 @@
     "startDate": null,
     "submittedToday": false,
     "todayMission": { "missionId": 10, "media": "PHOTO", "content": "지금 창밖으로 보이는 풍경",
-                      "submittedCount": 3, "submittedByMe": false } }
+                      "submittedCount": 3, "submittedByMe": false },
+    "todayMissions": [ { "missionId": 10, "media": "PHOTO", "content": "지금 창밖으로 보이는 풍경",
+                         "submittedCount": 3, "submittedByMe": false } ] }
 ], "page": 0, "size": 20, "totalPages": 1, "totalElements": 3 }
 ```
 - 정렬: 내가 참여한 순서. `members`는 그룹 안 표시 프로필, 참여 순.
-- `todayMission`: 지금 열려 있는 미션(§3 "현재 미션") 요약. 없으면 `null`. 홈 카드의 유형·주제·제출 인원·내 제출 여부에 쓴다.
-- `submittedToday`는 `todayMission.submittedByMe`와 같은 값이 되므로 반영 시 제거를 검토한다.
+- `todayMission`: 지금 열려 있는 미션(§3 "현재 미션") 요약. 없으면 `null`. 홈 카드의 유형·주제·제출 인원·내 제출 여부에 쓴다. 하루 여러 개면 **첫 슬롯**(현재 미션 중 가장 작은 `slotNo`)이다.
+- `todayMissions` (B7 추가): 현재 미션 요약 **전부**, `slotNo` 오름차순. 없으면 빈 배열. 하루 1개면 `[todayMission]`과 같다. 앱의 여러 미션 홈 카드는 A6.
+- `submittedToday`는 `todayMission.submittedByMe`와 같은 값(첫 슬롯 기준)이 되므로 반영 시 제거를 검토한다.
 
 #### POST /api/groups — 그룹 만들기
 ```json
@@ -165,7 +168,7 @@
 ```
 - `name`: trim 후 1~16자. `relationType` 생략 시 `CASUAL`.
 - `startDate`: COUPLE일 때만 받는다(선택). 다른 관계에서 보내면 400 `VALIDATION_ERROR`. 미래 날짜(Asia/Seoul 기준)는 400.
-- `dailyMissionCount`, `missionSlots`는 기존대로 선택 필드로 남지만 MVP에서는 하루 1개만 허용한다 (§3). 앱은 보내지 않는다.
+- `dailyMissionCount`, `missionSlots`는 기존대로 선택 필드다. 하루 미션 수는 1~5(B7, §3). 앱은 보내지 않는다.
 - 생성 직후 오늘 미션을 연다 (§3 "첫 미션").
 
 #### GET /api/groups/{groupId} — 그룹 상세 (멤버만)
@@ -202,7 +205,7 @@
 - 정렬: 참여 순 (기존과 같음). `nickname`·`characterKey`·`profileImageUrl`은 그룹 안 표시 프로필.
 - `hasGroupProfile`: 그룹 내 프로필을 쓰는지. 16-1에서 "기본 프로필 사용" 상태를 보여 줄 때 쓴다.
 - "나"는 `GET /me`의 `id`와 `userId`를 비교해 판별한다.
-- `submissionCountThisMonth`·`stampedToday`는 앱이 쓰지 않는다. 유지·삭제는 반영 시 정한다 (§9-4).
+- `submissionCountThisMonth`·`stampedToday`는 앱이 쓰지 않는다. 유지·삭제는 반영 시 정한다 (§9-4). 뜻(B7): `submissionCountThisMonth` = 이번 달 제출한 **날 수**, `stampedToday` = 현재 미션 중 하나라도 제출.
 
 #### 초대 코드
 ```json
@@ -272,7 +275,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 
 ---
 
-## 3. Missions (조회·생성 규칙) — 상태: 반영됨 (1차: AI 연동·하루 여러 개·MISSION_CLOSED 제외. 발행 풀 설정화는 B5 반영)
+## 3. Missions (조회·생성 규칙) — 상태: 반영됨 (1차: AI 연동·MISSION_CLOSED 제외. 발행 풀 설정화는 B5, 하루 여러 개는 B7 반영)
 
 제출·피드는 §6 이후에서 따로 정한다. 이 절은 미션이 언제 열리고 닫히는지와 조회 응답을 다룬다.
 
@@ -284,6 +287,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 | MVP 하루 미션 수 | 1로 고정. `hawe.mission.max-daily-count=1`로 설정해 서버 검증으로 막는다. 앱에는 하루 미션 수 설정 UI가 없다 | 코드 변경 없이 설정값으로 나중에 늘릴 수 있음 |
 | MVP 틀 풀 | `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`(사진 화면), `DRAW_SKETCH`, `DRAW_A_TO_B`(그림 화면), `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`(글 화면)의 7종. **제외**: `TEXT_ONE_WORD`(캡션 칸), `TEXT_REVIEW`(별점), `TEXT_BALANCE`(A/B 선택), `SLIDER_*`(슬라이더). 처음에는 `VOICE_LINE`(음성 화면)을 넣은 8종이었으나 2026-10-12 음성 제거로 빠졌고, 음성 틀 3종은 틀 목록에서도 삭제됐다 | 각 틀이 요구하는 입력이 기존 화면 하나로 끝나는지 기준. 틀 선택 규칙(`MISSIONS_API.md` §6-1, 하루 1개면 어제와 같은 매체 피하기)은 이 풀 안에서 적용한다. 앱의 "같은 유형 3일 연속 금지" 규칙은 서버 규칙으로 대체 |
 | 발행 풀 설정 (B5, 2026-10-13) | 풀을 설정 `hawe.mission.enabled-templates`로 바꿀 수 있게 했다. 기본값은 위 7종이라 지금 발행 결과는 그대로다. 제외했던 새 틀 6종은 서버가 제출·결과를 받을 수 있게 됐고, **앱(A4)이 화면을 배포한 뒤** 설정에 추가한다 | 구 앱이 모르는 틀을 받으면 미션을 열 수 없음. 코드 배포 없이 설정만으로 켤 수 있게 |
+| 하루 여러 개 (B7, 2026-10-13) | 상한을 5로 열었다(`max-daily-count=5`). 같은 날 슬롯끼리 틀이 겹치지 않게 고르고(`MISSIONS_API.md` §6-1), 문장은 같은 날 앞 슬롯·최근 5개와 겹치지 않게 만든다. **도장·피드 잠금은 미션별**, 그룹 목록에 `todayMissions` 추가, 콕은 `missionId`로 미션을 고를 수 있다(§4). 하루 1개의 선택 결과·응답은 그대로다 | 앱은 `dailyMissionCount`를 보내지 않아 지금은 하루 1개. 앱 화면(A6)이 생기면 그룹장이 설정한다 |
 | 유형 표시 | 앱은 서버 `media`(`PHOTO/TEXT/DRAW`, 나중에 `SLIDER`. `VOICE`는 음성 제거로 없어짐)로 화면을 고르고, `content`를 주제 문장으로 보여 준다 | 앱의 `topic` 자리에 서버 `content`를 그대로 씀 |
 | 시간 규칙 | **마감 + 지각, 다음 미션이 열리면 제출 종료.** 발행~마감 전은 정상, 마감~다음 미션 발행 전은 지각(`isLate=true`)으로 제출 가능, 그 뒤로는 제출 불가 | 사용자 결정. 지각 규칙(`PROJECT_OVERVIEW`)을 지키면서 며칠 지난 미션에 제출하는 일을 막음 |
 | 첫 미션 | 그룹을 만들 때 오늘 발행 시각이 이미 지났으면 **바로 연다.** 아직 안 지났으면 오늘 발행 시각에 연다 | 사용자 결정. 첫 경험이 비지 않게 (앱 현재 동작) |
@@ -298,7 +302,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 - **마감 시각** `deadlineAt`: `publishedAt` 이후 **처음 오는** 슬롯 마감 시각(지정 없으면 `default-deadline-time`). 예: 주제 도착 시각 23:30, 마감 기본 23:00이면 마감은 다음 날 23:00이고, 다음 미션 발행(다음 날 23:30)보다 앞선다. 따라서 마감은 항상 발행 후 24시간 안이다.
 - **제출 종료**: 같은 그룹·같은 슬롯에 **다음 미션이 발행되는 순간** 이전 미션은 닫힌다. 닫힌 미션에 제출하면 409 `MISSION_CLOSED`(새 오류 코드). 응답의 `closesAt`은 다음 발행 예정 시각(그룹 설정이 바뀌면 달라질 수 있는 예정값)이다.
 - **지각**: `submittedAt > deadlineAt`이면 `isLate=true`.
-- **현재 미션**: 슬롯마다 가장 최근에 발행된 미션. "오늘"을 `CURDATE()`로 판단하지 않는다 — 23:30에 열린 미션은 자정이 지나도 다음 발행 전까지 현재 미션이다. 그룹 목록의 `submittedToday`·`todayMission`, 멤버 목록의 `stampedToday`, 콕 찌르기의 "이미 제출함" 판단도 이 기준으로 바꾼다.
+- **현재 미션**: 슬롯마다 가장 최근에 발행된 미션. "오늘"을 `CURDATE()`로 판단하지 않는다 — 23:30에 열린 미션은 자정이 지나도 다음 발행 전까지 현재 미션이다. 그룹 목록의 `submittedToday`·`todayMission`, 멤버 목록의 `stampedToday`, 콕 찌르기의 "이미 제출함" 판단도 이 기준으로 바꾼다. B7: 하루 미션 수를 줄여 없어진 슬롯의 미션은 그룹의 다음 날 첫 발행에서, 하루 넘게 발행이 없었던 슬롯의 미션은 그 뒤 첫 발행에서 닫힌다(다음 미션 없이도). 달력의 `closed`도 같은 기준이다.
 - `mission_date`는 발행 시각의 날짜(Asia/Seoul)다. 달력은 이 날짜로 묶는다.
 
 ### 3-3. 최종 계약
@@ -352,7 +356,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 - 임시 생성기는 고정 변형을 사용한다. 발행 오류는 로그를 남기고 스케줄러가 다음 분에 재시도한다. 향후 AI 연동 시 재시도·대체 문장 정책은 별도로 정한다.
 - `/mission-templates`에 MVP 풀 여부(`enabled`)를 내려줄지.
 - 그룹 생성 직후 첫 미션의 `deadlineAt`이 생성 시각과 너무 가까운 경우(예: 22:55 생성, 23:00 마감) 그대로 둘지.
-- 하루 여러 개를 켤 때 홈 카드·05 화면 구성과 그룹 목록 `todayMission`의 모양 (MVP 이후).
+- ~~하루 여러 개를 켤 때 그룹 목록 `todayMission`의 모양~~ — B7에서 `todayMissions` 배열 추가로 정함(§2). 홈 카드·05 화면 구성은 A6.
 
 ---
 
@@ -367,17 +371,18 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 | 대상 조건 | 받는 사람은 같은 그룹 멤버이고 나 자신이 아니며 **현재 미션**에 아직 제출하지 않았어야 한다 | `CURDATE()` 기준(어떤 미션이든 오늘 제출)을 현재 미션 기준으로 바꿈 (§3-2) |
 | 콕 상태 조회 | 현재 미션 응답의 `members[]`에 내가 그 멤버에게 보낸 재촉을 넣는다 | 앱 05 화면이 "찔렀어요" 상태를 다시 그릴 수 있어야 함 |
 | 알림 | `poke`·`fling` 푸시를 받는 사람에게 보낸다. 알림 설정에서는 둘 다 "콕 찌르기" 항목을 따른다 (§8) | 사용자 결정 |
+| 미션 고르기 (B7, 2026-10-13) | 요청에 **선택** 필드 `missionId`. 없으면 첫 슬롯(현재 미션 중 가장 작은 `slotNo`)의 미션, 있으면 그 그룹의 현재 미션이어야 한다(아니면 409 `NO_OPEN_MISSION`). 횟수 제한은 미션마다라 슬롯이 다르면 같은 종류도 따로 보낼 수 있다 | 하루 여러 개일 때 05 화면이 미션별로 재촉. 지금 앱은 보내지 않아 하루 1개와 같음 |
 
 ### 4-2. 최종 계약 (현재까지)
 
 ```json
 // POST /api/groups/{groupId}/pokes — 멤버만
-// Request
-{ "toUserId": 7, "type": "poke" }
+// Request (missionId 는 선택)
+{ "toUserId": 7, "type": "poke", "missionId": 10 }
 // Response 201
 { "id": 1, "toUserId": 7, "type": "poke", "missionId": 10, "sentAt": "2026-09-28T15:41:48+09:00" }
 ```
-- 서버가 그 그룹의 현재 미션을 찾아 `pokes.mission_id`에 저장한다. 현재 미션이 없으면 409 `NO_OPEN_MISSION`.
+- `missionId`가 없으면 서버가 그 그룹의 현재 미션(하루 여러 개면 첫 슬롯)을 찾아 `pokes.mission_id`에 저장한다. 현재 미션이 없거나, 보낸 `missionId`가 그 그룹의 현재 미션이 아니면(닫힌 미션·남의 그룹·없는 미션) 409 `NO_OPEN_MISSION`.
 - 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`, 400 `CANNOT_POKE_SELF`, 404 `TARGET_NOT_GROUP_MEMBER`, 409 `TARGET_ALREADY_SUBMITTED`, 409 `ALREADY_POKED`, 400 `VALIDATION_ERROR`(`type`).
 - 현재 미션 응답(§3-3)의 `members[]` 항목: `{ "userId": 7, "submitted": false, "pokedByMe": ["poke"] }` — 내가 이 미션에서 그 멤버에게 보낸 종류 목록(`"poke"`, `"fling"`), 안 보냈으면 빈 배열. 앱은 종류별로 버튼을 "보냈어요" 상태로 바꾼다.
 
@@ -698,7 +703,7 @@ PATCH /api/notifications/read-all      204
                       "submittedCount": 3, "memberCount": 5, "stamp": "PENALTY" } ] }
   ] }
 ```
-- 미션이 있었던 날만 `days`에 넣는다. `date`는 `mission_date`. MVP는 하루 1개라 `missions`는 원소 1개지만, 하루 여러 개를 대비해 배열로 둔다.
+- 미션이 있었던 날만 `days`에 넣는다. `date`는 `mission_date`. 하루 1개면 `missions`는 원소 1개이고, 하루 여러 개면 슬롯 순으로 여러 개다 — **도장은 미션마다** 따로다(B7 결정).
 - `stamp`: `GOOD` / `LATE` / `PENALTY` / `null`(도장 없음 — 9-1 범위 밖).
 - 날짜를 누르면 결과 화면(`GET /missions/{id}/submissions`, 피드 잠금 규칙 적용). 내가 제출하지 않은 날은 결과를 볼 수 없다 (앱 현재 동작과 같음).
 - 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`, 400 `VALIDATION_ERROR`(month 형식).
@@ -723,6 +728,6 @@ PATCH /api/notifications/read-all      204
 
 - ~~`memberCount`~~ → 9-1에서 결정 (2026-10-12). 정확한 당시 인원이 필요해지면 나갈 때 행을 지우지 않고 나간 시각을 남기는 방식(그룹 나가기 코드·마이그레이션 변경)을 검토한다.
 - 나갔다가 다시 들어온 사용자는 다시 들어온 시점부터 도장이 계산된다 (이전 기간은 `null`).
-- 하루 여러 미션일 때 날짜 단위 도장 규칙(`PROJECT_OVERVIEW` §11-1) — MVP 이후.
+- ~~하루 여러 미션일 때 날짜 단위 도장 규칙(`PROJECT_OVERVIEW` §11-1)~~ — B7에서 **미션별 도장**으로 정함(날짜 단위로 합치지 않음).
 - 도장 3종 디자인 (지각 도장 포함). 지금은 임시 이미지: Android `res/drawable/stamp_good|late|penalty.xml`, iOS `Assets.xcassets/Stamps/stamp-good|late|penalty`. 디자인이 나오면 같은 이름으로 교체한다.
-- 멤버 목록의 `submissionCountThisMonth`·`stampedToday`는 앱이 쓰지 않는다. 유지·삭제를 반영 시 정한다.
+- 멤버 목록의 `submissionCountThisMonth`·`stampedToday`는 앱이 쓰지 않는다. 유지·삭제를 반영 시 정한다. (뜻은 B7에서 정함: 제출한 날 수 / 현재 미션 중 하나라도 제출 — §2)

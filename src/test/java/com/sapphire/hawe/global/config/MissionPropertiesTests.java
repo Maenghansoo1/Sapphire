@@ -24,6 +24,11 @@ class MissionPropertiesTests {
     }
 
     @Test
+    void applicationPropertiesAllowUpToFiveMissionsADay() {
+        assertEquals(5, properties.maxDailyCount());
+    }
+
+    @Test
     void missingPoolFallsBackToMvpAndEmptyPoolIsRejected() {
         assertEquals(MissionTemplateSelector.MVP_POOL, create(null).enabledTemplates());
         assertThrows(IllegalArgumentException.class, () -> create(List.of()));

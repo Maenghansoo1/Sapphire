@@ -2,6 +2,7 @@ package com.sapphire.hawe.poke.dao;
 
 import com.sapphire.hawe.poke.domain.Poke;
 import org.junit.jupiter.api.Test;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,6 +25,7 @@ class PokeMapperTests {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PokeMapper pokes;
+    @Autowired SqlSessionTemplate sqlSession;
 
     @Test
     void insertStoresPokeWithGeneratedId() {
@@ -81,6 +83,38 @@ class PokeMapperTests {
         assertFalse(pokes.existsSubmission(current, submitterId));
         assertFalse(pokes.existsSubmission(current, otherUserId));
         assertTrue(pokes.existsSubmission(other, otherUserId));
+    }
+
+    @Test
+    void defaultIsTheFirstOpenSlotAndChosenMissionMustBeCurrentInThatGroup() {
+        Long userId = insertUser();
+        Long groupId = insertGroup(userId);
+        Long otherGroupId = insertGroup(userId);
+        jdbc.update("UPDATE `groups` SET daily_mission_count = 3 WHERE id = ?", groupId);
+        Long previousSlot2 = insertSlotMission(groupId, 2, "CURDATE() - INTERVAL 1 DAY");
+        Long slot3 = insertSlotMission(groupId, 3, "CURDATE()");
+        Long slot2 = insertSlotMission(groupId, 2, "CURDATE()");
+        Long other = insertSlotMission(otherGroupId, 1, "CURDATE()");
+
+        // 1번 슬롯이 아직 열리지 않았으면 열린 것 중 가장 작은 슬롯
+        assertEquals(slot2, pokes.findCurrentMissionId(groupId));
+        Long slot1 = insertSlotMission(groupId, 1, "CURDATE()");
+        sqlSession.clearCache();  // JdbcTemplate 로 넣은 행이 같은 조회에 보이게
+        assertEquals(slot1, pokes.findCurrentMissionId(groupId));
+
+        assertTrue(pokes.isCurrentMissionOfGroup(slot3, groupId));
+        assertTrue(pokes.isCurrentMissionOfGroup(slot2, groupId));
+        assertFalse(pokes.isCurrentMissionOfGroup(previousSlot2, groupId));  // 다음 미션이 열린 지난 미션
+        assertFalse(pokes.isCurrentMissionOfGroup(other, groupId));          // 남의 그룹 미션
+        assertTrue(pokes.isCurrentMissionOfGroup(other, otherGroupId));
+        assertFalse(pokes.isCurrentMissionOfGroup(Long.MAX_VALUE, groupId));
+    }
+
+    private Long insertSlotMission(Long groupId, int slotNo, String missionDate) {
+        jdbc.update("INSERT INTO missions (group_id, content, category, mission_date, template, params, slot_no, "
+                + "published_at, deadline_at) VALUES (?, 'Test mission', 'TEST', " + missionDate + ", 'PHOTO_NOW', '{}', ?, "
+                + missionDate + ", NOW() + INTERVAL 1 HOUR)", groupId, slotNo);
+        return jdbc.queryForObject("SELECT MAX(id) FROM missions WHERE group_id = ?", Long.class, groupId);
     }
 
     private Long insertUser() {

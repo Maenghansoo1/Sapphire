@@ -19,8 +19,12 @@ public interface PokeMapper {
     void insert(Poke poke);
 
     @Select("SELECT m.id FROM missions m WHERE m.group_id = #{groupId} AND " + MissionMapper.CURRENT
-            + "AND m.slot_no = (SELECT MIN(slot_no) FROM missions c WHERE c.group_id = m.group_id) LIMIT 1")
+            + "ORDER BY m.slot_no LIMIT 1")
     Long findCurrentMissionId(@Param("groupId") Long groupId);
+
+    @Select("SELECT COUNT(*) > 0 FROM missions m WHERE m.id = #{missionId} AND m.group_id = #{groupId} AND "
+            + MissionMapper.CURRENT)
+    boolean isCurrentMissionOfGroup(@Param("missionId") Long missionId, @Param("groupId") Long groupId);
 
     @Select("SELECT EXISTS (SELECT 1 FROM submissions WHERE mission_id = #{missionId} AND user_id = #{userId})")
     boolean existsSubmission(@Param("missionId") Long missionId, @Param("userId") Long userId);

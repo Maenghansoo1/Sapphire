@@ -1,5 +1,6 @@
 package com.sapphire.hawe.calendar.dao;
 
+import com.sapphire.hawe.mission.dao.MissionMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -28,9 +29,8 @@ public interface CalendarMapper {
             + "AND s.user_id = #{userId} AND s.is_late = 1) AS late_by_me, "
             + "EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = m.group_id "
             + "AND gm.user_id = #{userId} AND " + JOINED_BY_PUBLISH + ") AS member_when_published, "
-            // 같은 슬롯에 더 나중 미션이 열렸으면 이 미션은 닫혔다 (MissionMapper.CURRENT와 같은 기준)
-            + "EXISTS (SELECT 1 FROM missions n WHERE n.group_id = m.group_id AND n.slot_no = m.slot_no "
-            + "AND (n.published_at > m.published_at OR (n.published_at = m.published_at AND n.id > m.id))) AS closed "
+            // 현재 미션이 아니면 닫혔다 (같은 슬롯에 다음 미션이 열렸거나, 없어진·건너뛴 슬롯 — MissionMapper.CURRENT)
+            + "NOT (" + MissionMapper.CURRENT + ") AS closed "
             + "FROM missions m WHERE m.group_id = #{groupId} AND m.mission_date BETWEEN #{from} AND #{to} "
             + "ORDER BY m.mission_date, m.slot_no")
     List<CalendarMissionRow> findMissionsInMonth(@Param("groupId") Long groupId, @Param("userId") Long userId,
