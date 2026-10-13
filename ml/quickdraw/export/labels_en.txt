@@ -1,0 +1,50 @@
+sun
+moon
+star
+cloud
+rainbow
+lightning
+snowflake
+mountain
+tree
+flower
+house plant
+mushroom
+cat
+dog
+rabbit
+pig
+elephant
+giraffe
+snake
+fish
+octopus
+bird
+butterfly
+apple
+strawberry
+pizza
+hamburger
+ice cream
+birthday cake
+cup
+book
+umbrella
+key
+clock
+light bulb
+scissors
+eyeglasses
+guitar
+crown
+teddy-bear
+t-shirt
+shoe
+car
+bicycle
+airplane
+train
+hot air balloon
+house
+face
+snowman

@@ -48,6 +48,7 @@ python train.py --data data --name full  :: Colab: 50개 범주 전체 (기본 3
 
 - 결과 폴더 `runs/<이름>/`: `model.keras`, `best.keras`, `metrics.json`(테스트 top-1·top-3, 범주별 정확도, 걸린 시간, 버전), `history.csv`, `labels_en.txt`, `labels_ko.txt`, `config.json`. `runs/` 는 깃에 올리지 않는다.
 - 측정값(2026-10-12, 이 PC): 그림 변환 약 730장/초(프로세스 1개) → 전체 150만 장은 프로세스 2개(Colab)로 약 20분. 작은 학습 결과 테스트 top-1 0.972 / top-3 0.992 (5개 범주, 학습 2,000장). Keras → TFLite(float32) 변환 확인, 출력 차이 2e-7.
+- **본 학습(2026-10-13, Colab T4)**: 50개 범주, 학습 120만 / 검증 15만 / 테스트 15만 장, 파라미터 146,258개. 테스트 **top-1 93.1% / top-3 98.4%**. 그림 변환 1시간 45분(프로세스 2개 — 예상보다 오래 걸림) + 학습 47분. 가장 약한 범주는 강아지 67%(코끼리·고양이·돼지와 혼동), 가장 많이 헷갈린 쌍은 열기구↔전구.
 - Colab 에서는 `colab_train.ipynb` 를 열어 위 칸부터 차례로 실행한다(코드는 `dist/quickdraw_code.zip` 으로 올린다 — download·rasterize·dataset·train·export.py, categories.json, golden/).
 
 ## 크기 줄이기·앱용 파일 (`export.py`)
@@ -60,6 +61,7 @@ python export.py --run runs/full --data data    :: 본 모델 → export/ (Colab
 - TFLite 후보 3개 — float32, float16(가중치 절반), int8(계산 전체를 정수로, 학습 그림 500장으로 보정) — 를 테스트셋 전체로 비교하고, **Keras 원본보다 top-1 이 1%p 넘게 떨어지지 않는 것 중 가장 작은 것**을 고른다. 세 후보 모두 입력·출력이 float32 라서 앱 코드는 같다.
 - 결과 `export/`(깃에 올림): `quickdraw_cnn.tflite`, `labels_ko.txt`, `labels_en.txt`, `model_card.md`(입력·출력, 후보 비교표, 범주, 라이선스, 한계), `export.json`(같은 내용의 숫자), `golden_outputs.json`(골든 예시를 넣었을 때의 출력 — 앱이 모델을 제대로 부르는지 확인용). 후보 3개는 `runs/<이름>/tflite/`(깃 제외).
 - 연습 결과(2026-10-13, 5개 범주): float32 550KB → float16 280KB → int8 151KB, 세 개 모두 top-1 97.2% 그대로, 이 PC 지연 int8 0.09ms.
+- **본 모델(2026-10-13)**: float32 573KB → float16 292KB → **int8 158KB(선택)**, 셋 다 top-1 93.13% 그대로. `export/` 에 있고, 이 PC 에서 다시 실행해도 골든 출력과 확률 차이 1e-6 이하(Colab 과 같음).
 - iOS 용 Core ML 은 Windows 에서 만들 수 없어 아직 없다(Core ML 미검증).
 
 ## 앱 그림으로 평가 (`collect.py`, `evaluate.py`)
