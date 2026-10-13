@@ -1,6 +1,7 @@
 package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.data.SubmissionContent
+import com.sapphire.hawe.core.model.AiReview
 import com.sapphire.hawe.core.model.AvatarContent
 import com.sapphire.hawe.core.model.ConsensusRank
 import com.sapphire.hawe.core.model.MissionAggregate
@@ -31,6 +32,13 @@ internal fun scalarParts(content: SubmissionContent.Scalar): List<ApiClient.Mult
     content.number?.let { add(ApiClient.MultipartPart.Text("number", it.toString())) }
     content.guess?.let { add(ApiClient.MultipartPart.Text("guess", it.toString())) }
     content.choice?.let { add(ApiClient.MultipartPart.Text("choice", it)) }
+}
+
+/** AI 심사 결과. 배지도 코멘트도 비어 있으면 보여 줄 게 없으니 null. */
+internal fun AiReviewDto.toModel(): AiReview? {
+    val badge = badge?.takeIf { it.isNotBlank() }
+    val comment = comment?.trim()?.takeIf { it.isNotEmpty() }
+    return if (badge == null && comment == null) null else AiReview(badge, comment)
 }
 
 /** 서버가 계산한 집계 결과를 앱 모델로. 앱이 모르는 틀이면 null. */
@@ -138,6 +146,6 @@ class SubmissionRepository(private val api: ApiClient) {
             OffsetDateTime.parse(submittedAt).toInstant(),
             mediaUrl?.let { URI(api.absoluteUrl(it)) }, text, isLate,
             author.userId, reactions.orEmpty().toReactions(), commentCount,
-            template, number, choice, guess, caption)
+            template, number, choice, guess, caption, aiReview?.toModel())
     }
 }

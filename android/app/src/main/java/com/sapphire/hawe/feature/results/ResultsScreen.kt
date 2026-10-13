@@ -32,7 +32,9 @@ import com.sapphire.hawe.designsystem.components.HNavBar
 import com.sapphire.hawe.designsystem.components.HNavLeading
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HType
+import java.time.Instant
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 const val LATE_LABEL = "지각"
 
@@ -84,6 +86,12 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
                 else -> AggregateLoad.Failed
             }
         }
+    }
+    // AI 심사(B10)는 제출 뒤에 따로 끝나요. 방금 올린 내 사진이 아직이면 5초 뒤 한 번만 더 불러와요(계속 묻지 않음).
+    LaunchedEffect(missionID) {
+        delay(5_000)
+        val submissions = store.result(groupID, missionID)?.submissions.orEmpty()
+        if (awaitsAiReview(submissions, Instant.now())) refresh++
     }
     DisposableEffect(owner, missionID) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }
@@ -140,6 +148,7 @@ private fun PhotoFeed(result: MissionResult, onDetail: (Long) -> Unit) {
                     if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
                 }
                 PhotoArtwork(submission, 260.dp, Modifier.clickable { onDetail(submission.id) })
+                submission.aiReview?.let { AiReviewLine(it) }
             }
         }
     }

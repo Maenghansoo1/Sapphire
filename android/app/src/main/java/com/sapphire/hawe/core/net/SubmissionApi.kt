@@ -10,7 +10,10 @@ import kotlinx.serialization.Serializable
     val mediaType: String? = null,
     val caption: String? = null, val text: String? = null, val number: Int? = null,
     val choice: String? = null, val guess: Int? = null, val submittedAt: String,
-    val isLate: Boolean = false, val reactions: List<ReactionDto>? = null, val commentCount: Int = 0)
+    val isLate: Boolean = false, val reactions: List<ReactionDto>? = null, val commentCount: Int = 0,
+    val aiReview: AiReviewDto? = null)
+
+@Serializable internal data class AiReviewDto(val badge: String? = null, val comment: String? = null)
 
 @Serializable internal data class ReactionDto(val stickerType: String, val count: Int = 0,
     val reactedByMe: Boolean = false, val userIds: List<Long> = emptyList())

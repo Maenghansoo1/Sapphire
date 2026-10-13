@@ -54,6 +54,9 @@ fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, s
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp)) {
             DetailArtwork(submission, result.type, result.spec)
+            if (result.type == MissionType.PHOTO) submission.aiReview?.let {
+                AiReviewLine(it, Modifier.padding(top = 12.dp), commentLines = 2)
+            }
             Spacer(Modifier.height(24.dp))
             SubmissionSocial(submission.id, submission.reactions,
                 store.group(groupID)?.members.orEmpty(), repository)

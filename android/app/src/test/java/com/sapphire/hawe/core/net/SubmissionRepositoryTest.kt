@@ -1,6 +1,7 @@
 package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.data.SubmissionContent
+import com.sapphire.hawe.core.model.AiReview
 import com.sapphire.hawe.core.model.ConsensusRank
 import com.sapphire.hawe.core.model.MissionAggregate
 import com.sapphire.hawe.core.model.MissionType
@@ -189,6 +190,24 @@ class SubmissionRepositoryTest {
             val unsupported = assertThrows(ApiException::class.java) { runBlocking { repo.result(30L) } }
             assertEquals(400, unsupported.status)
             assertEquals("RESULT_NOT_SUPPORTED", unsupported.code)
+        }
+    }
+
+    @Test fun mapsAiReviewOnlyWhenThereIsSomethingToShow() = runBlocking {
+        fun item(id: Long, review: String?) = """{"id":$id,"missionId":10,"author":{"userId":3,"nickname":"서연"},"template":"PHOTO_NOW","mediaUrl":"/files/a.jpg","mediaType":"IMAGE","submittedAt":"2026-10-14T09:00:00+09:00"${review?.let { ",\"aiReview\":$it" } ?: ""}}"""
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"content":[
+                ${item(1L, """{"badge":"PERFECT_FIT","comment":"주제랑 딱 맞는 사진이에요!"}""")},
+                ${item(2L, """{"comment":"주제를 잘 담았어요"}""")},
+                ${item(3L, """{"badge":"GOLDEN_FIT"}""")},
+                ${item(4L, """{"badge":null,"comment":"  "}""")},
+                ${item(5L, null)}],"page":0,"size":100,"totalPages":1,"totalElements":5}"""))
+            val feed = SubmissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore())).feed(10L, 3L)
+            assertEquals(AiReview("PERFECT_FIT", "주제랑 딱 맞는 사진이에요!"), feed[0].aiReview)
+            assertEquals(AiReview(null, "주제를 잘 담았어요"), feed[1].aiReview)  // 코멘트만
+            assertEquals(AiReview("GOLDEN_FIT", null), feed[2].aiReview)  // 모르는 배지는 화면에서 이름 없이
+            assertNull(feed[3].aiReview)  // 빈 코멘트뿐이면 보여 줄 게 없음
+            assertNull(feed[4].aiReview)  // 비활성·심사 전·낮은 점수
         }
     }
 }
