@@ -6,6 +6,7 @@ import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.global.storage.FileStorage;
+import com.sapphire.hawe.global.ratelimit.AttemptLimiter;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -24,6 +25,7 @@ import com.sapphire.hawe.group.dto.GroupSummaryResponse;
 import com.sapphire.hawe.group.dto.MissionSlotRequest;
 import com.sapphire.hawe.group.dto.MissionSlotResponse;
 import com.sapphire.hawe.group.dto.InvitePreviewResponse;
+import com.sapphire.hawe.group.dto.InviteCodeResponse;
 import com.sapphire.hawe.group.dto.MemberProfileResponse;
 import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.JoinResponse;
@@ -62,11 +64,13 @@ public class GroupService {
     private final ApplicationEventPublisher events;
     private final String inviteBaseUrl;
     private final FileStorage storage;
+    private final AttemptLimiter inviteLimiter;
 
     public GroupService(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper,
             GroupMissionSlotMapper slotMapper, MissionProperties missionProperties,
             @Value("${hawe.invite.base-url:https://hawe.app/invite}") String inviteBaseUrl,
-            MissionService missionService, ApplicationEventPublisher events, FileStorage storage) {
+            MissionService missionService, ApplicationEventPublisher events, FileStorage storage,
+            AttemptLimiter inviteLimiter) {
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.slotMapper = slotMapper;
@@ -74,6 +78,7 @@ public class GroupService {
         this.missionService = missionService;
         this.events = events;
         this.storage = storage;
+        this.inviteLimiter = inviteLimiter;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
@@ -205,8 +210,27 @@ public class GroupService {
         return PageResponse.of(content, safePage, safeSize, total);
     }
 
+    @Transactional
+    public InviteCodeResponse reissueInviteCode(Long userId, Long groupId) {
+        Group group = groupMapper.findByIdForUpdate(groupId);
+        if (group == null) throw new BusinessException(GroupErrorCode.GROUP_NOT_FOUND);
+        requireMember(groupId, userId);
+        requireOwner(group, userId);
+        for (int attempt = 0; attempt < 5; attempt++) {
+            String code = InviteCodeGenerator.generate();
+            if (code.equals(group.getInviteCode())) continue;
+            try {
+                groupMapper.updateInviteCode(groupId, code);
+                return new InviteCodeResponse(code, inviteBaseUrl + "/" + code);
+            } catch (DuplicateKeyException e) {
+                if (attempt == 4) throw e;
+            }
+        }
+        throw new IllegalStateException("Unable to create a unique invite code");
+    }
+
     public InvitePreviewResponse previewInvite(Long userId, String rawCode) {
-        Group group = findInviteGroup(rawCode, false);
+        Group group = findInviteGroup(userId, rawCode, false);
         checkJoinable(group, userId);
         List<MemberProfileResponse> members = memberProfiles(group.getId());
         return new InvitePreviewResponse(group.getId(), group.getName(), group.getRelationType(),
@@ -215,7 +239,7 @@ public class GroupService {
 
     @Transactional
     public JoinResponse join(Long userId, JoinRequest request) {
-        Group group = findInviteGroup(request.code(), true);
+        Group group = findInviteGroup(userId, request.code(), true);
         Long groupId = group.getId();
         checkJoinable(group, userId);
 
@@ -259,12 +283,18 @@ public class GroupService {
         groupMemberMapper.deleteByGroupIdAndUserId(groupId, userId);
     }
 
-    private Group findInviteGroup(String rawCode, boolean lock) {
-        String code = InviteCodeGenerator.normalize(rawCode);
-        if (code == null) throw new BusinessException(GroupErrorCode.INVITE_NOT_FOUND);
-        Group group = lock ? groupMapper.findByInviteCodeForUpdate(code) : groupMapper.findByInviteCode(code);
-        if (group == null) throw new BusinessException(GroupErrorCode.INVITE_NOT_FOUND);
-        return group;
+    private Group findInviteGroup(Long userId, String rawCode, boolean lock) {
+        inviteLimiter.check(userId);
+        try {
+            String code = InviteCodeGenerator.normalize(rawCode);
+            if (code == null) throw new BusinessException(GroupErrorCode.INVITE_NOT_FOUND);
+            Group group = lock ? groupMapper.findByInviteCodeForUpdate(code) : groupMapper.findByInviteCode(code);
+            if (group == null) throw new BusinessException(GroupErrorCode.INVITE_NOT_FOUND);
+            return group;
+        } catch (BusinessException error) {
+            if (error.errorCode() == GroupErrorCode.INVITE_NOT_FOUND) inviteLimiter.recordFailure(userId);
+            throw error;
+        }
     }
 
     private void checkJoinable(Group group, Long userId) {

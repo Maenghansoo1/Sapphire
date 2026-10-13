@@ -1,16 +1,15 @@
-# B1 그룹 내 프로필 리뷰
+# B2 초대 코드 재발급 + 코드 조회 시도 제한 리뷰
 
-대상: 미커밋 변경(`git diff` + 신규 파일), `.agent/plan.md`, `.agent/report.md`. 코드는 수정하지 않았다.
+대상: B2 관련 미커밋 변경(`group/`, `global/ratelimit/`, `CommonErrorCode`, `application.properties`, 테스트, 문서/Postman), `.agent/plan.md`, `.agent/report.md`. 코드는 수정하지 않았다. 작업 트리에는 아직 커밋되지 않은 **B3 변경이 함께 있어** B2 범위 파일만 따로 검토했다.
 
 ## 확인한 것
 
-- 스키마: `group_members` 에 컬럼 3개 + KEY/FK 추가, `characters` FK 는 V1 에서 정상 적용(report 상 Flyway 재적용·170 테스트 통과).
-- 표시 CASE 는 `GroupMemberMapper` 상수 한 곳에만 정의, 4개 쿼리(`findMembersByGroupId`, `findMemberPreviewsByGroupIds`, `SubmissionMapper`, `CommentMapper`)가 참조. 닉네임·캐릭터·사진이 같은 조건(`nickname_override IS NOT NULL`)으로 한 묶음 선택됨.
-- 제출·댓글은 `LEFT JOIN group_members`(UNIQUE(group_id,user_id) 라 행 중복 없음), 댓글은 `co.user_id`(댓글 작성자) 기준 — 계획과 일치. 나간 작성자는 기본 프로필.
-- `GroupProfileService`: 그룹 404 → 비멤버 403 순서, 닉네임 검증이 파일 저장보다 앞, 롤백 시 새 파일 삭제 / 커밋 후 이전 파일 삭제, DELETE 멱등, 불변식(캐릭터형은 image NULL, 사진형은 character NULL) 유지. 응답은 기존 `MemberProfileResponse` 재사용.
-- `hasGroupProfile` 전달 경로(Row → Response → `GroupService.listMembers`) 정상. 다른 생성 호출처 없음.
-- 범위: `GroupService.leaveGroup`/`deleteGroupCascade`, 기본 프로필 API, 앱, 알림 미변경. 불필요한 리팩터링 없음. 문서·Postman 갱신됨.
-- 병렬 작업 충돌 지점은 계획의 "Potential Merge Conflicts" 와 동일(V1, group mappers/service, Submission/CommentMapper). 실제 충돌은 현 시점에서 확인 불가(HEAD 기준 변경 없음).
+- 재발급(`GroupService.reissueInviteCode`): `findByIdForUpdate` → 404 → `requireMember`(403) → `requireOwner`(403) 순서, 행 잠금으로 동시 재발급·`join` 직렬화, 새 코드 생성(현재 코드와 같으면 건너뜀), `DuplicateKeyException` 최대 5회 재시도, 응답 `inviteBaseUrl + "/" + code`. `GroupMapper.updateInviteCode` 추가(기존 `update` 는 코드 미갱신이므로 필요). 이전 코드는 UPDATE 로 즉시 무효.
+- 제한기: `findInviteGroup(userId, …)` 가 호출 전 `check`, `INVITE_NOT_FOUND`(형식 오류 포함)만 `recordFailure` 후 rethrow. `checkJoinable` 의 `ALREADY_MEMBER`/`GROUP_FULL` 은 `findInviteGroup` 밖이라 카운트되지 않음. 미리보기·가입이 같은 키(`userId`)와 한도 공유. 차단 중 요청은 기록 안 함(윈도 연장 없음), 성공 시 초기화 없음 — 계획과 일치.
+- `AttemptLimiter`: `computeIfPresent`/`compute` 로 키별 원자성 확보, 만료 정리는 접근 시 + 64회마다 전체 정리(스케줄러 없음), 빈 deque 제거, 두 생성자 중 `@Autowired` 지정, 설정값 검증. `Clock` 주입으로 테스트 가능. 동시 요청 시 한도를 약간 넘을 수 있는 경합은 인메모리 제한기에서 허용 가능한 수준.
+- `CommonErrorCode.TOO_MANY_REQUESTS`(429), `application.properties` 기본값(10 / 10m), `GroupService` 생성자 변경에 맞춘 테스트 2곳 수정. 스키마·B3 코드 변경 없음.
+- 테스트: `AttemptLimiterTests`(한도 직전/초과·사용자 독립·창 만료·차단이 윈도 연장 안 함·기본값), `GroupServiceTests`(권한 순서, 현재 코드 건너뜀+충돌 재시도, INVITE_NOT_FOUND 만 카운트·429 차단), `GroupMapperTests`(코드 갱신·유니크), `InviteCodeControllerTests`(MockMvc+MariaDB: 재발급, 이전 코드 무효, 새 코드로 가입, 429, 사용자별 독립). 보고서: 185 테스트·실패 0.
+- 문서: API_DESIGN(재발급 API·429·단일 인스턴스 가정), CONTRACT_DECISIONS §2-4 확정, 재발급 상태 갱신, WORK_PLAN, Postman 3개 요청.
 
 ## P0
 
@@ -23,35 +22,23 @@
 ## P2
 
 ### File / Location
-`src/main/java/com/sapphire/hawe/group/service/GroupProfileService.java` (`updateImage` 검증 메시지), `group/controller/GroupProfileController.java` (`"Attach one image file"`)
+작업 트리 전체(커밋 단위)
 
 ### Problem
-`VALIDATION_ERROR` 메시지가 영어("Nickname must be 2 to 10 characters", "Attach an image file", "Attach one image file")다. 같은 로직을 복사한 원본 `ProfileService`/`ProfileController` 와 기존 오류 코드 메시지는 한국어다.
+작업 트리에 B2 와 무관한 변경이 섞여 있다: 미커밋 **B3**(auth/security/V1/문서/Postman `HAWE_ME`), B1·B3 계획 문서 이름 변경(`docs/해야될거/1번_찬희/B1-…`, `B3-…` 삭제 + `B1(완료)-…`, `B3(완료)-…` 신규), 미추적 `docs/템플릿.txt`. 보고서에 따르면 이름 변경·템플릿은 Codex 가 만든 것이 아니다. `docs/BACKEND/API_DESIGN.md`·`CONTRACT_DECISIONS.md`·`CONTRACT_WORK_PLAN.md` 는 B3 와 B2 변경이 같은 파일에 함께 들어 있다.
 
 ### Why It Matters
-클라이언트에 그대로 노출되는 오류 문구라 언어가 섞인다. 기능 문제는 아니다.
+한 커밋에 B2·B3·문서 정리가 섞이면 이력 추적과 되돌리기가 어렵다. 코드 파일은 겹치지 않아 B3 를 먼저 커밋하면 쉽게 분리된다.
 
 ### Recommended Fix
-원본 `ProfileService` 와 같은 한국어 문구로 교체(예: "사진 파일을 첨부해 주세요", "사진 파일을 하나 첨부해 주세요"; 닉네임은 "닉네임은 2~10자여야 합니다" 등). 인코딩 문제가 이유였다면 UTF-8 로 저장되는지만 확인.
-
----
-
-### File / Location
-`src/test/java/com/sapphire/hawe/group/**` (테스트 보강)
-
-### Problem
-계획의 테스트 항목 중 아래가 확인되지 않는다: ① 10MB 초과 → 413 (컨트롤러/서비스 어느 쪽도 해당 케이스 없음; `imageValidationPrecedesStorageAndUpdate` 가 포함하는지 확인 필요), ② 기본 프로필 변경(`PATCH /me/profile`)이 그룹 프로필이 있는 그룹에 반영되지 않음, ③ 컨트롤러 통합 테스트가 단일 멤버 그룹이라 `content[0]` 만 검증 — 다른 멤버의 프로필이 섞이지 않는지(멤버 2명 이상) 미검증.
-
-### Why It Matters
-①은 413 경로 회귀를 못 잡고, ②는 계약의 핵심 규칙(§2-2)이다. 쿼리 규칙상 현재 동작은 맞을 가능성이 높지만 보장하는 테스트가 없다.
-
-### Recommended Fix
-`GroupProfileServiceTests` 에 `file.getSize() > 10MB` 케이스(저장·갱신 미호출, `FILE_TOO_LARGE`) 추가. `GroupMemberMapperTests` 또는 컨트롤러 테스트에 "그룹 프로필 설정 후 `users.nickname` 변경 → 그룹 응답 불변, 다른 그룹은 변경 반영" 케이스 추가. 멤버 2명 케이스는 `GroupMemberMapperTests` 가 이미 일부 다룬다면 생략 가능.
+B3 를 먼저 커밋(B3 코드·테스트·`HAWE_ME` Postman + 문서의 B3 hunk)한 뒤 B2 를 커밋. 문서 파일은 `git add -p` 로 B3/B2 hunk 를 나눈다. 계획 문서 이름 변경과 `템플릿.txt` 는 별도 커밋이거나 제외. 코드 수정은 필요 없다.
 
 ## 미검증(보고서에도 명시됨)
 
-- 실서버 기동 스모크 미실행(MockMvc 로 대체). 공유 DB 는 V1 변경 때문에 별도 재생성 필요 — 병합 시 팀 공지.
+- 실서버 스모크 미실행(MockMvc 로 대체).
+- 인메모리·단일 인스턴스 가정: 서버를 여러 대로 늘리면 인스턴스별 카운트 — 문서에 명시돼 있음. 사용자 단위 키라 계정을 여러 개 만들어 우회하는 것은 설계상 막지 않는다(계획의 결정사항).
+- 앱(A3, 경환): 16 화면 재발급 버튼과 `inviteUrl` 사용 연결 필요.
 
 ## 결론
 
-**승인 가능** — P0/P1 없음. P2 두 건은 선택적 후속 정리(병합 차단 아님). 병합 전에 B5 시작 전 커밋 순서(V1·SubmissionMapper·CommentMapper 충돌)만 지킬 것.
+**승인 가능** — P0/P1 없음. P2 는 커밋 정리(코드 수정 불필요). B4 시작 전에 B2 를 커밋할 것(`GroupService`·`GroupMapper` 겹침).

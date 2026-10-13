@@ -21,6 +21,7 @@ public class JwtTokenProvider {
 
     private static final String CLAIM_TYPE = "type";
     private static final String CLAIM_NICKNAME = "nickname";
+    private static final String CLAIM_TOKEN_VERSION = "tv";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
 
@@ -33,30 +34,55 @@ public class JwtTokenProvider {
     }
 
     public String createAccessToken(Long userId, String nickname) {
-        return createToken(userId, Map.of(CLAIM_TYPE, TYPE_ACCESS, CLAIM_NICKNAME, nickname),
+        return createAccessToken(userId, nickname, 0);
+    }
+
+    public String createAccessToken(Long userId, String nickname, int tokenVersion) {
+        return createToken(userId, Map.of(CLAIM_TYPE, TYPE_ACCESS, CLAIM_NICKNAME, nickname,
+                        CLAIM_TOKEN_VERSION, tokenVersion),
                 properties.accessTokenValiditySeconds());
     }
 
     public String createRefreshToken(Long userId) {
-        return createToken(userId, Map.of(CLAIM_TYPE, TYPE_REFRESH), properties.refreshTokenValiditySeconds());
+        return createRefreshToken(userId, 0);
+    }
+
+    public String createRefreshToken(Long userId, int tokenVersion) {
+        return createToken(userId, Map.of(CLAIM_TYPE, TYPE_REFRESH, CLAIM_TOKEN_VERSION, tokenVersion),
+                properties.refreshTokenValiditySeconds());
     }
 
     /** Validates the token is well-formed, unexpired, and actually a refresh token. */
     public Long validateRefreshTokenAndGetUserId(String token) {
+        return parseRefreshToken(token).userId();
+    }
+
+    public TokenClaims parseRefreshToken(String token) {
         Claims claims = parseClaims(token);
         if (!TYPE_REFRESH.equals(claims.get(CLAIM_TYPE))) {
             throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
         }
-        return parseId(claims);
+        return new TokenClaims(parseId(claims), parseTokenVersion(claims));
     }
 
     /** Used by the request-authentication filter; only access tokens may authenticate requests. */
     public Long validateAndGetUserId(String token) {
+        return parseAccessToken(token).userId();
+    }
+
+    public TokenClaims parseAccessToken(String token) {
         Claims claims = parseClaims(token);
         if (!TYPE_ACCESS.equals(claims.get(CLAIM_TYPE))) {
             throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
         }
-        return parseId(claims);
+        return new TokenClaims(parseId(claims), parseTokenVersion(claims));
+    }
+
+    private int parseTokenVersion(Claims claims) {
+        Object value = claims.get(CLAIM_TOKEN_VERSION);
+        if (value == null) return 0;
+        if (value instanceof Number number) return number.intValue();
+        throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
     }
 
     private Long parseId(Claims claims) {

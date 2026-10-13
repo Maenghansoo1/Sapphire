@@ -40,6 +40,19 @@
       "request": { "method": "DELETE", "url": "{{baseUrl}}/api/me/profile-image" }
     },
     {
+      "name": "5-1. 비밀번호 변경 (새 토큰 저장)",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"currentPassword\":\"abcd1234\",\"newPassword\":\"efgh5678\"}" },
+        "url": "{{baseUrl}}/api/me/password"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('password changed', () => pm.response.to.have.status(200));",
+        "if (pm.response.code === 200) { const tokens = pm.response.json(); pm.collectionVariables.set('token', tokens.accessToken); pm.collectionVariables.set('refreshToken', tokens.refreshToken); }"
+      ] } }]
+    },
+    {
       "name": "6. 회원 탈퇴 (마지막에 실행)",
       "request": { "method": "DELETE", "url": "{{baseUrl}}/api/me" }
     },

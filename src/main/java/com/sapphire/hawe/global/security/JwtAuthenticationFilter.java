@@ -47,8 +47,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
         if (token != null) {
             try {
-                Long userId = jwtTokenProvider.validateAndGetUserId(token);
-                if (!users.existsById(userId)) throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
+                TokenClaims claims = jwtTokenProvider.parseAccessToken(token);
+                Long userId = claims.userId();
+                Integer tokenVersion = users.findTokenVersion(userId);
+                if (tokenVersion == null || tokenVersion != claims.tokenVersion())
+                    throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
                 var authentication = new UsernamePasswordAuthenticationToken(userId, null, List.of());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (BusinessException e) {

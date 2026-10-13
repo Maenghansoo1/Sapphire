@@ -2982,6 +2982,46 @@
           }
         }
       ]
+    },
+    {
+      "name": "7. 초대 코드 재발급",
+      "description": "정상 시나리오에서 groupId와 tokenA/tokenB를 만든 뒤 실행합니다. 재발급된 새 코드를 컬렉션 변수 inviteCode에 저장합니다.",
+      "item": [
+        {
+          "name": "일반 멤버 재발급 거부 (403)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenB}}" }],
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/invite-code"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('member cannot reissue', () => { pm.response.to.have.status(403); pm.expect(pm.response.json().code).to.eql('NOT_GROUP_OWNER'); });"
+          ] } }]
+        },
+        {
+          "name": "그룹장 재발급 (200)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenA}}" }],
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/invite-code"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('owner receives new code', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.inviteCode).to.match(/^[A-HJ-NP-Z2-9]{6}$/); pm.expect(body.inviteUrl).to.include(body.inviteCode); });",
+            "if (pm.response.code === 200) { pm.collectionVariables.set('oldInviteCode', pm.collectionVariables.get('inviteCode')); pm.collectionVariables.set('inviteCode', pm.response.json().inviteCode); }"
+          ] } }]
+        },
+        {
+          "name": "이전 초대 코드 무효 (404)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenC}}" }],
+            "url": "{{baseUrl}}/api/invites/{{oldInviteCode}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('old code is invalid', () => { pm.response.to.have.status(404); pm.expect(pm.response.json().code).to.eql('INVITE_NOT_FOUND'); });"
+          ] } }]
+        }
+      ]
     }
   ]
 }

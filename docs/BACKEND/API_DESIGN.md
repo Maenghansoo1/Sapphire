@@ -75,7 +75,7 @@
 ```
 캐릭터가 선택되지 않았으면 `characterKey`는 `null`이다. 에러: `INVALID_TOKEN` (401).
 
-`PATCH /me/password`는 2차 범위이며 아직 구현되지 않았다.
+`PATCH /me/password`는 인증이 필요하다. 요청은 `{ "currentPassword": "abcd1234", "newPassword": "efgh5678" }`이며, 성공 시 200 `{ "accessToken": "...", "refreshToken": "..." }`를 반환한다. 새 비밀번호는 8~100자이며 영문과 숫자를 포함해야 한다. 규칙 위반은 400 `VALIDATION_ERROR`, 현재 비밀번호 불일치는 400 `WRONG_CURRENT_PASSWORD`, 토큰 누락·무효는 401이다. 변경 시 기존 액세스·리프레시 토큰은 모두 `INVALID_TOKEN`으로 거절된다. 요청 기기는 응답의 새 토큰을 저장해야 한다.
 
 ### 내 프로필과 회원 탈퇴
 
@@ -102,7 +102,7 @@
 
 ## 2. Group — /api/groups, /api/invites
 
-모든 엔드포인트는 로그인 필요. 초대 코드는 그룹별 6자리이며 만료되지 않는다. 문자 집합은 ABCDEFGHJKLMNPQRSTUVWXYZ23456789이고, 입력 앞뒤 공백과 소문자는 정규화한다. 코드 재발급은 2차 범위(미구현)이다.
+모든 엔드포인트는 로그인 필요. 초대 코드는 그룹별 6자리이며 만료되지 않는다. 문자 집합은 ABCDEFGHJKLMNPQRSTUVWXYZ23456789이고, 입력 앞뒤 공백과 소문자는 정규화한다. 그룹장은 코드를 재발급할 수 있으며 이전 코드는 즉시 무효다.
 
 | Method | Path | 설명 |
 |---|---|---|
@@ -116,6 +116,7 @@
 | DELETE | /groups/{groupId}/members/me/profile | 내 그룹 프로필 해제 |
 | GET | /invites/{code} | 참여 전 미리보기 |
 | POST | /groups/join | 코드로 가입 |
+| POST | /groups/{groupId}/invite-code | 초대 코드 재발급(그룹장만) |
 | DELETE | /groups/{groupId}/members/me | 나가기 |
 
 ### GET /groups
@@ -156,6 +157,12 @@
 ### GET /invites/{code}
 
 응답은 groupId, name, relationType, memberCount, maxMembers, members(각 userId, nickname, characterKey, profileImageUrl)를 가진다. 형식 오류·없는 코드는 404 INVITE_NOT_FOUND. 이미 멤버면 409 ALREADY_MEMBER, 정원이 차면 409 GROUP_FULL.
+
+미리보기와 코드 가입은 사용자별로 코드 조회 실패를 공유해 센다. 형식 오류와 없는 코드는 실패이며, 올바른 코드의 `ALREADY_MEMBER`·`GROUP_FULL`은 실패로 세지 않는다. 10분 안에 실패 10회가 쌓이면 다음 요청부터 429 `TOO_MANY_REQUESTS`를 반환한다. 유효한 코드로 요청해도 차단되며, 차단 요청은 실패 횟수를 늘리지 않는다. 성공은 실패 횟수를 초기화하지 않는다. 제한기는 서버 메모리에 있으므로 단일 인스턴스를 가정하며, 여러 인스턴스로 확장할 때 재검토해야 한다.
+
+### POST /groups/{groupId}/invite-code
+
+그룹장만 재발급할 수 있다. 200 응답은 `{ "inviteCode": "M8R3TQ", "inviteUrl": "https://hawe.app/invite/M8R3TQ" }`이며 이전 코드는 즉시 404 `INVITE_NOT_FOUND`가 된다. 없는 그룹은 404 `GROUP_NOT_FOUND`, 비멤버는 403 `NOT_GROUP_MEMBER`, 일반 멤버는 403 `NOT_GROUP_OWNER`다.
 
 ### POST /groups/join
 

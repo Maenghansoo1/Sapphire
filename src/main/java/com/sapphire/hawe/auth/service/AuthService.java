@@ -4,6 +4,7 @@ import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.auth.domain.User;
 import com.sapphire.hawe.auth.dto.LoginRequest;
 import com.sapphire.hawe.auth.dto.MeResponse;
+import com.sapphire.hawe.auth.dto.PasswordChangeRequest;
 import com.sapphire.hawe.auth.dto.RefreshRequest;
 import com.sapphire.hawe.auth.dto.RegisterRequest;
 import com.sapphire.hawe.auth.dto.RegisterResponse;
@@ -13,6 +14,7 @@ import com.sapphire.hawe.character.domain.ProfileCharacter;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.security.JwtTokenProvider;
 import com.sapphire.hawe.global.security.TokenErrorCode;
+import com.sapphire.hawe.global.security.TokenClaims;
 import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.global.time.SeoulTime;
 import org.springframework.dao.DuplicateKeyException;
@@ -71,12 +73,25 @@ public class AuthService {
     }
 
     public TokenResponse refresh(RefreshRequest request) {
-        Long userId = jwtTokenProvider.validateRefreshTokenAndGetUserId(request.refreshToken());
-        User user = userMapper.findById(userId);
-        if (user == null) {
+        TokenClaims claims = jwtTokenProvider.parseRefreshToken(request.refreshToken());
+        User user = userMapper.findById(claims.userId());
+        if (user == null || user.getTokenVersion() != claims.tokenVersion()) {
             throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
         }
         return issueTokens(user);
+    }
+
+    @Transactional
+    public TokenResponse changePassword(Long userId, PasswordChangeRequest request) {
+        User user = userMapper.findById(userId);
+        if (user == null) throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash()))
+            throw new BusinessException(AuthErrorCode.WRONG_CURRENT_PASSWORD);
+        String hash = passwordEncoder.encode(request.newPassword());
+        userMapper.changePassword(userId, hash);
+        User updated = userMapper.findById(userId);
+        if (updated == null) throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
+        return issueTokens(updated);
     }
 
     public MeResponse getMe(Long userId) {
@@ -95,8 +110,8 @@ public class AuthService {
     }
 
     private TokenResponse issueTokens(User user) {
-        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getNickname());
-        String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getNickname(), user.getTokenVersion());
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getTokenVersion());
         return new TokenResponse(accessToken, refreshToken);
     }
 }

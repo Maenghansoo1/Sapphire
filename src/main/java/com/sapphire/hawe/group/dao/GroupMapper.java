@@ -42,6 +42,9 @@ public interface GroupMapper {
             + "daily_mission_count = #{dailyMissionCount}, start_date = #{startDate} WHERE id = #{id}")
     void update(Group group);
 
+    @Update("UPDATE `groups` SET invite_code = #{code} WHERE id = #{groupId}")
+    int updateInviteCode(@Param("groupId") Long groupId, @Param("code") String code);
+
     @Select("SELECT g.id AS id, g.name AS name, g.relation_type, g.start_date "
             + "FROM `groups` g JOIN group_members gm ON gm.group_id = g.id "
             + "WHERE gm.user_id = #{userId} ORDER BY gm.joined_at ASC, g.id ASC LIMIT #{limit} OFFSET #{offset}")

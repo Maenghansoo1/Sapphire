@@ -38,6 +38,15 @@ class UserMapperTests {
         assertNotNull(users.findById(user.getId()).getTermsAgreedAt());
         assertNotNull(users.findById(user.getId()).getPrivacyAgreedAt());
         assertTrue(users.existsById(user.getId()));
+        assertEquals(0, users.findTokenVersion(user.getId()));
+        assertEquals(0, users.findById(user.getId()).getTokenVersion());
+        assertEquals(0, users.findByEmail(email).getTokenVersion());
+        users.changePassword(user.getId(), "new-hash");
+        assertEquals("new-hash", users.findById(user.getId()).getPasswordHash());
+        assertEquals(1, users.findTokenVersion(user.getId()));
+        assertEquals(1, users.findById(user.getId()).getTokenVersion());
+        assertEquals(1, users.findByEmail(email).getTokenVersion());
+        assertEquals(null, users.findTokenVersion(Long.MAX_VALUE));
         users.updateNickname(user.getId(), "새이름");
         assertEquals("새이름", users.findById(user.getId()).getNickname());
         users.updateProfileImageUrl(user.getId(), "profiles/photo.jpg");

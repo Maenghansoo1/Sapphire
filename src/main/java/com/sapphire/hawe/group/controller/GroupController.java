@@ -8,6 +8,7 @@ import com.sapphire.hawe.group.dto.GroupSettingsUpdateRequest;
 import com.sapphire.hawe.group.dto.GroupSummaryResponse;
 import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.JoinResponse;
+import com.sapphire.hawe.group.dto.InviteCodeResponse;
 import com.sapphire.hawe.group.service.GroupService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -70,6 +71,11 @@ public class GroupController {
     @PostMapping("/join")
     public JoinResponse join(@AuthenticationPrincipal Long userId, @Valid @RequestBody JoinRequest request) {
         return groupService.join(userId, request);
+    }
+
+    @PostMapping("/{groupId}/invite-code")
+    public InviteCodeResponse reissueInviteCode(@AuthenticationPrincipal Long userId, @PathVariable Long groupId) {
+        return groupService.reissueInviteCode(userId, groupId);
     }
 
     @DeleteMapping("/{groupId}/members/me")

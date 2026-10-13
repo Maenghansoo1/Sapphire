@@ -10,6 +10,10 @@ public class User {
     private String email;
     private Long characterId;
     private String profileImageUrl;
+    private int tokenVersion;
+
+    public int getTokenVersion() { return tokenVersion; }
+    public void setTokenVersion(int tokenVersion) { this.tokenVersion = tokenVersion; }
     private LocalDateTime createdAt;
     private LocalDateTime termsAgreedAt;
     private LocalDateTime privacyAgreedAt;

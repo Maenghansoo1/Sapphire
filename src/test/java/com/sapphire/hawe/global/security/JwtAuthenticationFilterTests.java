@@ -23,8 +23,9 @@ class JwtAuthenticationFilterTests {
     @Test
     void publicCharacterListIgnoresExpiredBearerToken() throws Exception {
         JwtTokenProvider provider = mock(JwtTokenProvider.class);
+        UserMapper users = mock(UserMapper.class);
         FilterChain chain = mock(FilterChain.class);
-        var filter = new JwtAuthenticationFilter(provider, mock(ObjectMapper.class), mock(UserMapper.class));
+        var filter = new JwtAuthenticationFilter(provider, mock(ObjectMapper.class), users);
         var request = request("GET", "/api/characters");
         var response = new MockHttpServletResponse();
 
@@ -33,6 +34,7 @@ class JwtAuthenticationFilterTests {
         assertEquals(200, response.getStatus());
         verify(chain).doFilter(request, response);
         verifyNoInteractions(provider);
+        verifyNoInteractions(users);
     }
 
     @Test
@@ -43,7 +45,7 @@ class JwtAuthenticationFilterTests {
         var filter = new JwtAuthenticationFilter(provider, objectMapper, mock(UserMapper.class));
         var request = request("PATCH", "/api/me/character");
         var response = new MockHttpServletResponse();
-        when(provider.validateAndGetUserId("expired"))
+        when(provider.parseAccessToken("expired"))
                 .thenThrow(new BusinessException(TokenErrorCode.TOKEN_EXPIRED));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
@@ -62,7 +64,8 @@ class JwtAuthenticationFilterTests {
         var filter = new JwtAuthenticationFilter(provider, new ObjectMapper(), users);
         var request = request("GET", "/api/me");
         var response = new MockHttpServletResponse();
-        when(provider.validateAndGetUserId("expired")).thenReturn(9L);
+        when(provider.parseAccessToken("expired")).thenReturn(new TokenClaims(9L, 0));
+        when(users.findTokenVersion(9L)).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 
@@ -70,6 +73,30 @@ class JwtAuthenticationFilterTests {
         assertEquals("INVALID_TOKEN", new ObjectMapper().readTree(response.getContentAsString()).get("code").asText());
         assertFalse(SecurityContextHolder.getContext().getAuthentication() != null);
         verify(chain, never()).doFilter(request, response);
+    }
+
+    @Test
+    void matchingVersionAuthenticatesAndMismatchIsRejected() throws Exception {
+        SecurityContextHolder.clearContext();
+        JwtTokenProvider provider = mock(JwtTokenProvider.class);
+        UserMapper users = mock(UserMapper.class);
+        FilterChain chain = mock(FilterChain.class);
+        var filter = new JwtAuthenticationFilter(provider, new ObjectMapper(), users);
+        var request = request("GET", "/api/me");
+        var response = new MockHttpServletResponse();
+        when(provider.parseAccessToken("expired")).thenReturn(new TokenClaims(9L, 2));
+        when(users.findTokenVersion(9L)).thenReturn(2, 3);
+
+        filter.doFilter(request, response, chain);
+        assertEquals(9L, SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        verify(chain).doFilter(request, response);
+        SecurityContextHolder.clearContext();
+        var secondRequest = request("GET", "/api/me");
+        var secondResponse = new MockHttpServletResponse();
+        filter.doFilter(secondRequest, secondResponse, chain);
+        assertEquals(401, secondResponse.getStatus());
+        assertEquals("INVALID_TOKEN", new ObjectMapper().readTree(secondResponse.getContentAsString()).get("code").asText());
+        verify(chain, never()).doFilter(secondRequest, secondResponse);
     }
 
     private MockHttpServletRequest request(String method, String path) {

@@ -84,6 +84,19 @@ class GroupMapperTests {
         assertFalse(members.findMembersByGroupId(groupId, 0L, 20).isEmpty());
     }
 
+    @Test
+    void inviteCodeUpdateImmediatelyInvalidatesOldCodeAndEnforcesUniqueness() {
+        Long owner = insertUser();
+        Long first = insertGroup(owner);
+        Long second = insertGroup(owner);
+        String oldCode = groups.findById(first).getInviteCode();
+        String secondCode = groups.findById(second).getInviteCode();
+        assertEquals(1, groups.updateInviteCode(first, "K7Q2PX"));
+        assertEquals(null, groups.findByInviteCode(oldCode));
+        assertEquals(first, groups.findByInviteCode("K7Q2PX").getId());
+        assertThrows(DuplicateKeyException.class, () -> groups.updateInviteCode(first, secondCode));
+    }
+
     private Long insertUser() {
         String email = "test-" + UUID.randomUUID() + "@test.com";
         jdbc.update("INSERT INTO users (nickname, email, password_hash, terms_agreed_at, privacy_agreed_at) VALUES (?, ?, ?, NOW(), NOW())",

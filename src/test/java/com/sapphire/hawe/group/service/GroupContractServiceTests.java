@@ -5,6 +5,7 @@ import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.global.storage.FileStorage;
+import com.sapphire.hawe.global.ratelimit.AttemptLimiter;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberPreviewRow;
 import com.sapphire.hawe.group.dao.GroupSummaryRow;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
+import org.mockito.MockedStatic;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -42,13 +44,14 @@ class GroupContractServiceTests {
     @Mock MissionService missionService;
     @Mock ApplicationEventPublisher events;
     @Mock FileStorage storage;
+    @Mock AttemptLimiter inviteLimiter;
     GroupService service;
 
     @BeforeEach
     void setUp() {
         service = new GroupService(groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5), "https://hawe.app/invite",
-                missionService, events, storage);
+                missionService, events, storage, inviteLimiter);
     }
 
     @Test
@@ -142,6 +145,52 @@ class GroupContractServiceTests {
         doThrow(new DuplicateKeyException("duplicate")).when(members).insert(any(GroupMember.class));
         assertCode(GroupErrorCode.ALREADY_MEMBER, () -> service.join(8L, new JoinRequest("K7Q2PX")));
         verify(groups, times(2)).findByInviteCodeForUpdate("K7Q2PX");
+    }
+
+    @Test
+    void reissueRequiresGroupMembershipAndOwnership() {
+        assertCode(GroupErrorCode.GROUP_NOT_FOUND, () -> service.reissueInviteCode(7L, 11L));
+        Group group = group("FRIEND");
+        when(groups.findByIdForUpdate(11L)).thenReturn(group);
+        assertCode(GroupErrorCode.NOT_GROUP_MEMBER, () -> service.reissueInviteCode(8L, 11L));
+        when(members.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
+        assertCode(GroupErrorCode.NOT_GROUP_OWNER, () -> service.reissueInviteCode(8L, 11L));
+        verify(groups, never()).updateInviteCode(any(), any());
+    }
+
+    @Test
+    void reissueSkipsCurrentCodeAndRetriesCollision() {
+        Group group = group("FRIEND");
+        when(groups.findByIdForUpdate(11L)).thenReturn(group);
+        when(members.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
+        doThrow(new DuplicateKeyException("collision")).when(groups).updateInviteCode(11L, "NEWABC");
+        try (MockedStatic<InviteCodeGenerator> generator = mockStatic(InviteCodeGenerator.class)) {
+            generator.when(InviteCodeGenerator::generate)
+                    .thenReturn("K7Q2PX", "NEWABC", "NEWDEF");
+            var response = service.reissueInviteCode(7L, 11L);
+            assertEquals("NEWDEF", response.inviteCode());
+            assertEquals("https://hawe.app/invite/NEWDEF", response.inviteUrl());
+            verify(groups, never()).updateInviteCode(11L, "K7Q2PX");
+            verify(groups).updateInviteCode(11L, "NEWABC");
+            verify(groups).updateInviteCode(11L, "NEWDEF");
+        }
+    }
+
+    @Test
+    void inviteLimiterCountsOnlyUnknownCodesAndBlocksBeforeLookup() {
+        Group group = group("FRIEND");
+        when(groups.findByInviteCode("K7Q2PX")).thenReturn(group);
+        when(members.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
+        assertCode(GroupErrorCode.ALREADY_MEMBER, () -> service.previewInvite(8L, "K7Q2PX"));
+        verify(inviteLimiter, never()).recordFailure(any());
+        assertCode(GroupErrorCode.INVITE_NOT_FOUND, () -> service.previewInvite(8L, "BAD"));
+        verify(inviteLimiter).recordFailure(8L);
+        assertCode(GroupErrorCode.INVITE_NOT_FOUND, () -> service.join(8L, new JoinRequest("BAD")));
+        verify(inviteLimiter, times(2)).recordFailure(8L);
+        doThrow(new BusinessException(CommonErrorCode.TOO_MANY_REQUESTS)).when(inviteLimiter).check(8L);
+        assertCode(CommonErrorCode.TOO_MANY_REQUESTS, () -> service.previewInvite(8L, "K7Q2PX"));
+        verify(groups, times(1)).findByInviteCode("K7Q2PX");
+        verify(inviteLimiter, times(2)).recordFailure(8L);
     }
 
     @Test

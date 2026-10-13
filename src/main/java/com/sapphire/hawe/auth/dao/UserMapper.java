@@ -11,11 +11,11 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface UserMapper {
 
-    @Select("SELECT id, email, password_hash, nickname, character_id, profile_image_url, terms_agreed_at, privacy_agreed_at, created_at "
+    @Select("SELECT id, email, password_hash, nickname, character_id, profile_image_url, token_version, terms_agreed_at, privacy_agreed_at, created_at "
             + "FROM users WHERE email = #{email}")
     User findByEmail(@Param("email") String email);
 
-    @Select("SELECT id, email, password_hash, nickname, character_id, profile_image_url, terms_agreed_at, privacy_agreed_at, created_at "
+    @Select("SELECT id, email, password_hash, nickname, character_id, profile_image_url, token_version, terms_agreed_at, privacy_agreed_at, created_at "
             + "FROM users WHERE id = #{id}")
     User findById(@Param("id") Long id);
 
@@ -24,6 +24,12 @@ public interface UserMapper {
 
     @Select("SELECT COUNT(*) > 0 FROM users WHERE id = #{id}")
     boolean existsById(@Param("id") Long id);
+
+    @Select("SELECT token_version FROM users WHERE id = #{id}")
+    Integer findTokenVersion(@Param("id") Long id);
+
+    @Update("UPDATE users SET password_hash = #{passwordHash}, token_version = token_version + 1 WHERE id = #{id}")
+    int changePassword(@Param("id") Long id, @Param("passwordHash") String passwordHash);
 
     @Update("UPDATE users SET nickname = #{nickname} WHERE id = #{id}")
     int updateNickname(@Param("id") Long id, @Param("nickname") String nickname);
