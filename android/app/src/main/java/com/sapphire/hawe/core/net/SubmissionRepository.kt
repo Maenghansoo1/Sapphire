@@ -11,22 +11,10 @@ import com.sapphire.hawe.core.model.SubmissionComment
 import com.sapphire.hawe.designsystem.assets.ProfileCharacter
 import java.net.URI
 import java.time.OffsetDateTime
-import java.util.Locale
-
-fun voiceDurationParam(value: Double): String = String.format(Locale.ROOT, "%.2f",
-    (if (value.isFinite()) value else 0.1).coerceIn(0.1, 30.0))
-
-fun waveformParam(values: List<Float>): String {
-    val sampled = if (values.size <= 64) values else (0 until 64).map { values[it * (values.size - 1) / 63] }
-    return sampled.joinToString(prefix = "[", postfix = "]", separator = ",") {
-        (if (it.isFinite()) it else 0f).coerceIn(0f, 1f).toString()
-    }
-}
 
 internal fun templateType(template: String): MissionType? = when {
     template.startsWith("PHOTO_") -> MissionType.PHOTO
     template.startsWith("DRAW_") -> MissionType.DRAW
-    template.startsWith("VOICE_") -> MissionType.VOICE
     template.startsWith("TEXT_") -> MissionType.WRITE
     else -> null
 }
@@ -61,10 +49,6 @@ class SubmissionRepository(private val api: ApiClient) {
                     if (png) "image/png" else "image/jpeg", content.bytes))
             }
             is SubmissionContent.Text -> listOf(ApiClient.MultipartPart.Text("text", content.body))
-            is SubmissionContent.Voice -> listOf(
-                ApiClient.MultipartPart.FilePart("file", "voice.m4a", "audio/mp4", content.file),
-                ApiClient.MultipartPart.Text("duration", voiceDurationParam(content.duration)),
-                ApiClient.MultipartPart.Text("waveform", waveformParam(content.waveform)))
         }
         val dto: SubmissionDto = api.postMultipart("/api/missions/$missionId/submissions", parts)
         return dto.toModel(myUserId) ?: throw ApiException(201, "INVALID_RESPONSE", "서버 응답을 읽을 수 없습니다")
@@ -118,7 +102,7 @@ class SubmissionRepository(private val api: ApiClient) {
         return Submission(id, Profile(AvatarContent.Character(ProfileCharacter.fromKey(author.characterKey)),
             author.nickname), author.userId == myUserId, type,
             OffsetDateTime.parse(submittedAt).toInstant(),
-            mediaUrl?.let { URI(api.absoluteUrl(it)) }, text, duration, waveform.orEmpty(), isLate,
+            mediaUrl?.let { URI(api.absoluteUrl(it)) }, text, isLate,
             author.userId, reactions.orEmpty().toReactions(), commentCount)
     }
 }

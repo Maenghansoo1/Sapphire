@@ -24,9 +24,6 @@ fun MissionPerformScreen(type: MissionType, topic: String, template: String, spe
             MissionType.WRITE -> WriteMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Text(it)) }
             MissionType.PHOTO -> PhotoMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "jpg")) }
             MissionType.DRAW -> DrawMissionScreen(topic, spec, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
-            MissionType.VOICE -> VoiceMissionScreen(topic, onClose) { file, duration, waveform ->
-                onSubmit(SubmissionContent.Voice(file, duration, waveform))
-            }
         }
         HToastHost(toast)
     }

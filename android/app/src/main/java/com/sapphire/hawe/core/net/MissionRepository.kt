@@ -15,7 +15,6 @@ data class ServerMission(val id: Long, val number: Int, val topic: String, val t
 
 fun mediaToType(media: String): MissionType? = when (media) {
     "PHOTO" -> MissionType.PHOTO
-    "VOICE" -> MissionType.VOICE
     "TEXT" -> MissionType.WRITE
     "DRAW" -> MissionType.DRAW
     else -> null

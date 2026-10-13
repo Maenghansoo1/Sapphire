@@ -25,8 +25,8 @@ internal object DemoSeed {
         val members = listOf(member("민준", ProfileCharacter.GAMJA, true), member("지우", ProfileCharacter.KKOTNIM),
             member("서연", ProfileCharacter.MULBANGUL), member("현우", ProfileCharacter.PILLEUM))
         val start = LocalDate.of(2026, 6, 2).atStartOfDay(HaweTime.SEOUL).toInstant()
-        val pattern = listOf(MissionType.DRAW, MissionType.PHOTO, MissionType.WRITE, MissionType.VOICE,
-            MissionType.DRAW, MissionType.PHOTO, MissionType.VOICE, MissionType.WRITE, MissionType.DRAW, MissionType.PHOTO)
+        val pattern = listOf(MissionType.DRAW, MissionType.PHOTO, MissionType.WRITE, MissionType.PHOTO,
+            MissionType.DRAW, MissionType.PHOTO, MissionType.WRITE, MissionType.WRITE, MissionType.DRAW, MissionType.PHOTO)
         val current = HaweTime.window(LocalTime.of(9, 0), now).first
         var opens = LocalDate.of(2026, 6, 2).atTime(9, 0).atZone(HaweTime.SEOUL).toInstant()
         var index = 0
@@ -63,12 +63,8 @@ internal object DemoSeed {
     private fun sample(person: GroupMember, type: MissionType, at: Instant, seed: Int): Submission {
         val texts = listOf("편의점 사장님이 \"오늘도 수고 많았어요\" 하면서 영수증을 건네주셨다. 별말 아닌데 하루가 풀렸음.",
             "엄마가 전화로 밥은 잘 먹고 다니냐고 물어봤다.", "조별과제 팀원이 네 덕분에 끝났다고 말해줬다. 사실 나도 덕분이었는데.", "교수님이 질문 좋다고 하셨다.")
-        val base = listOf(6, 10, 16, 22, 14, 20, 24, 12, 8, 18, 22, 16, 10, 6, 12, 20, 24, 18, 12, 8, 14, 20, 16, 10, 6, 10, 14, 8)
-        val shift = (seed * 5) % base.size
         return Submission(localId(), person.displayed, false, type, at,
             text = if (type == MissionType.WRITE) texts[seed % texts.size] else null,
-            duration = if (type == MissionType.VOICE) (7 + seed % 6).toDouble() else null,
-            waveform = if (type == MissionType.VOICE) (base.drop(shift) + base.take(shift)).map { it / 24f } else emptyList(),
             authorID = person.id)
     }
 }

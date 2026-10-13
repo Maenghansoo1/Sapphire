@@ -33,7 +33,7 @@ fun WithdrawScreen(session: AppSession, store: DataStore, onBack: () -> Unit) {
             Column(Modifier.fillMaxWidth().background(HColors.surface, RoundedCornerShape(16.dp))
                 .padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf(
-                    "그동안 남긴 그림, 사진, 글, 음성과 댓글이 모두 삭제되고 되돌릴 수 없어요.",
+                    "그동안 남긴 그림, 사진, 글과 댓글이 모두 삭제되고 되돌릴 수 없어요.",
                     "참여 중인 모든 그룹에서 나가게 돼요. 방장인 그룹은 가장 오래된 멤버에게 방장이 넘어가요.",
                     "같은 계정으로 다시 가입해도 이전 기록은 복구되지 않아요."
                 ).forEach { warning ->

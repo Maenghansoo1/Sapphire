@@ -21,7 +21,6 @@ import kotlin.random.Random
 sealed interface SubmissionContent {
     data class Image(val bytes: ByteArray, val fileExtension: String) : SubmissionContent
     data class Text(val body: String) : SubmissionContent
-    data class Voice(val file: File, val duration: Double, val waveform: List<Float>) : SubmissionContent
 }
 
 enum class InviteLookupError(val message: String) {
@@ -289,6 +288,5 @@ internal object TopicPool {
         MissionType.DRAW -> listOf("요즘 제일 웃겼던 순간", "오늘 기분을 날씨로 그려줘", "내 방 책상 위", "지금 제일 먹고 싶은 것", "서로의 첫인상")
         MissionType.PHOTO -> listOf("지금 창밖으로 보이는 풍경", "오늘 먹은 것 중 최고", "지금 신고 있는 신발", "오늘의 하늘", "내 주변에서 가장 파란 것")
         MissionType.WRITE -> listOf("오늘 들은 가장 따뜻한 말", "너에게 해주고 싶은 말 한 줄", "요즘 빠져 있는 것", "오늘 하루를 세 단어로", "지금 가장 고마운 사람")
-        MissionType.VOICE -> listOf("오늘 하루를 10초로 말해줘", "요즘 흥얼거리는 노래 한 소절", "지금 들리는 소리", "내일의 나에게 한마디", "아침 인사 한마디")
     }
 }

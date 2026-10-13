@@ -28,13 +28,7 @@ class ResultsFormatTest {
         }
     }
 
-    @Test fun durationsAndRelativeTime() {
-        assertEquals("0:00", shortDurationText(0.0))
-        assertEquals("0:09", shortDurationText(9.9))
-        assertEquals("0:59", shortDurationText(59.0))
-        assertEquals("1:01", shortDurationText(61.0))
-        assertEquals("10:00", shortDurationText(600.0))
-        assertEquals("0:00", shortDurationText(-1.0))
+    @Test fun relativeTime() {
         assertEquals("방금", koreanRelativeText(now.minusSeconds(30), now))
         assertEquals("방금", koreanRelativeText(now.minusSeconds(59), now))
         assertEquals("1분 전", koreanRelativeText(now.minusSeconds(60), now))
@@ -53,7 +47,6 @@ class ResultsFormatTest {
         assertEquals("사진을 눌러서 자세히 보기", hintText(MissionType.PHOTO))
         assertEquals("그림을 눌러서 자세히 보기", hintText(MissionType.DRAW))
         assertEquals("글을 눌러서 자세히 보기", hintText(MissionType.WRITE))
-        assertEquals("눌러서 듣고 자세히 보기", hintText(MissionType.VOICE))
         assertNull(likersText(emptyList(), 0))
         assertEquals("지우님이 좋아해요", likersText(listOf("지우"), 1))
         assertEquals("지우, 서연님이 좋아해요", likersText(listOf("지우", "서연"), 2))
@@ -66,11 +59,7 @@ class ResultsFormatTest {
         assertEquals("민준님에게 댓글 남기기", commentPlaceholder("민준"))
     }
 
-    @Test fun voiceAndLocalImage() {
-        assertEquals(0f, voiceProgress(0.0, 10.0))
-        assertEquals(0.5f, voiceProgress(5.0, 10.0))
-        assertEquals(1f, voiceProgress(12.0, 10.0))
-        assertEquals(1f, voiceProgress(1.0, 0.0))
+    @Test fun localImage() {
         val submission = Submission(1L, Profile.mockMine, true, MissionType.PHOTO, now)
         assertNull(localImageFile(submission))
         val file = File.createTempFile("hawe-result-", ".png")

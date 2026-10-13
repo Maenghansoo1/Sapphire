@@ -49,7 +49,7 @@ class RecordCalendarLogicTest {
     @Test fun recordsUseSeoulDatesAndKeepFirstOfDay() {
         val byDate = recordsByDate(listOf(
             record("2026-10-10T00:00:00Z"), record("2026-10-11T15:00:00Z", MissionType.WRITE),
-            record("2026-10-11T16:00:00Z", MissionType.VOICE)))
+            record("2026-10-11T16:00:00Z", MissionType.DRAW)))
         assertEquals(setOf(LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 12)), byDate.keys)
         assertEquals(MissionType.WRITE, byDate[LocalDate.of(2026, 10, 12)]!!.type)
         assertEquals(LocalDate.of(2026, 10, 12), initialSelectedDate(byDate))

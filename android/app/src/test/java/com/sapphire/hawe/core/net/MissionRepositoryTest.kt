@@ -51,7 +51,7 @@ class MissionRepositoryTest {
             assertNull(mission.spec.seconds)
             assertEquals(MissionType.WRITE, mediaToType("TEXT"))
             assertEquals(MissionType.PHOTO, mediaToType("PHOTO"))
-            assertEquals(MissionType.VOICE, mediaToType("VOICE"))
+            assertNull(mediaToType("VOICE"))  // 음성은 없앴다 — 예전 서버가 보내도 "열 수 없는 미션"
         }
     }
 

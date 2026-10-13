@@ -2,7 +2,6 @@ package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.data.SubmissionContent
 import com.sapphire.hawe.core.model.MissionType
-import java.io.File
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -11,7 +10,7 @@ import org.junit.Test
 
 class SubmissionRepositoryTest {
     private fun response(id: Long = 100L, template: String = "PHOTO_ONE", media: String? = "/files/a.jpg",
-        late: Boolean = false): String = """{"id":$id,"missionId":10,"author":{"userId":3,"nickname":"서연","characterKey":"mulbangul"},"template":"$template","mediaUrl":${media?.let { "\"$it\"" } ?: "null"},"submittedAt":"2026-09-28T21:00:00+09:00","isLate":$late,"duration":9.4,"waveform":[0.25,0.42],"text":"답","reactions":[],"commentCount":0}"""
+        late: Boolean = false): String = """{"id":$id,"missionId":10,"author":{"userId":3,"nickname":"서연","characterKey":"mulbangul"},"template":"$template","mediaUrl":${media?.let { "\"$it\"" } ?: "null"},"submittedAt":"2026-09-28T21:00:00+09:00","isLate":$late,"text":"답","reactions":[],"commentCount":0}"""
 
     @Test fun imageAndTextSendOnlyAllowedParts() = runBlocking {
         MockWebServer().use { server ->
@@ -34,42 +33,27 @@ class SubmissionRepositoryTest {
         }
     }
 
-    @Test fun voiceParametersAndResponseMapping() = runBlocking {
+    @Test fun submitMapsResponse() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setResponseCode(201).setBody(response(template = "VOICE_LINE",
-                media = "/files/a.m4a", late = true)))
+            server.enqueue(MockResponse().setResponseCode(201).setBody(response(template = "DRAW_SKETCH",
+                media = "/files/a.png", late = true)))
             val tokens = InMemoryTokenStore().apply { save("access", "refresh") }
             val repo = SubmissionRepository(ApiClient(server.url("/").toString(), tokens))
-            val file = File.createTempFile("hawe-voice", ".m4a")
-            try {
-                file.writeBytes(byteArrayOf(1, 2, 3))
-                val submission = repo.submit(10L, SubmissionContent.Voice(file, 30.4,
-                    (0..69).map { if (it == 0) Float.NaN else it / 60f }), 3L)
-                assertEquals(100L, submission.id)
-                assertEquals(MissionType.VOICE, submission.type)
-                assertTrue(submission.isMine)
-                assertTrue(submission.isLate)
-                assertEquals("서연", submission.author.nickname)
-                assertEquals(server.url("/files/a.m4a").toString(), submission.mediaURL.toString())
-                assertEquals(9.4, submission.duration!!, 0.001)
-                assertEquals(2, submission.waveform.size)
-                val request = server.takeRequest()
-                assertEquals("Bearer access", request.getHeader("Authorization"))
-                val body = request.body.readUtf8()
-                assertTrue("audio/mp4" in body)
-                assertTrue("name=\"duration\"" in body && "30.00" in body)
-                assertTrue("name=\"waveform\"" in body)
-                assertFalse("NaN" in body)
-            } finally { file.delete() }
+            val submission = repo.submit(10L, SubmissionContent.Image(byteArrayOf(1, 2, 3), "png"), 3L)
+            assertEquals(100L, submission.id)
+            assertEquals(MissionType.DRAW, submission.type)
+            assertTrue(submission.isMine)
+            assertTrue(submission.isLate)
+            assertEquals("서연", submission.author.nickname)
+            assertEquals(server.url("/files/a.png").toString(), submission.mediaURL.toString())
+            assertEquals("Bearer access", server.takeRequest().getHeader("Authorization"))
         }
-        assertEquals("0.10", voiceDurationParam(0.0))
-        assertEquals(64, waveformParam((0..69).map { it / 60f }).removeSurrounding("[", "]").split(",").size)
-        assertEquals("[0.0,1.0]", waveformParam(listOf(Float.NaN, 2f)))
     }
 
     @Test fun feedKeepsOrderSkipsUnknownAndPropagatesLock() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setBody("""{"content":[${response(1L)},${response(2L, "UNEXPECTED")},${response(3L, "TEXT_ACROSTIC", null)}],"page":0,"size":100,"totalPages":1,"totalElements":3}"""))
+            // 예전 음성 제출(VOICE_LINE)·모르는 틀은 건너뛴다
+            server.enqueue(MockResponse().setBody("""{"content":[${response(1L)},${response(2L, "UNEXPECTED")},${response(4L, "VOICE_LINE", "/files/a.m4a")},${response(3L, "TEXT_ACROSTIC", null)}],"page":0,"size":100,"totalPages":1,"totalElements":4}"""))
             server.enqueue(MockResponse().setResponseCode(423).setBody("""{"code":"FEED_LOCKED","message":"locked"}"""))
             val repo = SubmissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
             val feed = repo.feed(10L, 4L)

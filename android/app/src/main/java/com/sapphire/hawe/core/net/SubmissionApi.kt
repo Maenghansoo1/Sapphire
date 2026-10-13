@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable internal data class SubmissionDto(val id: Long, val missionId: Long,
     val author: SubmissionAuthorDto, val template: String, val mediaUrl: String? = null,
-    val mediaType: String? = null, val duration: Double? = null, val waveform: List<Float>? = null,
+    val mediaType: String? = null,
     val caption: String? = null, val text: String? = null, val submittedAt: String,
     val isLate: Boolean = false, val reactions: List<ReactionDto>? = null, val commentCount: Int = 0)
 

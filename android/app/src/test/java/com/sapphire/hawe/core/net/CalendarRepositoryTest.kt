@@ -20,7 +20,7 @@ class CalendarRepositoryTest {
                   "submittedCount":3,"memberCount":5,"stamp":"PENALTY"}]},
                 {"date":"2026-10-03","missions":[{"missionId":103,"media":"TEXT","content":"삼행시",
                   "submittedCount":1,"memberCount":5,"stamp":"LATE"}]},
-                {"date":"2026-10-12","missions":[{"missionId":104,"media":"VOICE","content":"오늘 한마디",
+                {"date":"2026-10-12","missions":[{"missionId":104,"media":"PHOTO","content":"오늘 한마디",
                   "submittedCount":0,"memberCount":5,"stamp":null}]}]}"""))
             val records = CalendarRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
                 .month(7L, YearMonth.of(2026, 10))
@@ -50,6 +50,7 @@ class CalendarRepositoryTest {
             server.enqueue(MockResponse().setBody("""{"month":"2026-10","days":[
                 {"date":"2026-10-01","missions":[
                   {"missionId":101,"media":"SLIDER","content":"슬라이더","submittedCount":1,"memberCount":2,"stamp":"GOOD"},
+                  {"missionId":103,"media":"VOICE","content":"예전 음성 미션","submittedCount":1,"memberCount":2,"stamp":"GOOD"},
                   {"missionId":102,"media":"PHOTO","content":"사진","submittedCount":1,"memberCount":2,"stamp":"NEW_STAMP"}]}]}"""))
             val records = CalendarRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
                 .month(7L, YearMonth.of(2026, 10))
@@ -62,15 +63,14 @@ class CalendarRepositoryTest {
     @Test fun mapsStatsByMedia() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"completedMissions":42,"streakDays":5,"groupCount":3,
-                "byMedia":{"DRAW":10,"PHOTO":15,"TEXT":9,"VOICE":8,"SLIDER":1}}"""))
+                "byMedia":{"DRAW":10,"PHOTO":15,"TEXT":9,"VOICE":8,"SLIDER":1}}"""))  // 예전 음성 기록은 건너뛴다
             val stats = CalendarRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore())).stats()
 
             assertEquals("/api/me/stats", server.takeRequest().path)
             assertEquals(42, stats.completedMissions)
             assertEquals(5, stats.streakDays)
             assertEquals(3, stats.groupCount)
-            assertEquals(mapOf(MissionType.DRAW to 10, MissionType.PHOTO to 15, MissionType.WRITE to 9,
-                MissionType.VOICE to 8), stats.byType)
+            assertEquals(mapOf(MissionType.DRAW to 10, MissionType.PHOTO to 15, MissionType.WRITE to 9), stats.byType)
         }
     }
 

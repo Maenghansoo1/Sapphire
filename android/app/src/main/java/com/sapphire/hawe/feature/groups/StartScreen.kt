@@ -38,10 +38,7 @@ fun StartScreen(showsBack: Boolean = false, onBack: () -> Unit = {},
                         Text("오늘은 그림일까, 사진일까?\n매일 랜덤으로 정해지는 미션을 최대 6명이 함께해요.",
                             style = HType.plex(15, lineHeightMultiple = 1.6f), color = HColors.textSecondary)
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MissionRow(MissionType.DRAW, MissionType.PHOTO)
-                        MissionRow(MissionType.WRITE, MissionType.VOICE)
-                    }
+                    MissionRow(MissionType.DRAW, MissionType.PHOTO, MissionType.WRITE)
                 }
             }, cta = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -58,10 +55,9 @@ fun StartScreen(showsBack: Boolean = false, onBack: () -> Unit = {},
 }
 
 @Composable
-private fun MissionRow(first: MissionType, second: MissionType) {
+private fun MissionRow(vararg types: MissionType) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        MissionCard(first, Modifier.weight(1f))
-        MissionCard(second, Modifier.weight(1f))
+        types.forEach { MissionCard(it, Modifier.weight(1f)) }
     }
 }
 

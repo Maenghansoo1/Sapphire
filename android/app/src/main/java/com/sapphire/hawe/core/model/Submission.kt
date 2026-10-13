@@ -6,7 +6,6 @@ import java.time.Instant
 data class Submission(
     val id: Long, val author: Profile, val isMine: Boolean, val type: MissionType,
     val createdAt: Instant, val mediaURL: URI? = null, val text: String? = null,
-    val duration: Double? = null, val waveform: List<Float> = emptyList(),
     val isLate: Boolean = false, val authorID: Long? = null,
     val reactions: List<Reaction> = emptyList(), val commentCount: Int = 0,
 )

@@ -56,21 +56,6 @@ fun DrawingArtwork(submission: Submission, height: Dp, drawingSize: Dp,
             onSuccess = { loaded = true }, onError = { loaded = false })
     }
 }
-
-@Composable
-fun VoiceBars(levels: List<Float>, progress: Float = 0f, barWidth: Dp = 3.dp,
-    spacing: Dp = 3.dp, maxHeight: Dp = 24.dp, minHeight: Dp = 6.dp) {
-    Row(Modifier.height(maxHeight), horizontalArrangement = Arrangement.spacedBy(spacing),
-        verticalAlignment = Alignment.CenterVertically) {
-        levels.forEachIndexed { index, level ->
-            val height = maxOf(minHeight, maxHeight * level.coerceIn(0f, 1f))
-            Box(Modifier.width(barWidth).height(height).background(
-                if (index.toFloat() / levels.size.coerceAtLeast(1) < progress) HColors.accent else HColors.controlBorder,
-                RoundedCornerShape(barWidth / 2f)))
-        }
-    }
-}
-
 @Composable
 fun LikeButton(count: Int, isLiked: Boolean, onClick: () -> Unit) {
     Row(Modifier.height(40.dp).clickable(onClick = onClick)

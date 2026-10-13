@@ -1,7 +1,6 @@
 package com.sapphire.hawe.feature.results
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,8 +11,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,8 +24,6 @@ import com.sapphire.hawe.core.net.SubmissionRepository
 import com.sapphire.hawe.core.model.MissionResult
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.Submission
-import com.sapphire.hawe.designsystem.assets.HIcon
-import com.sapphire.hawe.designsystem.assets.HIconView
 import com.sapphire.hawe.designsystem.components.HAvatar
 import com.sapphire.hawe.designsystem.components.HButton
 import com.sapphire.hawe.designsystem.components.HNavBar
@@ -74,12 +69,6 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
         return
     }
     if (result == null) { Box(Modifier.fillMaxSize().background(HColors.bg)); return }
-    val player = remember { VoicePlayerController() }
-    DisposableEffect(player, owner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) player.stop() }
-        owner.lifecycle.addObserver(observer)
-        onDispose { owner.lifecycle.removeObserver(observer); player.release() }
-    }
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = 20.dp)) {
         HNavBar("${koreanMonthDayText(result.date)} · ${result.type.displayName}",
             leading = HNavLeading.BACK, onLeading = onBack,
@@ -94,7 +83,6 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
                 MissionType.PHOTO -> PhotoFeed(result, onDetail)
                 MissionType.DRAW -> DrawingGrid(result, onDetail)
                 MissionType.WRITE -> TextCards(result, onDetail)
-                MissionType.VOICE -> VoiceList(result, player, onDetail)
             }
             if (result.pending.isNotEmpty()) {
                 Spacer(Modifier.height(28.dp))
@@ -162,41 +150,6 @@ private fun TextCards(result: MissionResult, onDetail: (Long) -> Unit) {
                     if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
                 }
                 Text(submission.text ?: "", style = HType.plex(16, lineHeightMultiple = 1.65f), color = HColors.ink)
-            }
-        }
-    }
-}
-
-@Composable
-private fun VoiceList(result: MissionResult, player: VoicePlayerController, onDetail: (Long) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth().height(48.dp).border(1.dp, HColors.border, RoundedCornerShape(14.dp))
-            .clickable { player.playAll(result.submissions) }, horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.width(16.dp))
-            HIconView(HIcon.PLAY, size = 16.dp)
-            Text("전체 이어 듣기", style = HType.plex(15, FontWeight.SemiBold), color = HColors.ink)
-        }
-        result.submissions.forEach { submission ->
-            Row(Modifier.fillMaxWidth().border(1.dp, HColors.line, RoundedCornerShape(18.dp)).padding(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                val playing = player.playingID == submission.id
-                Box(Modifier.size(44.dp).background(if (playing) HColors.accent else HColors.ink, CircleShape)
-                    .clickable { player.toggle(submission) }
-                    .semantics { contentDescription = if (playing) "일시정지" else "${submission.author.nickname} 음성 재생" },
-                    contentAlignment = Alignment.Center) {
-                    HIconView(if (playing) HIcon.PAUSE else HIcon.PLAY, size = 16.dp, color = HColors.onAccent)
-                }
-                Column(Modifier.weight(1f).clickable { onDetail(submission.id) }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        HAvatar(submission.author.avatar, size = 24.dp)
-                        Text(submission.author.nickname, Modifier.weight(1f), style = HType.plex(14, FontWeight.SemiBold),
-                            color = HColors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${shortDurationText(submission.duration ?: 0.0)}${if (submission.isLate) " · $LATE_LABEL" else ""}",
-                            style = HType.caption12, color = HColors.textSecondary)
-                    }
-                    VoiceBars(submission.waveform, if (playing) player.progress else 0f)
-                }
             }
         }
     }

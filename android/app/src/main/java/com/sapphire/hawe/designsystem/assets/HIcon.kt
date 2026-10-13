@@ -18,8 +18,8 @@ enum class HIcon(@DrawableRes val drawable: Int) {
     CHEVRON_RIGHT(R.drawable.ic_chevron_right), CLOSE(R.drawable.ic_close), COMMENT(R.drawable.ic_comment),
     COPY(R.drawable.ic_copy), FLASH(R.drawable.ic_flash), FLIP(R.drawable.ic_flip),
     HEART(R.drawable.ic_heart), HEART_FILL(R.drawable.ic_heart_fill), IMAGE(R.drawable.ic_image),
-    LOCK(R.drawable.ic_lock), MIC(R.drawable.ic_mic), MORE(R.drawable.ic_more), PAUSE(R.drawable.ic_pause),
-    PENCIL(R.drawable.ic_pencil), PERSON(R.drawable.ic_person), PLAY(R.drawable.ic_play),
+    LOCK(R.drawable.ic_lock), MORE(R.drawable.ic_more),
+    PENCIL(R.drawable.ic_pencil), PERSON(R.drawable.ic_person),
     PLUS(R.drawable.ic_plus), REDO(R.drawable.ic_redo), TEXT(R.drawable.ic_text), UNDO(R.drawable.ic_undo),
 }
 

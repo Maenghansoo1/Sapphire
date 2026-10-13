@@ -43,7 +43,6 @@ class MissionFormatTest {
         assertEquals("내 미션을 올리면 친구들의 그림이 열려요.", lockNoticeText(MissionType.DRAW))
         assertEquals("내 미션을 올리면 친구들의 사진이 열려요.", lockNoticeText(MissionType.PHOTO))
         assertEquals("내 미션을 올리면 친구들의 글이 열려요.", lockNoticeText(MissionType.WRITE))
-        assertEquals("내 미션을 올리면 친구들의 음성이 열려요.", lockNoticeText(MissionType.VOICE))
         assertEquals("민준님을 콕 찔렀어요", pokeToastText("민준"))
     }
 
