@@ -37,6 +37,7 @@ import com.sapphire.hawe.core.model.MissionMember
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.PokeKind
 import com.sapphire.hawe.core.model.TodayMission
+import com.sapphire.hawe.core.model.supportsTemplate
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
 import com.sapphire.hawe.designsystem.components.*
@@ -151,11 +152,11 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                         sendPoke(mission.id, member, kind)
                     }
                 }
-                if (!mission.didSubmit && mission.type != null) Row(Modifier.fillMaxWidth().padding(top = 20.dp)
+                if (!mission.didSubmit && mission.type != null && supportsTemplate(mission.template)) Row(Modifier.fillMaxWidth().padding(top = 20.dp)
                     .background(HColors.surface, RoundedCornerShape(18.dp)).padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     HIconView(HIcon.LOCK, size = 22.dp, color = HColors.textSecondary)
-                    Text(lockNoticeText(mission.type), style = HType.plex(14), color = HColors.textBody)
+                    Text(lockNoticeText(mission.type, mission.template), style = HType.plex(14), color = HColors.textBody)
                 }
                 }
             }
@@ -187,11 +188,17 @@ private fun MissionCard(mission: TodayMission, onPerform: () -> Unit, onResults:
                 style = HType.caption13, color = HColors.textSecondary, textAlign = TextAlign.End,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(mission.topic, style = HType.plex(24, FontWeight.Bold, 1.35f), color = HColors.ink)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(mission.topic, style = HType.plex(24, FontWeight.Bold, 1.35f), color = HColors.ink)
+            templateGuideText(mission.template, mission.spec)?.let {
+                Text(it, style = HType.plex(14), color = HColors.textSecondary)
+            }
+        }
         MissionCountdown(mission.closesAt, mission.deadlineAt)
-        if (mission.type == null) Text("이 미션은 아직 앱에서 열 수 없어요",
+        if (mission.type == null || !supportsTemplate(mission.template)) Text(UNSUPPORTED_MISSION_TEXT,
             style = HType.caption13, color = HColors.textSecondary)
-        else HButton(if (mission.didSubmit) "친구들 작품 보기" else mission.type.actionTitle,
+        else HButton(if (mission.didSubmit) resultsActionTitle(mission.template)
+            else missionActionTitle(mission.type, mission.template),
             onClick = if (mission.didSubmit) onResults else onPerform)
     }
 }

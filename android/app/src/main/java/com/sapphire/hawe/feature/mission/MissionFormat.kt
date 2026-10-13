@@ -2,8 +2,11 @@ package com.sapphire.hawe.feature.mission
 
 import com.sapphire.hawe.core.HaweTime
 import com.sapphire.hawe.core.model.MissionMember
+import com.sapphire.hawe.core.model.MissionSpec
+import com.sapphire.hawe.core.model.MissionTemplates
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.PokeKind
+import com.sapphire.hawe.core.model.isAggregateTemplate
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
@@ -38,7 +41,41 @@ fun deadlineText(deadlineAt: Instant, closesAt: Instant, now: Instant): String? 
 fun memberDisplayName(member: MissionMember): String =
     if (member.isMe) "${member.profile.nickname} (나)" else member.profile.nickname
 
-fun lockNoticeText(type: MissionType): String = "내 미션을 올리면 친구들의 ${type.subjectForm} 열려요."
+fun lockNoticeText(type: MissionType, template: String = ""): String =
+    if (isAggregateTemplate(template)) "내 답을 올리면 친구들의 답과 그룹 결과가 열려요."
+    else "내 미션을 올리면 친구들의 ${type.subjectForm} 열려요."
+
+/** 서버가 새 틀을 켰는데 이 앱에 그 화면이 없을 때(구형 앱) 05 카드에 보여요. */
+const val UNSUPPORTED_MISSION_TEXT = "앱을 업데이트하면 이 미션을 할 수 있어요"
+
+/** 05 카드의 수행 버튼. 밸런스 게임은 글을 쓰는 게 아니라 고르는 거라 따로 불러요. */
+fun missionActionTitle(type: MissionType, template: String): String =
+    if (template == MissionTemplates.TEXT_BALANCE) "하나 고르기" else type.actionTitle
+
+/** 제출한 뒤 05 카드 버튼. 집계 틀은 결과 카드가 먼저 보여서 "결과 보기"예요. */
+fun resultsActionTitle(template: String): String =
+    if (isAggregateTemplate(template)) "결과 보기" else "친구들 작품 보기"
+
+/** 새 틀의 방법 안내(05 카드·수행 화면 제목 아래). 기존 틀은 주제 문장만으로 충분해서 null. */
+fun templateGuideText(template: String, spec: MissionSpec): String? = when (template) {
+    MissionTemplates.TEXT_ONE_WORD -> "띄어쓰기 없이 한 단어로 남겨요"
+    MissionTemplates.TEXT_REVIEW -> "별점 1~5개와 한 줄 후기를 남겨요"
+    MissionTemplates.TEXT_BALANCE -> {
+        val a = spec.optionA?.takeIf { it.isNotBlank() }
+        val b = spec.optionB?.takeIf { it.isNotBlank() }
+        if (a != null && b != null) "‘$a’ vs ‘$b’ 둘 중 하나를 골라요" else "둘 중 하나를 골라요"
+    }
+    MissionTemplates.SLIDER_POSITION, MissionTemplates.SLIDER_TASTE -> sliderEnds(spec)
+        ?.let { "$it 사이에서 내 위치를 골라요" } ?: "내 위치를 골라요"
+    MissionTemplates.SLIDER_CONSENSUS -> "내 위치와 우리 그룹 평균을 함께 예측해요"
+    else -> null
+}
+
+private fun sliderEnds(spec: MissionSpec): String? {
+    val left = spec.left?.takeIf { it.isNotBlank() } ?: return null
+    val right = spec.right?.takeIf { it.isNotBlank() } ?: return null
+    return "‘$left’ ↔ ‘$right’"
+}
 fun pokeToastText(nickname: String): String = "${nickname}님을 콕 찔렀어요"
 fun flingToastText(nickname: String): String = "${nickname}님에게 똥을 뿌렸어요"
 fun pokeSentText(kind: PokeKind, nickname: String): String = when (kind) {

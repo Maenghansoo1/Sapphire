@@ -167,6 +167,41 @@ class DataStoreTest {
         assertFalse(store.groups.single().missions.single().feedLoaded)
     }
 
+    @Test fun pastAggregateMissionLearnsTemplateAndSpec() {
+        val store = store()
+        val detail = GroupDetail.mock.copy(id = 11L)
+        store.applyServerGroups(listOf(LoadedGroup(detail, null)))
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(200L).copy(type = MissionType.SLIDER,
+            template = "SLIDER_POSITION", spec = MissionSpec(question = "컨디션", left = "방전", right = "풀충전")),
+            now.plusSeconds(86400)))
+        // 현재 미션은 틀·빈칸을 이미 알아서 다시 받을 필요가 없어요
+        assertFalse(store.needsMissionSpec(11L, 200L))
+        val me = detail.me!!
+        store.applyFeed(11L, 200L, listOf(Submission(1L, me.displayed, true, MissionType.SLIDER, now,
+            authorID = me.id, template = "SLIDER_POSITION", number = 70)))
+        val current = store.result(11L, 200L)!!
+        assertEquals("SLIDER_POSITION", current.template)
+        assertEquals("풀충전", current.spec.right)
+
+        // 달력에서 연 지난 밸런스 미션: 틀은 제출물에서, 선택지는 미션 정보를 받은 뒤에 알아요
+        val pastDay = now.minusSeconds(2L * 86400)
+        store.applyCalendar(11L, YearMonth.of(2026, 10),
+            listOf(DayRecord(pastDay, MissionType.WRITE, "짜장면 vs 짬뽕", 2, 4, true, 101L, Stamp.GOOD)))
+        assertTrue(store.needsMissionSpec(11L, 101L))
+        assertFalse(store.needsMissionSpec(99L, 101L))  // 모르는 그룹
+        store.applyFeed(11L, 101L, listOf(Submission(2L, me.displayed, true, MissionType.WRITE, pastDay,
+            authorID = me.id, template = "TEXT_BALANCE", choice = "A")))
+        val before = store.result(11L, 101L)!!
+        assertEquals("TEXT_BALANCE", before.template)
+        assertEquals(MissionSpec(), before.spec)
+        store.applyMissionSpec(101L, "TEXT_BALANCE", MissionSpec(optionA = "짜장면", optionB = "짬뽕"))
+        assertFalse(store.needsMissionSpec(11L, 101L))
+        assertEquals("짜장면", store.result(11L, 101L)!!.spec.optionA)
+        store.reset()
+        store.applyServerGroups(listOf(LoadedGroup(detail, null)))
+        assertTrue(store.needsMissionSpec(11L, 101L))  // 로그아웃하면 지워요
+    }
+
     @Test fun settingsReplaceSnapshots() {
         val store = store()
         val id = store.createGroup("우리", Relationship.FRIEND)

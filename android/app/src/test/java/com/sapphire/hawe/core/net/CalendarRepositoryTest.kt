@@ -51,12 +51,15 @@ class CalendarRepositoryTest {
                 {"date":"2026-10-01","missions":[
                   {"missionId":101,"media":"SLIDER","content":"슬라이더","submittedCount":1,"memberCount":2,"stamp":"GOOD"},
                   {"missionId":103,"media":"VOICE","content":"예전 음성 미션","submittedCount":1,"memberCount":2,"stamp":"GOOD"},
+                  {"missionId":104,"media":"DICE","content":"모르는 매체","submittedCount":1,"memberCount":2,"stamp":"GOOD"},
                   {"missionId":102,"media":"PHOTO","content":"사진","submittedCount":1,"memberCount":2,"stamp":"NEW_STAMP"}]}]}"""))
             val records = CalendarRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
                 .month(7L, YearMonth.of(2026, 10))
 
-            assertEquals(listOf(102L), records.map { it.missionID })
-            assertNull(records.single().stamp)
+            // 슬라이더(A4)는 보이고, 예전 음성·모르는 매체는 건너뛴다
+            assertEquals(listOf(101L, 102L), records.map { it.missionID })
+            assertEquals(MissionType.SLIDER, records[0].type)
+            assertNull(records[1].stamp)
         }
     }
 
@@ -70,7 +73,8 @@ class CalendarRepositoryTest {
             assertEquals(42, stats.completedMissions)
             assertEquals(5, stats.streakDays)
             assertEquals(3, stats.groupCount)
-            assertEquals(mapOf(MissionType.DRAW to 10, MissionType.PHOTO to 15, MissionType.WRITE to 9), stats.byType)
+            assertEquals(mapOf(MissionType.DRAW to 10, MissionType.PHOTO to 15, MissionType.WRITE to 9,
+                MissionType.SLIDER to 1), stats.byType)
         }
     }
 

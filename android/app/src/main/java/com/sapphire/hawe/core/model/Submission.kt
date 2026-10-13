@@ -8,6 +8,9 @@ data class Submission(
     val createdAt: Instant, val mediaURL: URI? = null, val text: String? = null,
     val isLate: Boolean = false, val authorID: Long? = null,
     val reactions: List<Reaction> = emptyList(), val commentCount: Int = 0,
+    // 새 틀(B5)에서만 채워져요: 별점·슬라이더 위치(number), 밸런스 선택(choice), 평균 예측(guess), 이유(caption)
+    val template: String = "", val number: Int? = null, val choice: String? = null,
+    val guess: Int? = null, val caption: String? = null,
 )
 
 /** 서버 스티커 종류(`stickerType`). 디자인이 나오기 전까지 이모지로 임시 표시해요. */
@@ -27,4 +30,5 @@ data class SubmissionComment(
 data class MissionResult(
     val id: Long, val groupName: String, val type: MissionType, val topic: String,
     val date: Instant, val memberCount: Int, val submissions: List<Submission>, val pending: List<Profile>,
+    val template: String = "", val spec: MissionSpec = MissionSpec(),
 )

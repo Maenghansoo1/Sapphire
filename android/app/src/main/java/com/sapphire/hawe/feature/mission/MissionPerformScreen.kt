@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import com.sapphire.hawe.core.data.SubmissionContent
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.MissionSpec
+import com.sapphire.hawe.core.model.MissionTemplates
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.components.HToastHost
 import com.sapphire.hawe.designsystem.components.rememberHToastState
@@ -21,9 +22,15 @@ fun MissionPerformScreen(type: MissionType, topic: String, template: String, spe
     LaunchedEffect(message) { if (message != null) { toast.show(message); onMessageShown() } }
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
         when (type) {
-            MissionType.WRITE -> WriteMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Text(it)) }
+            MissionType.WRITE -> when (template) {
+                MissionTemplates.TEXT_ONE_WORD -> OneWordMissionScreen(topic, onClose, onSubmit)
+                MissionTemplates.TEXT_REVIEW -> ReviewMissionScreen(topic, onClose, onSubmit)
+                MissionTemplates.TEXT_BALANCE -> BalanceMissionScreen(topic, spec, onClose, onSubmit)
+                else -> WriteMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Text(it)) }
+            }
             MissionType.PHOTO -> PhotoMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "jpg")) }
             MissionType.DRAW -> DrawMissionScreen(topic, spec, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
+            MissionType.SLIDER -> SliderMissionScreen(topic, template, spec, onClose, onSubmit)
         }
         HToastHost(toast)
     }

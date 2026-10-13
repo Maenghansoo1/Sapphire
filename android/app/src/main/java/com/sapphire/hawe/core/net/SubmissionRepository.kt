@@ -2,9 +2,13 @@ package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.data.SubmissionContent
 import com.sapphire.hawe.core.model.AvatarContent
+import com.sapphire.hawe.core.model.ConsensusRank
+import com.sapphire.hawe.core.model.MissionAggregate
+import com.sapphire.hawe.core.model.MissionTemplates
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.Profile
 import com.sapphire.hawe.core.model.Reaction
+import com.sapphire.hawe.core.model.SliderPoint
 import com.sapphire.hawe.core.model.Sticker
 import com.sapphire.hawe.core.model.Submission
 import com.sapphire.hawe.core.model.SubmissionComment
@@ -16,6 +20,29 @@ internal fun templateType(template: String): MissionType? = when {
     template.startsWith("PHOTO_") -> MissionType.PHOTO
     template.startsWith("DRAW_") -> MissionType.DRAW
     template.startsWith("TEXT_") -> MissionType.WRITE
+    template.startsWith("SLIDER_") -> MissionType.SLIDER
+    else -> null
+}
+
+/** 새 틀의 제출 필드. 값이 없는 필드는 파트를 만들지 않아요(서버는 요구하지 않는 필드를 400 으로 거부). */
+internal fun scalarParts(content: SubmissionContent.Scalar): List<ApiClient.MultipartPart> = buildList {
+    content.text?.let { add(ApiClient.MultipartPart.Text("text", it)) }
+    content.caption?.let { add(ApiClient.MultipartPart.Text("caption", it)) }
+    content.number?.let { add(ApiClient.MultipartPart.Text("number", it.toString())) }
+    content.guess?.let { add(ApiClient.MultipartPart.Text("guess", it.toString())) }
+    content.choice?.let { add(ApiClient.MultipartPart.Text("choice", it)) }
+}
+
+/** 서버가 계산한 집계 결과를 앱 모델로. 앱이 모르는 틀이면 null. */
+internal fun MissionResultDto.toAggregate(): MissionAggregate? = when (template) {
+    MissionTemplates.TEXT_BALANCE -> MissionAggregate.Balance(totalCount,
+        choices.orEmpty().filter { it.choice == "A" }.sumOf { it.count },
+        choices.orEmpty().filter { it.choice == "B" }.sumOf { it.count }, myChoice)
+    MissionTemplates.SLIDER_POSITION, MissionTemplates.SLIDER_TASTE -> MissionAggregate.Slider(totalCount, average,
+        distribution.orEmpty().map { SliderPoint(it.userId, it.nickname, it.number) }, myNumber, diffFromAverage)
+    MissionTemplates.SLIDER_CONSENSUS -> MissionAggregate.Consensus(totalCount, average,
+        ranking.orEmpty().map { ConsensusRank(it.userId, it.nickname, it.guess, it.diff) },
+        winnerUserIds.orEmpty().toSet())
     else -> null
 }
 
@@ -49,9 +76,16 @@ class SubmissionRepository(private val api: ApiClient) {
                     if (png) "image/png" else "image/jpeg", content.bytes))
             }
             is SubmissionContent.Text -> listOf(ApiClient.MultipartPart.Text("text", content.body))
+            is SubmissionContent.Scalar -> scalarParts(content)
         }
         val dto: SubmissionDto = api.postMultipart("/api/missions/$missionId/submissions", parts)
         return dto.toModel(myUserId) ?: throw ApiException(201, "INVALID_RESPONSE", "서버 응답을 읽을 수 없습니다")
+    }
+
+    /** 집계 틀의 그룹 결과. 내가 안 냈으면 423 FEED_LOCKED, 집계 틀이 아니면 400 RESULT_NOT_SUPPORTED. */
+    suspend fun result(missionId: Long): MissionAggregate? {
+        val dto: MissionResultDto = api.get("/api/missions/$missionId/result")
+        return dto.toAggregate()
     }
 
     suspend fun feed(missionId: Long, myUserId: Long): List<Submission> {
@@ -103,6 +137,7 @@ class SubmissionRepository(private val api: ApiClient) {
             author.nickname), author.userId == myUserId, type,
             OffsetDateTime.parse(submittedAt).toInstant(),
             mediaUrl?.let { URI(api.absoluteUrl(it)) }, text, isLate,
-            author.userId, reactions.orEmpty().toReactions(), commentCount)
+            author.userId, reactions.orEmpty().toReactions(), commentCount,
+            template, number, choice, guess, caption)
     }
 }

@@ -19,27 +19,37 @@ fun mediaToType(media: String): MissionType? = when (media) {
     "PHOTO" -> MissionType.PHOTO
     "TEXT" -> MissionType.WRITE
     "DRAW" -> MissionType.DRAW
+    "SLIDER" -> MissionType.SLIDER
     else -> null
 }
 
-internal fun paramsToSpec(params: JsonObject): MissionSpec = MissionSpec(
-    seconds = params["seconds"]?.let { runCatching { it.jsonPrimitive.intOrNull ?: it.jsonPrimitive.content.toIntOrNull() }.getOrNull() },
-    word = params["word"]?.let { runCatching { it.jsonPrimitive.content }.getOrNull() },
-    drawFrom = params["a"]?.let { runCatching { it.jsonPrimitive.content }.getOrNull() },
-    drawTo = params["b"]?.let { runCatching { it.jsonPrimitive.content }.getOrNull() },
-)
+internal fun paramsToSpec(params: JsonObject): MissionSpec {
+    fun text(key: String) = params[key]?.let { runCatching { it.jsonPrimitive.content }.getOrNull() }
+    return MissionSpec(
+        seconds = params["seconds"]?.let { runCatching { it.jsonPrimitive.intOrNull ?: it.jsonPrimitive.content.toIntOrNull() }.getOrNull() },
+        word = text("word"), drawFrom = text("a"), drawTo = text("b"),
+        optionA = text("optionA"), optionB = text("optionB"),
+        question = text("question"), topic = text("topic"), left = text("left"), right = text("right"),
+    )
+}
 
 class MissionRepository(private val api: ApiClient) {
     suspend fun current(groupId: Long, myUserId: Long): CurrentMissionState {
         val response: TodayMissionsDto = api.get("/api/groups/$groupId/missions/today")
-        val mission = response.missions.firstOrNull()?.let { row ->
-            ServerMission(row.missionId, row.number, row.content, mediaToType(row.media), row.template,
-                paramsToSpec(row.params), OffsetDateTime.parse(row.publishedAt).toInstant(),
-                OffsetDateTime.parse(row.deadlineAt).toInstant(), OffsetDateTime.parse(row.closesAt).toInstant(),
-                row.submittedByMe, row.members.associate { it.userId to it.submitted },
-                row.members.associate { member -> member.userId to member.pokedByMe.mapNotNull(PokeKind::fromWire).toSet() }
-                    .filterValues { it.isNotEmpty() })
-        }
+        val mission = response.missions.firstOrNull()?.toModel()
         return CurrentMissionState(mission, response.nextPublishAt?.let { OffsetDateTime.parse(it).toInstant() })
     }
+
+    /** 미션 한 개(지난 미션 포함). 달력에서 연 지난 미션의 틀·빈칸을 알아낼 때 써요. */
+    suspend fun mission(missionId: Long): ServerMission {
+        val row: MissionDto = api.get("/api/missions/$missionId")
+        return row.toModel()
+    }
+
+    private fun MissionDto.toModel() = ServerMission(missionId, number, content, media?.let(::mediaToType), template,
+        paramsToSpec(params), OffsetDateTime.parse(publishedAt).toInstant(),
+        OffsetDateTime.parse(deadlineAt).toInstant(), OffsetDateTime.parse(closesAt).toInstant(),
+        submittedByMe, members.associate { it.userId to it.submitted },
+        members.associate { member -> member.userId to member.pokedByMe.mapNotNull(PokeKind::fromWire).toSet() }
+            .filterValues { it.isNotEmpty() })
 }

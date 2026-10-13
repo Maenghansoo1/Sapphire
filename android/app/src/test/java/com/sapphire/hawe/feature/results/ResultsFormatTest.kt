@@ -47,6 +47,7 @@ class ResultsFormatTest {
         assertEquals("사진을 눌러서 자세히 보기", hintText(MissionType.PHOTO))
         assertEquals("그림을 눌러서 자세히 보기", hintText(MissionType.DRAW))
         assertEquals("글을 눌러서 자세히 보기", hintText(MissionType.WRITE))
+        assertEquals("슬라이더를 눌러서 자세히 보기", hintText(MissionType.SLIDER))
         assertNull(likersText(emptyList(), 0))
         assertEquals("지우님이 좋아해요", likersText(listOf("지우"), 1))
         assertEquals("지우, 서연님이 좋아해요", likersText(listOf("지우", "서연"), 2))
@@ -68,5 +69,66 @@ class ResultsFormatTest {
         } finally { file.delete() }
         assertNull(localImageFile(submission.copy(mediaURL = file.toURI())))
         assertNull(localImageFile(submission.copy(mediaURL = java.net.URI("https://example.com/a.png"))))
+    }
+
+    @Test fun newTemplateAnswerCopy() {
+        assertEquals("★★★★☆", starsText(4))
+        assertEquals("☆☆☆☆☆", starsText(0))
+        assertEquals("★★★★★", starsText(9))
+        assertEquals("☆☆☆☆☆", starsText(-1))
+        val spec = MissionSpec(optionA = "짜장면", optionB = "짬뽕")
+        assertEquals("A · 짜장면", balanceChoiceText("A", spec))
+        assertEquals("B · 짬뽕", balanceChoiceText("B", spec))
+        assertEquals("B", balanceChoiceText("B", MissionSpec()))
+        assertNull(balanceChoiceText(null, spec))
+        assertNull(balanceChoiceText("C", spec))
+        assertEquals(setOf("TEXT_ONE_WORD", "TEXT_REVIEW", "TEXT_BALANCE", "SLIDER_POSITION", "SLIDER_TASTE",
+            "SLIDER_CONSENSUS"), MissionTemplates.supported.filter(::hasTemplateAnswer).toSet())
+    }
+
+    @Test fun balancePercentsAlwaysAddUpTo100() {
+        assertEquals(75 to 25, balancePercents(3, 1))
+        assertEquals(33 to 67, balancePercents(1, 2))
+        assertEquals(67 to 33, balancePercents(2, 1))
+        assertEquals(100 to 0, balancePercents(1, 0))
+        assertEquals(0 to 100, balancePercents(0, 6))
+        assertEquals(0 to 0, balancePercents(0, 0))
+        (0..6).forEach { a -> (0..6).forEach { b ->
+            if (a + b > 0) assertEquals(100, balancePercents(a, b).let { it.first + it.second })
+        } }
+    }
+
+    @Test fun averageAndDiffCopyKeepServerRounding() {
+        val locale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.GERMANY)  // 소수점이 쉼표인 기기에서도 "62.5"
+            assertEquals("62.5", decimalText(62.5))
+            assertEquals("60", decimalText(60.0))
+            assertEquals("0", decimalText(0.0))
+            assertEquals("32.8", decimalText(32.8))
+        } finally { Locale.setDefault(locale) }
+        val spec = MissionSpec(left = "방전", right = "풀충전")
+        assertEquals("내 위치는 평균보다 ‘풀충전’ 쪽으로 7.5", diffFromAverageText(7.5, spec))
+        assertEquals("내 위치는 평균보다 ‘방전’ 쪽으로 32.8", diffFromAverageText(-32.8, spec))
+        assertEquals("내 위치가 딱 평균이에요", diffFromAverageText(0.0, spec))
+        assertEquals("내 위치는 평균보다 오른쪽으로 10", diffFromAverageText(10.0, MissionSpec()))
+        assertEquals("내 위치는 평균보다 왼쪽으로 2.5", diffFromAverageText(-2.5, MissionSpec(left = "")))
+        assertNull(diffFromAverageText(null, spec))
+    }
+
+    @Test fun consensusRanksAndWinners() {
+        val ranking = listOf(ConsensusRank(2L, "잎사귀", 60, 2.5), ConsensusRank(3L, "서연", 65, 2.5),
+            ConsensusRank(1L, "몽실이", 80, 17.5), ConsensusRank(4L, "지우", 40, 22.5))
+        assertEquals(listOf(1, 1, 3, 4), competitionRanks(ranking))
+        assertEquals(emptyList<Int>(), competitionRanks(emptyList()))
+        assertEquals("잎사귀님, 서연님이 공동으로 가장 가깝게 맞혔어요", consensusWinnerText(ranking, setOf(2L, 3L), 1L))
+        assertEquals("나와 서연님이 공동으로 가장 가깝게 맞혔어요", consensusWinnerText(ranking, setOf(2L, 3L), 2L))
+        assertEquals("잎사귀님이 가장 가깝게 맞혔어요", consensusWinnerText(ranking.take(1), setOf(2L), 1L))
+        assertEquals("내가 가장 가깝게 맞혔어요", consensusWinnerText(ranking.take(1), setOf(2L), 2L))
+        assertNull(consensusWinnerText(ranking, emptySet(), 1L))
+        // 1명뿐인 결과: 혼자 1등
+        val alone = listOf(ConsensusRank(1L, "몽실이", 50, 0.0))
+        assertEquals(listOf(1), competitionRanks(alone))
+        assertEquals("내가 가장 가깝게 맞혔어요", consensusWinnerText(alone, setOf(1L), 1L))
     }
 }

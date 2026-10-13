@@ -21,6 +21,9 @@ import kotlin.random.Random
 sealed interface SubmissionContent {
     data class Image(val bytes: ByteArray, val fileExtension: String) : SubmissionContent
     data class Text(val body: String) : SubmissionContent
+    /** 새 틀(한 단어·후기·밸런스·슬라이더)의 글·숫자·선택 필드. null 인 필드는 보내지 않아요. */
+    data class Scalar(val number: Int? = null, val guess: Int? = null, val choice: String? = null,
+        val text: String? = null, val caption: String? = null) : SubmissionContent
 }
 
 enum class InviteLookupError(val message: String) {
@@ -73,6 +76,8 @@ class DataStore(
     // 달력: (그룹, 달) → 그 달 기록. 달력에서 연 지난 미션의 피드는 pastFeeds에 따로 둬요.
     private val calendars = mutableStateMapOf<Pair<Long, YearMonth>, List<DayRecord>>()
     private val pastFeeds = mutableStateMapOf<Long, List<Submission>>()
+    // 달력에서 연 지난 미션의 틀·빈칸(밸런스 선택지, 슬라이더 양 끝 라벨). 달력 응답에는 없어서 따로 받아 둬요.
+    private val pastSpecs = mutableStateMapOf<Long, Pair<String, MissionSpec>>()
     var stats by mutableStateOf<ActivityStats?>(null)
         private set
 
@@ -87,7 +92,7 @@ class DataStore(
 
     fun reset() {
         _groups.clear(); storedProfile = Profile.mockMine; groupsState = GroupsState.NOT_LOADED
-        calendars.clear(); pastFeeds.clear(); stats = null
+        calendars.clear(); pastFeeds.clear(); pastSpecs.clear(); stats = null
         nextLocalGroupId = -1L; nextLocalMemberId = -1L
     }
 
@@ -209,6 +214,16 @@ class DataStore(
         applyCurrentFeed(groupID, missionID, submissions)
     }
 
+    fun applyMissionSpec(missionID: Long, template: String, spec: MissionSpec) {
+        pastSpecs[missionID] = template to spec
+    }
+
+    /** 결과 화면이 지난 미션의 틀·빈칸을 서버에서 받아 와야 하는지. 현재 미션은 이미 알고 있어요. */
+    fun needsMissionSpec(groupID: Long, missionID: Long): Boolean {
+        val stored = groups.firstOrNull { it.id == groupID } ?: return false
+        return stored.missions.none { it.id == missionID } && missionID !in pastSpecs
+    }
+
     private fun applyCurrentFeed(groupID: Long, missionID: Long, submissions: List<Submission>) = update(groupID) { group ->
         val mission = group.missions.lastOrNull()?.takeIf { it.id == missionID } ?: return@update group
         group.copy(missions = listOf(mission.copy(submissions = submissions.toList(), feedLoaded = true)))
@@ -245,7 +260,7 @@ class DataStore(
         val done = mission.submissions.mapNotNull { it.authorID }.toSet()
         return MissionResult(mission.id, stored.detail.name, mission.type ?: return null, mission.topic, mission.opensAt,
             stored.detail.members.size, mission.submissions.toList(),
-            stored.detail.members.filter { it.id !in done }.map { it.displayed })
+            stored.detail.members.filter { it.id !in done }.map { it.displayed }, mission.template, mission.spec)
     }
 
     // 달력에서 연 지난 미션: 미션 정보는 달력 기록, 제출물은 pastFeeds에서 가져와요.
@@ -253,8 +268,11 @@ class DataStore(
         val record = calendarRecord(stored.id, missionID) ?: return null
         val submissions = pastFeeds[missionID] ?: return null
         val done = submissions.mapNotNull { it.authorID }.toSet()
+        // 틀은 미션 정보가 아직 없어도 제출물에서 알 수 있어요(한 미션의 제출은 모두 같은 틀).
+        val (template, spec) = pastSpecs[missionID] ?: ((submissions.firstOrNull()?.template ?: "") to MissionSpec())
         return MissionResult(missionID, stored.detail.name, record.type, record.topic, record.date,
-            record.memberCount, submissions, stored.detail.members.filter { it.id !in done }.map { it.displayed })
+            record.memberCount, submissions, stored.detail.members.filter { it.id !in done }.map { it.displayed },
+            template, spec)
     }
 
     private fun update(groupID: Long, change: (StoredGroup) -> StoredGroup) {
@@ -295,5 +313,14 @@ internal object TopicPool {
         MissionType.DRAW -> listOf("요즘 제일 웃겼던 순간", "오늘 기분을 날씨로 그려줘", "내 방 책상 위", "지금 제일 먹고 싶은 것", "서로의 첫인상")
         MissionType.PHOTO -> listOf("지금 창밖으로 보이는 풍경", "오늘 먹은 것 중 최고", "지금 신고 있는 신발", "오늘의 하늘", "내 주변에서 가장 파란 것")
         MissionType.WRITE -> listOf("오늘 들은 가장 따뜻한 말", "너에게 해주고 싶은 말 한 줄", "요즘 빠져 있는 것", "오늘 하루를 세 단어로", "지금 가장 고마운 사람")
+        MissionType.SLIDER -> listOf("요즘 나의 에너지는 어느 정도?", "나는 계획형일까 즉흥형일까?", "주말의 나는 집콕일까 밖으로일까?")
+    }
+
+    /** 목업 미션에 붙이는 대표 틀(서버 미션은 늘 실제 틀을 가져와요). */
+    fun template(type: MissionType): String = when (type) {
+        MissionType.DRAW -> MissionTemplates.DRAW_SKETCH
+        MissionType.PHOTO -> MissionTemplates.PHOTO_NOW
+        MissionType.WRITE -> MissionTemplates.TEXT_FILL_BLANK
+        MissionType.SLIDER -> MissionTemplates.SLIDER_POSITION
     }
 }

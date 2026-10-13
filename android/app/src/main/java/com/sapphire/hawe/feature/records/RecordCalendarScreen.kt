@@ -169,7 +169,7 @@ private fun DayCell(date: LocalDate, today: LocalDate, record: DayRecord?, isSel
         val stamp = record?.stamp
         if (stamp != null) StampImage(stamp, 20.dp)
         else Text(record?.type?.displayName ?: " ", style = HType.plex(10, FontWeight.SemiBold),
-            color = if (isSelected) HColors.onAccent else HColors.textSecondary)
+            color = if (isSelected) HColors.onAccent else HColors.textSecondary, maxLines = 1)
     }
 }
 

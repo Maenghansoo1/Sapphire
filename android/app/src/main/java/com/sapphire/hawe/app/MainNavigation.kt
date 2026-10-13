@@ -281,7 +281,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
                     else store.calendarRecord(groupID, missionID)?.didSubmit == true
                 if (!canOpen) nav.popBackStack()
             }
-            ResultsScreen(groupID, missionID, store, submissions, session,
+            ResultsScreen(groupID, missionID, store, submissions, missions, session,
                 onBack = { nav.popBackStack() }, onDetail = { submissionID ->
                     nav.navigate(MainRoute.SubmissionDetail(route.groupId, route.missionId,
                         submissionID)) { launchSingleTop = true }

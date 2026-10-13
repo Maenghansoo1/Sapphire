@@ -6,9 +6,10 @@ import org.junit.Test
 import java.time.Instant
 
 class MissionPerformCommonTest {
-    private fun mission(done: Boolean = false, type: MissionType = MissionType.WRITE) = TodayMission(
+    private fun mission(done: Boolean = false, type: MissionType = MissionType.WRITE,
+        template: String = MissionTemplates.TEXT_ACROSTIC) = TodayMission(
         100L, GroupDetail.mock, type, "주제", 1, Instant.EPOCH, Instant.EPOCH,
-        listOf(MissionMember(1L, Profile.mockMine, isMe = true, isDone = done)))
+        listOf(MissionMember(1L, Profile.mockMine, isMe = true, isDone = done)), template = template)
 
     @Test fun allTypesAvailable() {
         MissionType.entries.forEach { assertTrue(isPerformScreenAvailable(it)) }
@@ -20,5 +21,22 @@ class MissionPerformCommonTest {
         assertEquals(PerformEntryDecision.Allow(MissionType.WRITE), performEntryDecision(mission(), null))
         assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(), MissionType.PHOTO))
         assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission().copy(type = null), null))
+    }
+
+    @Test fun newTemplatesOpenAndUnknownTemplatesAskForUpdate() {
+        listOf(MissionTemplates.TEXT_ONE_WORD, MissionTemplates.TEXT_REVIEW, MissionTemplates.TEXT_BALANCE).forEach {
+            assertEquals(PerformEntryDecision.Allow(MissionType.WRITE), performEntryDecision(mission(template = it), null))
+        }
+        listOf(MissionTemplates.SLIDER_POSITION, MissionTemplates.SLIDER_TASTE, MissionTemplates.SLIDER_CONSENSUS).forEach {
+            assertEquals(PerformEntryDecision.Allow(MissionType.SLIDER),
+                performEntryDecision(mission(type = MissionType.SLIDER, template = it), MissionType.SLIDER))
+        }
+        // 서버가 나중에 켤 2차 틀(매체는 알아도 화면이 없음)·빈 틀은 열지 않아요
+        assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(template = "TEXT_RELAY"), null))
+        assertEquals(PerformEntryDecision.Unsupported,
+            performEntryDecision(mission(type = MissionType.SLIDER, template = "SLIDER_CLUE_BAR"), null))
+        assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(template = ""), null))
+        // 이미 냈으면 틀과 상관없이 "이미 냈어요"
+        assertEquals(PerformEntryDecision.AlreadySubmitted, performEntryDecision(mission(true, template = "TEXT_RELAY"), null))
     }
 }

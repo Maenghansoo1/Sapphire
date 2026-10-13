@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.model.MissionSpec
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.Submission
 import com.sapphire.hawe.core.net.SubmissionRepository
@@ -52,7 +53,7 @@ fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, s
                 color = HColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp)) {
-            DetailArtwork(submission, result.type)
+            DetailArtwork(submission, result.type, result.spec)
             Spacer(Modifier.height(24.dp))
             SubmissionSocial(submission.id, submission.reactions,
                 store.group(groupID)?.members.orEmpty(), repository)
@@ -61,11 +62,16 @@ fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, s
 }
 
 @Composable
-private fun DetailArtwork(submission: Submission, type: MissionType) {
-    when (type) {
-        MissionType.PHOTO -> PhotoArtwork(submission, 300.dp)
-        MissionType.DRAW -> DrawingArtwork(submission, 300.dp, 240.dp)
-        MissionType.WRITE -> SelectionContainer {
+private fun DetailArtwork(submission: Submission, type: MissionType, spec: MissionSpec) {
+    when {
+        type == MissionType.PHOTO -> PhotoArtwork(submission, 300.dp)
+        type == MissionType.DRAW -> DrawingArtwork(submission, 300.dp, 240.dp)
+        hasTemplateAnswer(submission.template) -> SelectionContainer {
+            Box(Modifier.fillMaxWidth().background(HColors.surface, RoundedCornerShape(20.dp)).padding(24.dp)) {
+                TemplateAnswer(submission, spec, large = true)
+            }
+        }
+        else -> SelectionContainer {
             Text(submission.text ?: "", Modifier.fillMaxWidth()
                 .background(HColors.surface, RoundedCornerShape(20.dp)).padding(24.dp),
                 style = HType.plex(19, FontWeight.Medium, 1.7f), color = HColors.ink)

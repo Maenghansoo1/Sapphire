@@ -1,0 +1,5 @@
+<!-- 임시 이미지: Figma 디자인 확정 시 교체 (슬라이더 — 가로선 위의 원) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24.0" android:viewportHeight="24.0">
+    <path android:pathData="M3,12 H21" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.8" android:strokeLineCap="round" />
+    <path android:pathData="M14,12 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" android:fillColor="#000000" />
+</vector>

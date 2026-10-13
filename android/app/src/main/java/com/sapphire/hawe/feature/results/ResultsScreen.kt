@@ -20,10 +20,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.net.ApiException
+import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
 import com.sapphire.hawe.core.model.MissionResult
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.Submission
+import com.sapphire.hawe.core.model.isAggregateTemplate
 import com.sapphire.hawe.designsystem.components.HAvatar
 import com.sapphire.hawe.designsystem.components.HButton
 import com.sapphire.hawe.designsystem.components.HNavBar
@@ -36,7 +38,7 @@ const val LATE_LABEL = "지각"
 
 @Composable
 fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: SubmissionRepository,
-    session: AppSession, onBack: () -> Unit, onDetail: (Long) -> Unit,
+    missions: MissionRepository, session: AppSession, onBack: () -> Unit, onDetail: (Long) -> Unit,
     onLocked: () -> Unit, onHome: () -> Unit) {
     var refresh by remember(missionID) { mutableIntStateOf(0) }
     var failed by remember(missionID) { mutableStateOf(false) }
@@ -51,6 +53,36 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
             if (error is ApiException && error.code == "FEED_LOCKED") onLocked()
             else if (error is ApiException && error.code in setOf("NOT_GROUP_MEMBER", "MISSION_NOT_FOUND")) onHome()
             else failed = true
+            return@LaunchedEffect
+        }
+        // 달력에서 연 지난 미션은 밸런스 선택지·슬라이더 라벨을 모르니 미션 정보를 한 번 받아 와요(실패하면 라벨 없이 보여요).
+        val template = store.result(groupID, missionID)?.template ?: return@LaunchedEffect
+        if (isAggregateTemplate(template) && store.needsMissionSpec(groupID, missionID)) {
+            try {
+                val mission = missions.mission(missionID)
+                if (session.state == AppSession.State.SIGNED_IN) store.applyMissionSpec(missionID, mission.template, mission.spec)
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+            }
+        }
+    }
+    // 집계 틀의 그룹 결과. 제출이 늘면 값이 바뀌어서 피드와 같이 다시 불러요. 오류로 화면을 닫는 건 피드 쪽만 해요.
+    val template = store.result(groupID, missionID)?.template
+    var aggregate by remember(missionID) { mutableStateOf<AggregateLoad>(AggregateLoad.Loading) }
+    var aggregateRetry by remember(missionID) { mutableIntStateOf(0) }
+    LaunchedEffect(missionID, refresh, aggregateRetry, template) {
+        if (template == null || !isAggregateTemplate(template)) return@LaunchedEffect
+        if (aggregate !is AggregateLoad.Loaded) aggregate = AggregateLoad.Loading
+        aggregate = try {
+            repository.result(missionID)?.let { AggregateLoad.Loaded(it) } ?: AggregateLoad.Hidden
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            when {
+                error is ApiException && error.code in setOf("FEED_LOCKED", "RESULT_NOT_SUPPORTED",
+                    "NOT_GROUP_MEMBER", "MISSION_NOT_FOUND") -> AggregateLoad.Hidden
+                aggregate is AggregateLoad.Loaded -> aggregate
+                else -> AggregateLoad.Failed
+            }
         }
     }
     DisposableEffect(owner, missionID) {
@@ -79,10 +111,13 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
                 Text("${progressText(result.submissions.size, result.memberCount)} · ${hintText(result.type)}",
                     style = HType.caption13, color = HColors.textSecondary)
             }
+            if (isAggregateTemplate(result.template)) AggregateCard(aggregate, result.spec,
+                store.group(groupID)?.members.orEmpty(), session.account.userId,
+                onRetry = { aggregateRetry++ }, modifier = Modifier.padding(bottom = 20.dp))
             when (result.type) {
                 MissionType.PHOTO -> PhotoFeed(result, onDetail)
                 MissionType.DRAW -> DrawingGrid(result, onDetail)
-                MissionType.WRITE -> TextCards(result, onDetail)
+                MissionType.WRITE, MissionType.SLIDER -> AnswerCards(result, onDetail)
             }
             if (result.pending.isNotEmpty()) {
                 Spacer(Modifier.height(28.dp))
@@ -136,7 +171,7 @@ private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit) {
 }
 
 @Composable
-private fun TextCards(result: MissionResult, onDetail: (Long) -> Unit) {
+private fun AnswerCards(result: MissionResult, onDetail: (Long) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         result.submissions.forEach { submission ->
             Column(Modifier.fillMaxWidth().background(HColors.surface, RoundedCornerShape(20.dp))
@@ -149,7 +184,7 @@ private fun TextCards(result: MissionResult, onDetail: (Long) -> Unit) {
                     Text(koreanTimeText(submission.createdAt), style = HType.caption12, color = HColors.textSecondary)
                     if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
                 }
-                Text(submission.text ?: "", style = HType.plex(16, lineHeightMultiple = 1.65f), color = HColors.ink)
+                TemplateAnswer(submission, result.spec)
             }
         }
     }

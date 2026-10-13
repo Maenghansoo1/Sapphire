@@ -2,9 +2,12 @@ package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.model.PokeKind
+import com.sapphire.hawe.core.model.supportsTemplate
 import java.net.ServerSocket
 import java.time.Instant
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
@@ -48,11 +51,22 @@ class MissionRepositoryTest {
                 "deadlineAt":"2026-10-12T23:00:00+09:00","closesAt":"2026-10-13T09:00:00+09:00",
                 "submittedByMe":false,"members":[]}]}"""))
             val mission = repo.current(7L, 8L).mission!!
-            assertNull(mission.type)
+            // 슬라이더 매체는 알지만 모르는 틀(나중에 서버가 켤 새 틀)은 "앱 업데이트" 안내 대상
+            assertEquals(MissionType.SLIDER, mission.type)
+            assertFalse(supportsTemplate(mission.template))
             assertNull(mission.spec.seconds)
             assertEquals(MissionType.WRITE, mediaToType("TEXT"))
             assertEquals(MissionType.PHOTO, mediaToType("PHOTO"))
+            assertEquals(MissionType.SLIDER, mediaToType("SLIDER"))
             assertNull(mediaToType("VOICE"))  // 음성은 없앴다 — 예전 서버가 보내도 "열 수 없는 미션"
+            assertNull(mediaToType("DICE"))
+            // 예전 음성 미션 행은 서버가 media: null 로 보내도 읽혀야 한다(목록 전체가 실패하면 안 됨)
+            server.enqueue(MockResponse().setBody("""{"date":"2026-10-12","dailyMissionCount":1,"missions":[{
+                "missionId":12,"groupId":7,"slotNo":1,"number":2,"content":"예전 미션","category":null,
+                "template":"VOICE_LINE","media":null,"publishedAt":"2026-10-12T09:00:00+09:00",
+                "deadlineAt":"2026-10-12T23:00:00+09:00","closesAt":"2026-10-13T09:00:00+09:00",
+                "submittedByMe":false,"members":[]}]}"""))
+            assertNull(repo.current(7L, 8L).mission!!.type)
         }
     }
 
@@ -89,5 +103,50 @@ class MissionRepositoryTest {
         val port = ServerSocket(0).use { it.localPort }
         val repo = MissionRepository(ApiClient("http://127.0.0.1:$port", InMemoryTokenStore()))
         assertThrows(NetworkException::class.java) { runBlocking { repo.current(7L, 8L) } }
+    }
+
+    @Test fun mapsNewTemplateParams() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"date":"2026-10-13","dailyMissionCount":2,"missions":[{
+                "missionId":20,"groupId":7,"slotNo":1,"number":5,"content":"짜장면 vs 짬뽕","category":"일상",
+                "template":"TEXT_BALANCE","media":"TEXT","params":{"optionA":"짜장면","optionB":"짬뽕"},
+                "publishedAt":"2026-10-13T09:00:00+09:00","deadlineAt":"2026-10-13T23:00:00+09:00",
+                "closesAt":"2026-10-14T09:00:00+09:00","submittedByMe":false,"members":[]}]}"""))
+            val repo = MissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
+            val balance = repo.current(7L, 8L).mission!!
+            assertEquals(MissionType.WRITE, balance.type)
+            assertEquals("TEXT_BALANCE", balance.template)
+            assertEquals("짜장면", balance.spec.optionA)
+            assertEquals("짬뽕", balance.spec.optionB)
+            assertTrue(supportsTemplate(balance.template))
+            server.takeRequest()
+
+            // 지난 미션 한 개(달력에서 연 결과 화면용)
+            server.enqueue(MockResponse().setBody("""{"missionId":21,"groupId":7,"slotNo":2,"number":6,
+                "content":"민트초코, 어디쯤?","category":"일상","template":"SLIDER_TASTE","media":"SLIDER",
+                "params":{"topic":"민트초코","left":"별로","right":"최고"},
+                "publishedAt":"2026-10-10T09:00:00+09:00","deadlineAt":"2026-10-10T23:00:00+09:00",
+                "closesAt":"2026-10-11T09:00:00+09:00","submittedByMe":true,"members":[{"userId":8,"submitted":true}]}"""))
+            val taste = repo.mission(21L)
+            assertEquals("/api/missions/21", server.takeRequest().path)
+            assertEquals(MissionType.SLIDER, taste.type)
+            assertEquals("민트초코", taste.spec.topic)
+            assertEquals("민트초코", taste.spec.sliderQuestion)
+            assertEquals("별로", taste.spec.left)
+            assertEquals("최고", taste.spec.right)
+            assertNull(taste.spec.question)
+            assertTrue(taste.submittedByMe)
+        }
+    }
+
+    @Test fun sliderQuestionPrefersQuestion() {
+        val spec = paramsToSpec(buildJsonObject {
+            put("question", JsonPrimitive("오늘 컨디션"))
+            put("left", JsonPrimitive("방전"))
+            put("right", JsonPrimitive("풀충전"))
+        })
+        assertEquals("오늘 컨디션", spec.sliderQuestion)
+        assertEquals("방전", spec.left)
+        assertNull(spec.optionA)
     }
 }

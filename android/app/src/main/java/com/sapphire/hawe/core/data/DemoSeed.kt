@@ -39,7 +39,8 @@ internal object DemoSeed {
             }
             missions.add(StoredMission(localId(), type,
                 TopicPool.topics(type)[index % TopicPool.topics(type).size], index + 1,
-                opens, opens.atZone(HaweTime.SEOUL).plusDays(1).toInstant(), submissions))
+                opens, opens.atZone(HaweTime.SEOUL).plusDays(1).toInstant(), submissions,
+                template = TopicPool.template(type)))
             opens = opens.atZone(HaweTime.SEOUL).plusDays(1).toInstant()
             index++
         }
@@ -65,6 +66,6 @@ internal object DemoSeed {
             "엄마가 전화로 밥은 잘 먹고 다니냐고 물어봤다.", "조별과제 팀원이 네 덕분에 끝났다고 말해줬다. 사실 나도 덕분이었는데.", "교수님이 질문 좋다고 하셨다.")
         return Submission(localId(), person.displayed, false, type, at,
             text = if (type == MissionType.WRITE) texts[seed % texts.size] else null,
-            authorID = person.id)
+            authorID = person.id, template = TopicPool.template(type))
     }
 }
