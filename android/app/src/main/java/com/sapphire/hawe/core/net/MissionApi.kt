@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonObject
     val number: Int, val content: String, val category: String, val template: String, val media: String,
     val params: JsonObject = JsonObject(emptyMap()), val publishedAt: String, val deadlineAt: String,
     val closesAt: String, val submittedByMe: Boolean, val members: List<MissionMemberDto>)
-@Serializable internal data class MissionMemberDto(val userId: Long, val submitted: Boolean)
+@Serializable internal data class MissionMemberDto(val userId: Long, val submitted: Boolean,
+    val pokedByMe: List<String> = emptyList())
 @Serializable internal data class TodayMissionSummaryDto(val missionId: Long, val media: String,
     val content: String, val submittedCount: Int, val submittedByMe: Boolean)

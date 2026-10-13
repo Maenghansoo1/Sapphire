@@ -21,6 +21,8 @@ enum class HIcon(@DrawableRes val drawable: Int) {
     LOCK(R.drawable.ic_lock), MORE(R.drawable.ic_more),
     PENCIL(R.drawable.ic_pencil), PERSON(R.drawable.ic_person),
     PLUS(R.drawable.ic_plus), REDO(R.drawable.ic_redo), TEXT(R.drawable.ic_text), UNDO(R.drawable.ic_undo),
+    // 임시 이미지: Figma 디자인이 나오면 같은 이름의 drawable 만 바꾼다
+    POKE_TEMP(R.drawable.ic_poke_temp), FLING_TEMP(R.drawable.ic_fling_temp),
 }
 
 @Composable

@@ -49,7 +49,7 @@ data class StoredMission(
     val id: Long, val type: MissionType?, val topic: String, val number: Int,
     val opensAt: Instant, val closesAt: Instant,
     val submissions: List<Submission> = emptyList(),
-    val poked: Set<Long> = emptySet(),
+    val poked: Map<Long, Set<PokeKind>> = emptyMap(),
     val deadlineAt: Instant = closesAt, val template: String = "", val spec: MissionSpec = MissionSpec(),
     val serverMembers: Map<Long, Boolean> = emptyMap(), val serverSubmittedByMe: Boolean = false,
     val feedLoaded: Boolean = false,
@@ -116,7 +116,7 @@ class DataStore(
         val row = state.mission
         val previous = group.missions.lastOrNull()?.takeIf { it.id == row?.id }
         val current = row?.let { StoredMission(it.id, it.type, it.topic, it.number,
-            it.publishedAt, it.closesAt, previous?.submissions.orEmpty(), previous?.poked.orEmpty(),
+            it.publishedAt, it.closesAt, previous?.submissions.orEmpty(), mergePoked(it.pokedByMe, previous?.poked.orEmpty()),
             it.deadlineAt, it.template, it.spec, it.members + previous?.serverMembers.orEmpty().filterValues { done -> done },
             it.submittedByMe || previous?.serverSubmittedByMe == true, previous?.feedLoaded == true) }
         group.copy(missions = listOfNotNull(current), nextPublishAt = state.nextPublishAt,
@@ -195,7 +195,8 @@ class DataStore(
             mission.opensAt, mission.closesAt, stored.detail.members.map { member ->
                 MissionMember(member.id, member.displayed, member.isMe,
                     mission.serverMembers[member.id] == true ||
-                        (member.isMe && mission.serverSubmittedByMe))
+                        (member.isMe && mission.serverSubmittedByMe),
+                    mission.poked[member.id].orEmpty())
             }, mission.deadlineAt, mission.template, mission.spec)
     }
 
@@ -226,10 +227,16 @@ class DataStore(
         group.copy(missions = listOf(updated), summary = summary)
     }
 
-    fun poke(memberID: Long, groupID: Long) = update(groupID) { group ->
-        val mission = group.missions.lastOrNull() ?: return@update group
-        group.copy(missions = group.missions.dropLast(1) + mission.copy(poked = mission.poked + memberID))
+    /** 서버가 재촉을 받은 뒤에만 부른다. 그사이 미션이 바뀌었으면 반영하지 않는다. */
+    fun markPoked(groupID: Long, missionID: Long, memberID: Long, kind: PokeKind) = update(groupID) { group ->
+        val mission = group.missions.lastOrNull()?.takeIf { it.id == missionID } ?: return@update group
+        group.copy(missions = group.missions.dropLast(1) +
+            mission.copy(poked = mergePoked(mission.poked, mapOf(memberID to setOf(kind)))))
     }
+
+    // 재촉은 취소가 없어서 서버 값과 앱이 아는 값을 합친다(보낸 직후 늦게 도착한 새로고침이 표시를 지우지 않게).
+    private fun mergePoked(server: Map<Long, Set<PokeKind>>, local: Map<Long, Set<PokeKind>>) =
+        (server.keys + local.keys).associateWith { server[it].orEmpty() + local[it].orEmpty() }
 
     fun result(groupID: Long, missionID: Long): MissionResult? {
         val stored = groups.firstOrNull { it.id == groupID } ?: return null

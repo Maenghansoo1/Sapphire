@@ -167,7 +167,7 @@ class DataStoreTest {
         assertFalse(store.groups.single().missions.single().feedLoaded)
     }
 
-    @Test fun settingsAndPokeReplaceSnapshots() {
+    @Test fun settingsReplaceSnapshots() {
         val store = store()
         val id = store.createGroup("우리", Relationship.FRIEND)
         injectMission(store, id, MissionType.DRAW)
@@ -181,11 +181,31 @@ class DataStoreTest {
         store.setMyGroupProfile(changed, id)
         assertEquals(changed, store.group(id)!!.me!!.displayed)
         assertEquals(Profile.mockMine, before.me!!.displayed)
-        val memberID = store.group(id)!!.me!!.id
-        store.poke(memberID, id)
-        assertEquals(setOf(memberID), store.groups.single().missions.single().poked)
-        store.poke(memberID, id)
-        assertEquals(setOf(memberID), store.groups.single().missions.single().poked)
+    }
+
+    @Test fun pokesComeFromServerAndSurviveLateRefresh() {
+        val store = store()
+        store.applyServerGroups(listOf(LoadedGroup(GroupDetail.mock.copy(id = 11L), null)))
+        fun poked(memberID: Long) = store.todayMission(11L)!!.members.single { it.id == memberID }.poked
+        store.applyCurrentMission(11L, CurrentMissionState(
+            serverMission(10L).copy(pokedByMe = mapOf(-2L to setOf(PokeKind.POKE))), null))
+        assertEquals(setOf(PokeKind.POKE), poked(-2L))
+        assertEquals(emptySet<PokeKind>(), poked(-3L))
+        store.markPoked(11L, 10L, -2L, PokeKind.FLING)
+        store.markPoked(11L, 10L, -3L, PokeKind.FLING)
+        store.markPoked(11L, 10L, -3L, PokeKind.FLING)
+        assertEquals(setOf(PokeKind.POKE, PokeKind.FLING), poked(-2L))
+        assertEquals(setOf(PokeKind.FLING), poked(-3L))
+        // 보내기 전에 출발한 새로고침이 늦게 와도 방금 보낸 표시는 남는다
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(10L), null))
+        assertEquals(setOf(PokeKind.POKE, PokeKind.FLING), poked(-2L))
+        assertEquals(setOf(PokeKind.FLING), poked(-3L))
+        // 그사이 미션이 바뀌었으면 이전 미션의 응답은 반영하지 않는다
+        store.markPoked(11L, 9L, -4L, PokeKind.POKE)
+        assertEquals(emptySet<PokeKind>(), poked(-4L))
+        // 새 미션은 처음부터
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(12L), null))
+        assertTrue(store.todayMission(11L)!!.members.all { it.poked.isEmpty() })
     }
 
     @Test fun statsComeFromServerAndResetOnSignOut() {

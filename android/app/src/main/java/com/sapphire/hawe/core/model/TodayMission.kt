@@ -4,7 +4,7 @@ import java.time.Instant
 
 data class MissionMember(
     val id: Long, val profile: Profile, val isMe: Boolean = false,
-    val isDone: Boolean = false, val pokedToday: Boolean = false,
+    val isDone: Boolean = false, val poked: Set<PokeKind> = emptySet(),
 )
 
 data class TodayMission(

@@ -1,6 +1,7 @@
 package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.PokeKind
 import java.net.ServerSocket
 import java.time.Instant
 import kotlinx.coroutines.runBlocking
@@ -52,6 +53,23 @@ class MissionRepositoryTest {
             assertEquals(MissionType.WRITE, mediaToType("TEXT"))
             assertEquals(MissionType.PHOTO, mediaToType("PHOTO"))
             assertNull(mediaToType("VOICE"))  // 음성은 없앴다 — 예전 서버가 보내도 "열 수 없는 미션"
+        }
+    }
+
+    @Test fun mapsPokedByMeAndIgnoresUnknownKinds() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"date":"2026-10-13","dailyMissionCount":1,"missions":[{
+                "missionId":10,"groupId":7,"slotNo":1,"number":3,"content":"주제","category":"일상",
+                "template":"PHOTO_NOW","media":"PHOTO","publishedAt":"2026-10-13T09:00:00+09:00",
+                "deadlineAt":"2026-10-13T23:00:00+09:00","closesAt":"2026-10-14T09:00:00+09:00","submittedByMe":false,
+                "members":[{"userId":1,"submitted":false,"pokedByMe":["poke"]},
+                  {"userId":2,"submitted":false,"pokedByMe":["poke","fling"]},
+                  {"userId":3,"submitted":false,"pokedByMe":["hug"]},
+                  {"userId":4,"submitted":true,"pokedByMe":[]},
+                  {"userId":5,"submitted":false}]}]}"""))
+            val mission = MissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore())).current(7L, 9L).mission!!
+            assertEquals(mapOf(1L to setOf(PokeKind.POKE), 2L to setOf(PokeKind.POKE, PokeKind.FLING)), mission.pokedByMe)
+            assertEquals(mapOf(1L to false, 2L to false, 3L to false, 4L to true, 5L to false), mission.members)
         }
     }
 

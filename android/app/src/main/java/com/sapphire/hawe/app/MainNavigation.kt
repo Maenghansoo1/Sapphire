@@ -32,6 +32,7 @@ import com.sapphire.hawe.core.data.GroupsState
 import com.sapphire.hawe.core.net.CalendarRepository
 import com.sapphire.hawe.core.net.GroupRepository
 import com.sapphire.hawe.core.net.MissionRepository
+import com.sapphire.hawe.core.net.PokeRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
 import com.sapphire.hawe.core.net.SubmitOutcome
 import com.sapphire.hawe.core.net.classifySubmitFailure
@@ -79,7 +80,7 @@ sealed interface MainRoute {
 
 @Composable
 fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups: GroupRepository,
-    missions: MissionRepository, submissions: SubmissionRepository, calendar: CalendarRepository) {
+    missions: MissionRepository, pokes: PokeRepository, submissions: SubmissionRepository, calendar: CalendarRepository) {
     val nav = rememberNavController()
     val context = LocalContext.current
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
@@ -186,7 +187,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             LaunchedEffect(entry) {
                 if (store.group(id) == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
             }
-            MissionScreen(id, store, missions, session, onBack = { nav.popBackStack() },
+            MissionScreen(id, store, missions, pokes, session, onBack = { nav.popBackStack() },
                 submittedSignal = submitted,
                 submittedLate = submittedLate,
                 onSubmittedHandled = { entry.savedStateHandle["submitted"] = false; entry.savedStateHandle["submittedLate"] = false },

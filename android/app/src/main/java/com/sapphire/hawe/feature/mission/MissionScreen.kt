@@ -9,9 +9,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -25,8 +30,12 @@ import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.data.MissionState
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.net.MissionRepository
+import com.sapphire.hawe.core.net.PokeFollowUp
+import com.sapphire.hawe.core.net.PokeRepository
+import com.sapphire.hawe.core.net.classifyPokeFailure
 import com.sapphire.hawe.core.model.MissionMember
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.PokeKind
 import com.sapphire.hawe.core.model.TodayMission
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
@@ -37,9 +46,10 @@ import java.time.Instant
 import java.time.Duration
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable
-fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, session: AppSession,
+fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes: PokeRepository, session: AppSession,
     onBack: () -> Unit, onGroupInfo: () -> Unit,
     submittedSignal: Boolean = false, onSubmittedHandled: () -> Unit = {},
     submittedLate: Boolean = false, refreshSignal: Boolean = false, onRefreshHandled: () -> Unit = {},
@@ -82,6 +92,34 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, sessi
     }
     LaunchedEffect(refreshSignal) { if (refreshSignal) { refresh++; onRefreshHandled() } }
     LaunchedEffect(notice) { if (notice != null) { toast.show(notice); onNoticeHandled() } }
+    val scope = rememberCoroutineScope()
+    var sending by remember(id) { mutableStateOf(emptySet<Pair<Long, PokeKind>>()) }
+    fun sendPoke(missionID: Long, member: MissionMember, kind: PokeKind) {
+        val key = member.id to kind
+        if (key in sending) return
+        sending = sending + key
+        scope.launch {
+            try {
+                val sent = pokes.send(id, member.id, kind)
+                sending = sending - key
+                if (session.state != AppSession.State.SIGNED_IN) return@launch
+                store.markPoked(id, sent.missionId, member.id, sent.kind)
+                toast.show(pokeSentText(kind, member.profile.nickname))
+            } catch (error: Exception) {
+                sending = sending - key
+                if (error is CancellationException) throw error
+                if (session.state != AppSession.State.SIGNED_IN) return@launch
+                val failure = classifyPokeFailure(error)
+                when (failure.followUp) {
+                    PokeFollowUp.MARK_SENT -> { store.markPoked(id, missionID, member.id, kind); refresh++ }
+                    PokeFollowUp.REFRESH -> refresh++
+                    PokeFollowUp.LEAVE -> onBack()
+                    PokeFollowUp.NONE -> Unit
+                }
+                failure.message?.let { toast.show(it) }
+            }
+        }
+    }
     val bottom = ctaBottomPadding()
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
         Column(Modifier.fillMaxSize().padding(horizontal = HLayout.screenPaddingCompact)) {
@@ -109,7 +147,9 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, sessi
                         style = HType.caption13, color = HColors.textSecondary)
                 }
                 mission.members.forEach { member ->
-                    MissionMemberRow(member)
+                    MissionMemberRow(member, sending.filter { it.first == member.id }.map { it.second }.toSet()) { kind ->
+                        sendPoke(mission.id, member, kind)
+                    }
                 }
                 if (!mission.didSubmit && mission.type != null) Row(Modifier.fillMaxWidth().padding(top = 20.dp)
                     .background(HColors.surface, RoundedCornerShape(18.dp)).padding(18.dp),
@@ -179,7 +219,7 @@ private fun MissionCountdown(closesAt: Instant, deadlineAt: Instant? = null) {
 }
 
 @Composable
-private fun MissionMemberRow(member: MissionMember) {
+private fun MissionMemberRow(member: MissionMember, sending: Set<PokeKind>, onPoke: (PokeKind) -> Unit) {
     Column {
         Row(Modifier.fillMaxWidth().height(55.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -193,9 +233,38 @@ private fun MissionMemberRow(member: MissionMember) {
                     HIconView(HIcon.CHECK, size = 16.dp)
                     Text("완료", style = HType.plex(13, FontWeight.SemiBold), color = HColors.ink)
                 }
-                else -> Text("아직 안 했어요", style = HType.caption13, color = HColors.textSecondary)
+                member.isMe -> Text("아직 안 했어요", style = HType.caption13, color = HColors.textSecondary)
+                else -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PokeKind.entries.forEach { kind ->
+                        PokeButton(kind, member.profile.nickname, sent = kind in member.poked,
+                            busy = kind in sending) { onPoke(kind) }
+                    }
+                }
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(HColors.line))
     }
+}
+
+/** 콕·똥 버튼. 보낸 종류는 체크와 강조색으로 바뀌고 다시 누를 수 없다(미션마다 종류별 1번). */
+@Composable
+private fun PokeButton(kind: PokeKind, nickname: String, sent: Boolean, busy: Boolean, onClick: () -> Unit) {
+    val description = pokeButtonDescription(kind, nickname, sent)
+    val color = if (sent) HColors.accentPressed else HColors.ink
+    Row(Modifier.minimumInteractiveComponentSize().height(34.dp).clip(CircleShape)
+        .background(if (sent) HColors.accentSubtle else HColors.bg)
+        .border(1.dp, if (sent) HColors.accentSubtle else HColors.border, CircleShape)
+        .clickable(enabled = !sent && !busy, role = Role.Button, onClick = onClick)
+        .semantics { contentDescription = description }
+        .alpha(if (busy) 0.5f else 1f).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        HIconView(if (sent) HIcon.CHECK_SMALL else kind.icon, size = 16.dp, color = color)
+        Text(pokeButtonLabel(kind), Modifier.clearAndSetSemantics { },
+            style = HType.plex(13, FontWeight.SemiBold), color = color)
+    }
+}
+
+private val PokeKind.icon: HIcon get() = when (this) {
+    PokeKind.POKE -> HIcon.POKE_TEMP
+    PokeKind.FLING -> HIcon.FLING_TEMP
 }

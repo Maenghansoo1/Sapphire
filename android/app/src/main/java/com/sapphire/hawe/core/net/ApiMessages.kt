@@ -12,6 +12,8 @@ fun Throwable.toUserMessage(): String = when (this) {
         "GROUP_NOT_FOUND" -> "그룹을 찾을 수 없어요"
         "NOT_GROUP_MEMBER" -> "이 그룹의 멤버가 아니에요"
         "SUCCESSOR_REQUIRED" -> "그룹장은 다른 멤버에게 그룹장을 넘긴 뒤 나갈 수 있어요. 지금은 준비 중이에요"
+        "TARGET_NOT_GROUP_MEMBER" -> "그룹을 나간 멤버예요"
+        "CANNOT_POKE_SELF" -> "나에게는 보낼 수 없어요"
         "INVALID_TOKEN", "TOKEN_EXPIRED" -> "다시 로그인해 주세요"
         else -> "잠시 후 다시 시도해 주세요"
     }

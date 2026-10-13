@@ -1,0 +1,6 @@
+<!-- 임시 이미지: Figma 디자인 확정 시 교체 (콕 찌르기 — 위를 가리키는 손가락) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24.0" android:viewportHeight="24.0">
+    <path android:pathData="M9.5,4.5 A2,2 0 0 1 13.5,4.5 V13 H9.5 Z" android:fillColor="#000000" />
+    <path android:pathData="M9,11 H14 A3,3 0 0 1 17,14 V18 A3,3 0 0 1 14,21 H9 A3,3 0 0 1 6,18 V14 A3,3 0 0 1 9,11 Z" android:fillColor="#000000" />
+    <path android:pathData="M5.2,3.8 L7.4,5.6 M17.8,3.8 L15.6,5.6 M4.6,8 L6.9,8.2 M18.4,8 L16.1,8.2" android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.6" android:strokeLineCap="round" />
+</vector>

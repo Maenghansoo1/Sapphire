@@ -3,6 +3,7 @@ package com.sapphire.hawe.feature.mission
 import com.sapphire.hawe.core.HaweTime
 import com.sapphire.hawe.core.model.MissionMember
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.PokeKind
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
@@ -39,3 +40,18 @@ fun memberDisplayName(member: MissionMember): String =
 
 fun lockNoticeText(type: MissionType): String = "내 미션을 올리면 친구들의 ${type.subjectForm} 열려요."
 fun pokeToastText(nickname: String): String = "${nickname}님을 콕 찔렀어요"
+fun flingToastText(nickname: String): String = "${nickname}님에게 똥을 뿌렸어요"
+fun pokeSentText(kind: PokeKind, nickname: String): String = when (kind) {
+    PokeKind.POKE -> pokeToastText(nickname)
+    PokeKind.FLING -> flingToastText(nickname)
+}
+fun pokeButtonLabel(kind: PokeKind): String = when (kind) {
+    PokeKind.POKE -> "콕"
+    PokeKind.FLING -> "똥"
+}
+/** 화면 읽기(TalkBack)용. 보낸 뒤에는 보낸 사실을 읽어 준다. */
+fun pokeButtonDescription(kind: PokeKind, nickname: String, sent: Boolean): String = if (sent) pokeSentText(kind, nickname)
+    else when (kind) {
+        PokeKind.POKE -> "${nickname}님 콕 찌르기"
+        PokeKind.FLING -> "${nickname}님에게 똥 뿌리기"
+    }
