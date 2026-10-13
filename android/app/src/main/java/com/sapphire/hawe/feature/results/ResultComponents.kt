@@ -33,7 +33,7 @@ import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
 
-private fun imageModel(submission: Submission): Any? = localImageFile(submission) ?:
+internal fun imageModel(submission: Submission): Any? = localImageFile(submission) ?:
     submission.mediaURL?.takeIf { it.scheme != "file" }?.toString()
 
 @Composable

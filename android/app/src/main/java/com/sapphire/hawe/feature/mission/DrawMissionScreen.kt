@@ -40,13 +40,20 @@ import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
+import com.sapphire.hawe.feature.draw.AiGuessDialog
+import com.sapphire.hawe.feature.draw.AiShowButton
+import com.sapphire.hawe.feature.draw.DrawSubjectMatcher
+import com.sapphire.hawe.feature.draw.rememberAiGuessAvailable
+import com.sapphire.hawe.feature.draw.rememberAiGuessRunner
+import com.sapphire.hawe.feature.draw.strokeInkImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 
 @Composable
-fun DrawMissionScreen(topic: String, spec: MissionSpec, onClose: () -> Unit, onSubmit: suspend (ByteArray) -> Boolean) {
+fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClose: () -> Unit,
+    onSubmit: suspend (ByteArray) -> Boolean) {
     val model = remember { DrawingModel() }
     val timer = remember(spec.seconds) { spec.seconds?.let { SketchTimer(it) } }
     val toast = rememberHToastState()
@@ -70,6 +77,8 @@ fun DrawMissionScreen(topic: String, spec: MissionSpec, onClose: () -> Unit, onS
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current.density
     val scope = rememberCoroutineScope()
+    val aiAvailable = rememberAiGuessAvailable()
+    val aiGuess = rememberAiGuessRunner()
     val bottom = ctaBottomPadding(32.dp)
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = 20.dp)) {
@@ -149,20 +158,32 @@ fun DrawMissionScreen(topic: String, spec: MissionSpec, onClose: () -> Unit, onS
             }
         }
         Spacer(Modifier.height(16.dp))
-        HButton(if (submitted) "올리는 중..." else "올리기", enabled = hasDraft && !submitted && canvasSize.width > 0) {
-            if (submitted) return@HButton
-            submitted = true
-            val strokes = model.strokes
-            val width = canvasSize.width / density
-            val height = canvasSize.height / density
-            scope.launch {
-                try { if (!onSubmit(withContext(Dispatchers.Default) { renderDrawingPng(strokes, width, height) })) submitted = false }
-                catch (error: Exception) { submitted = false }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // AI 추측은 재미용이라 올리기·도장에 영향이 없고, 그림은 기기 밖으로 나가지 않아요(A8)
+            if (aiAvailable) AiShowButton(enabled = hasDraft && canvasSize.width > 0) {
+                val strokes = model.strokes
+                val width = canvasSize.width / density
+                val height = canvasSize.height / density
+                aiGuess.guess(mine = true, load = { withContext(Dispatchers.Default) { strokeInkImage(strokes, width, height) } },
+                    subjectOf = { DrawSubjectMatcher.match(template, topic, spec, it) })
+            }
+            HButton(if (submitted) "올리는 중..." else "올리기", Modifier.weight(1f),
+                enabled = hasDraft && !submitted && canvasSize.width > 0) {
+                if (submitted) return@HButton
+                submitted = true
+                val strokes = model.strokes
+                val width = canvasSize.width / density
+                val height = canvasSize.height / density
+                scope.launch {
+                    try { if (!onSubmit(withContext(Dispatchers.Default) { renderDrawingPng(strokes, width, height) })) submitted = false }
+                    catch (error: Exception) { submitted = false }
+                }
             }
         }
         Spacer(Modifier.height(bottom))
     }
     HToastHost(toast)
+    AiGuessDialog(aiGuess)
     }
 }
 

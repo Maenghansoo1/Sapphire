@@ -32,6 +32,14 @@ import com.sapphire.hawe.designsystem.components.HNavBar
 import com.sapphire.hawe.designsystem.components.HNavLeading
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HType
+import com.sapphire.hawe.feature.draw.AiGuessChip
+import com.sapphire.hawe.feature.draw.AiGuessDialog
+import com.sapphire.hawe.feature.draw.AiGuessRunner
+import com.sapphire.hawe.feature.draw.DrawSubjectMatcher
+import com.sapphire.hawe.feature.draw.loadInkImage
+import com.sapphire.hawe.feature.draw.rememberAiGuessAvailable
+import com.sapphire.hawe.feature.draw.rememberAiGuessRunner
+import androidx.compose.ui.platform.LocalContext
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -57,9 +65,10 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
             else failed = true
             return@LaunchedEffect
         }
-        // 달력에서 연 지난 미션은 밸런스 선택지·슬라이더 라벨을 모르니 미션 정보를 한 번 받아 와요(실패하면 라벨 없이 보여요).
+        // 달력에서 연 지난 미션은 밸런스 선택지·슬라이더 라벨·그림 대상을 모르니 미션 정보를 한 번 받아 와요
+        // (실패하면 라벨 없이, AI 추측은 판정 없이 보여요).
         val template = store.result(groupID, missionID)?.template ?: return@LaunchedEffect
-        if (isAggregateTemplate(template) && store.needsMissionSpec(groupID, missionID)) {
+        if ((isAggregateTemplate(template) || template.startsWith("DRAW_")) && store.needsMissionSpec(groupID, missionID)) {
             try {
                 val mission = missions.mission(missionID)
                 if (session.state == AppSession.State.SIGNED_IN) store.applyMissionSpec(missionID, mission.template, mission.spec)
@@ -99,6 +108,8 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     val result = store.result(groupID, missionID)
+    val aiAvailable = rememberAiGuessAvailable()
+    val aiGuess = rememberAiGuessRunner()
     if (failed) {
         Column(Modifier.fillMaxSize().background(HColors.bg), verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally) {
@@ -124,7 +135,7 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
                 onRetry = { aggregateRetry++ }, modifier = Modifier.padding(bottom = 20.dp))
             when (result.type) {
                 MissionType.PHOTO -> PhotoFeed(result, onDetail)
-                MissionType.DRAW -> DrawingGrid(result, onDetail)
+                MissionType.DRAW -> DrawingGrid(result, onDetail, aiAvailable, aiGuess)
                 MissionType.WRITE, MissionType.SLIDER -> AnswerCards(result, onDetail)
             }
             if (result.pending.isNotEmpty()) {
@@ -133,6 +144,7 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
             }
         }
     }
+    AiGuessDialog(aiGuess)
 }
 
 @Composable
@@ -155,14 +167,21 @@ private fun PhotoFeed(result: MissionResult, onDetail: (Long) -> Unit) {
 }
 
 @Composable
-private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit) {
+private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit, aiAvailable: Boolean, aiGuess: AiGuessRunner) {
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         result.submissions.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { submission ->
                     Column(Modifier.weight(1f).clickable { onDetail(submission.id) },
                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        DrawingArtwork(submission, 165.dp, 130.dp, cornerRadius = 18.dp)
+                        Box {
+                            DrawingArtwork(submission, 165.dp, 130.dp, cornerRadius = 18.dp)
+                            if (aiAvailable) AiGuessChip(Modifier.align(Alignment.BottomEnd)) {
+                                aiGuess.guess(mine = submission.isMine, load = { loadInkImage(context, imageModel(submission)) },
+                                    subjectOf = { DrawSubjectMatcher.match(result.template, result.topic, result.spec, it) })
+                            }
+                        }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             HAvatar(submission.author.avatar, size = 26.dp)

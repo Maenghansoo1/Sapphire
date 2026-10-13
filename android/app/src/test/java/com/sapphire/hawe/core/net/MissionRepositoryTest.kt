@@ -149,4 +149,16 @@ class MissionRepositoryTest {
         assertEquals("방전", spec.left)
         assertNull(spec.optionA)
     }
+
+    @Test fun drawSubjectAndTargetParams() {
+        val sketch = paramsToSpec(buildJsonObject { put("subject", JsonPrimitive("고양이")); put("seconds", JsonPrimitive(30)) })
+        assertEquals("고양이", sketch.subject)
+        assertFalse(sketch.hasTarget)
+        // 사람을 지목한 미션: 서버가 targetUserId 를 target{userId,nickname} 으로 풀어 줘요
+        val target = paramsToSpec(buildJsonObject {
+            put("target", buildJsonObject { put("userId", JsonPrimitive(3)); put("nickname", JsonPrimitive("잎사귀")) })
+        })
+        assertTrue(target.hasTarget)
+        assertNull(target.subject)
+    }
 }

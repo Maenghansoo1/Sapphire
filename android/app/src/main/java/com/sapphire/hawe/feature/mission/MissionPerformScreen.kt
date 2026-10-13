@@ -29,7 +29,7 @@ fun MissionPerformScreen(type: MissionType, topic: String, template: String, spe
                 else -> WriteMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Text(it)) }
             }
             MissionType.PHOTO -> PhotoMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "jpg")) }
-            MissionType.DRAW -> DrawMissionScreen(topic, spec, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
+            MissionType.DRAW -> DrawMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
             MissionType.SLIDER -> SliderMissionScreen(topic, template, spec, onClose, onSubmit)
         }
         HToastHost(toast)
