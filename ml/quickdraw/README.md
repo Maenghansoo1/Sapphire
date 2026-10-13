@@ -48,6 +48,33 @@ python train.py --data data --name full  :: Colab: 50개 범주 전체 (기본 3
 
 - 결과 폴더 `runs/<이름>/`: `model.keras`, `best.keras`, `metrics.json`(테스트 top-1·top-3, 범주별 정확도, 걸린 시간, 버전), `history.csv`, `labels_en.txt`, `labels_ko.txt`, `config.json`. `runs/` 는 깃에 올리지 않는다.
 - 측정값(2026-10-12, 이 PC): 그림 변환 약 730장/초(프로세스 1개) → 전체 150만 장은 프로세스 2개(Colab)로 약 20분. 작은 학습 결과 테스트 top-1 0.972 / top-3 0.992 (5개 범주, 학습 2,000장). Keras → TFLite(float32) 변환 확인, 출력 차이 2e-7.
+- Colab 에서는 `colab_train.ipynb` 를 열어 위 칸부터 차례로 실행한다(코드는 `dist/quickdraw_code.zip` 으로 올린다 — download·rasterize·dataset·train·export.py, categories.json, golden/).
+
+## 크기 줄이기·앱용 파일 (`export.py`)
+
+```bat
+python export.py --smoke                        :: 이 PC: 연습 모델 → runs/smoke/export/
+python export.py --run runs/full --data data    :: 본 모델 → export/ (Colab 노트북 7번 칸이 이것을 한다)
+```
+
+- TFLite 후보 3개 — float32, float16(가중치 절반), int8(계산 전체를 정수로, 학습 그림 500장으로 보정) — 를 테스트셋 전체로 비교하고, **Keras 원본보다 top-1 이 1%p 넘게 떨어지지 않는 것 중 가장 작은 것**을 고른다. 세 후보 모두 입력·출력이 float32 라서 앱 코드는 같다.
+- 결과 `export/`(깃에 올림): `quickdraw_cnn.tflite`, `labels_ko.txt`, `labels_en.txt`, `model_card.md`(입력·출력, 후보 비교표, 범주, 라이선스, 한계), `export.json`(같은 내용의 숫자), `golden_outputs.json`(골든 예시를 넣었을 때의 출력 — 앱이 모델을 제대로 부르는지 확인용). 후보 3개는 `runs/<이름>/tflite/`(깃 제외).
+- 연습 결과(2026-10-13, 5개 범주): float32 550KB → float16 280KB → int8 151KB, 세 개 모두 top-1 97.2% 그대로, 이 PC 지연 int8 0.09ms.
+- iOS 용 Core ML 은 Windows 에서 만들 수 없어 아직 없다(Core ML 미검증).
+
+## 앱 그림으로 평가 (`collect.py`, `evaluate.py`)
+
+Quick, Draw! 테스트셋 점수만으로는 앱에서 그린 그림을 얼마나 맞히는지 모른다. 팀원이 휴대폰으로 그린 그림을 모아 따로 잰다.
+
+```bat
+python collect.py      :: 그림 모으기 서버. 화면에 나온 http://192.168.x.x:8000 을 같은 와이파이의 휴대폰으로 연다
+python evaluate.py     :: export/quickdraw_cnn.tflite 로 팀원 그림(+ data/cache/test.npz 가 있으면 테스트셋) 평가 → EVAL.md
+```
+
+- 그림판(`collect.html`)은 앱 그림 미션과 같다: 흰 바탕, 펜 굵기 3·6·12, 색 7가지, 지우개, 되돌리기, 화면의 2배 크기 PNG. 이름(a·b·c·d …)을 고르면 그 사람이 가장 적게 그린 범주가 나오고, 5장마다 1장꼴로 범주 밖 단어(연필·의자 …)가 나온다. 한 사람 목표 75장(4명이면 300장).
+- 그림은 `ml/eval-data/quickdraw/<사람>/<범주>__<번호>.png` + 같은 이름 `.json`(획 좌표)으로 이 PC 에만 저장된다(깃 제외). 처음 켤 때 Windows 방화벽 창이 뜨면 **개인 네트워크** 허용.
+- `evaluate.py` 는 앱과 같은 전처리(`PREPROCESS_SPEC.md`)로 28×28 을 만들어 top-1·top-3, 사람별·범주별 정확도, 헷갈린 쌍, 테스트셋과의 차이(도메인 격차)를 적는다. **"잘 모르겠어요" 기준**은 맞힌 답 +1, 틀린 답 −1(범주 밖 그림에 답한 것 포함), 모르겠다 0 으로 셌을 때 점수가 가장 높은 값을 추천한다.
+- 결과: `EVAL.md`(집계만, 깃에 올림) + `ml/eval-data/quickdraw/_results/`(그림별 결과 `predictions.csv`, 틀린 그림 모음 `mistakes.png`, 깃 제외). 연습: `python evaluate.py --smoke`.
 
 ## 테스트
 
