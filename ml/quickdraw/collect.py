@@ -26,7 +26,7 @@ from download import file_stem, load_categories
 HERE = Path(__file__).resolve().parent
 DEFAULT_OUT = HERE.parent / "eval-data" / "quickdraw"
 PAGE = HERE / "collect.html"
-PERSON = re.compile(r"^[a-z0-9_-]{1,20}$")
+PERSON = re.compile(r"^[a-z0-9_가-힣-]{1,20}$")  # 폴더 이름이 된다 (한글 이름 가능)
 FILE = re.compile(r"^(?P<stem>[a-z0-9_-]+?)__(?P<number>\d+)\.png$")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 MAX_BODY = 4 * 1024 * 1024
@@ -122,7 +122,7 @@ def make_handler(store, goal, log=print):
             if url.path == "/api/state":
                 person = parse_qs(url.query).get("person", [""])[0]
                 if not PERSON.match(person):
-                    return self.send_json(400, {"error": "이름은 영문 소문자·숫자 1~20자"})
+                    return self.send_json(400, {"error": "이름은 한글·영문 소문자·숫자 1~20자"})
                 return self.send_json(200, {"categories": categories, "others": OTHER_WORDS,
                                             "counts": store.counts(person), "goal": goal})
             self.send_json(404, {"error": "없는 주소"})
@@ -138,7 +138,7 @@ def make_handler(store, goal, log=print):
                 return self.send_json(400, {"error": "JSON 이 아님"})
             person = body.get("person", "") if isinstance(body, dict) else ""
             if not PERSON.match(person if isinstance(person, str) else ""):
-                return self.send_json(400, {"error": "이름은 영문 소문자·숫자 1~20자"})
+                return self.send_json(400, {"error": "이름은 한글·영문 소문자·숫자 1~20자"})
             try:
                 if url.path == "/api/drawings":
                     if body.get("category") not in names:

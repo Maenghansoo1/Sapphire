@@ -56,7 +56,6 @@
   .people { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .people button { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 16px 8px; font: inherit; color: var(--text); }
   .people b { display: block; font-size: 20px; }
-  .people span { color: var(--text2); font-size: 13px; }
   .custom { display: flex; gap: 8px; margin-top: 14px; }
   .custom input { flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: inherit; -webkit-user-select: text; user-select: text; }
   .error { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; }
@@ -97,7 +96,7 @@
     <p>그린 사람별로 폴더가 나뉘어요. 다른 휴대폰으로 이어 그려도 같은 이름을 고르면 이어서 세요.</p>
     <div class="people" id="people"></div>
     <div class="custom">
-      <input id="custom" placeholder="다른 이름 (영문 소문자·숫자)" autocomplete="off" autocapitalize="off">
+      <input id="custom" placeholder="다른 이름 (한글·영문·숫자)" autocomplete="off" autocapitalize="off">
       <button class="btn" id="custom-ok" type="button">확인</button>
     </div>
     <div class="error" id="error"></div>
@@ -110,7 +109,7 @@ const PALETTE = ["#111111", "#8E8E93", "#E5484D", "#F5A524", "#F2D74E", "#30A46C
 const WIDTHS = [{ width: 3, dot: 4, label: "가는 굵기" }, { width: 6, dot: 8, label: "보통 굵기" }, { width: 12, dot: 14, label: "굵은 굵기" }];
 const ERASER_SCALE = 3;
 const PNG_SCALE = 2;
-const PEOPLE = [["a", "우준"], ["b", "경환"], ["c", "찬희"], ["d", "한수"]];
+const PEOPLE = ["우준", "경환", "찬희", "한수"];  // 고른 이름이 그대로 저장 폴더 이름이 된다
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("canvas");
@@ -121,8 +120,8 @@ const state = {
   startedAt: null, last: null, saving: false, size: { w: 1, h: 1 },
 };
 
-function readPerson() { try { return localStorage.getItem("quickdraw-person"); } catch { return null; } }
-function writePerson(value) { try { localStorage.setItem("quickdraw-person", value); } catch {} }
+function readPerson() { try { return localStorage.getItem("quickdraw-name"); } catch { return null; } }
+function writePerson(value) { try { localStorage.setItem("quickdraw-name", value); } catch {} }
 
 // ---- 그리기 (앱 drawStrokes 와 같은 방식: 둥근 끝·이음, 점 사이를 중간점까지 2차 곡선) ----
 function drawStrokes(target, strokes, scale) {
@@ -365,20 +364,19 @@ $("toast-action").addEventListener("click", async () => {
 });
 
 // ---- 이름 ----
-PEOPLE.forEach(([code, name]) => {
+PEOPLE.forEach((name) => {
   const button = document.createElement("button");
   button.type = "button";
-  const b = document.createElement("b"); b.textContent = code;
-  const span = document.createElement("span"); span.textContent = name;
-  button.append(b, span);
-  button.addEventListener("click", () => choosePerson(code));
+  const b = document.createElement("b"); b.textContent = name;
+  button.append(b);
+  button.addEventListener("click", () => choosePerson(name));
   $("people").append(button);
 });
 $("custom-ok").addEventListener("click", () => choosePerson($("custom").value.trim().toLowerCase()));
 $("who").addEventListener("click", () => $("overlay").classList.add("show"));
 
 async function choosePerson(code) {
-  if (!/^[a-z0-9_-]{1,20}$/.test(code)) { $("error").textContent = "영문 소문자·숫자 1~20자로 적어 주세요."; return; }
+  if (!/^[a-z0-9_가-힣-]{1,20}$/.test(code)) { $("error").textContent = "한글·영문 소문자·숫자 1~20자로 적어 주세요."; return; }
   $("error").textContent = "";
   try {
     const response = await fetch(`/api/state?person=${encodeURIComponent(code)}`);

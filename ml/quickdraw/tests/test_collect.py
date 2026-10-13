@@ -3,6 +3,7 @@ import io
 import json
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import pytest
@@ -90,6 +91,9 @@ def test_server_saves_and_deletes_drawings(server):
                 {**drawing, "category": collect.OTHER, "word": "고양이"}):
         assert call(base + "/api/drawings", bad)[0] == 400
     assert call(base + "/api/state?person=")[0] == 400
+    status, body = call(base + "/api/drawings", {**drawing, "person": "우준"})  # 한글 이름 = 폴더 이름
+    assert status == 200 and (root / "우준" / "cat__001.png").exists()
+    assert call(base + "/api/state?person=" + urllib.parse.quote("우준"))[0] == 200
     assert call(base + "/nothing")[0] == 404
 
     status, body = call(base + "/api/drawings/delete", {"person": "a", "file": "cat__001.png"})
