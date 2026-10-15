@@ -22,4 +22,16 @@ public class AsyncConfig {
         executor.setRejectedExecutionHandler((task, pool) -> log.warn("Vision queue full; review discarded"));
         return executor;
     }
+
+    @Bean("insightExecutor")
+    public ThreadPoolTaskExecutor insightExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("insight-");
+        // A discarded job remains GENERATING and can be restarted after five minutes.
+        executor.setRejectedExecutionHandler((task, pool) -> log.warn("Insight queue full; generation discarded"));
+        return executor;
+    }
 }

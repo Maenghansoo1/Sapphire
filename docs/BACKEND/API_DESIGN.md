@@ -117,7 +117,7 @@
 | GET | /invites/{code} | 참여 전 미리보기 |
 | POST | /groups/join | 코드로 가입 |
 | POST | /groups/{groupId}/invite-code | 초대 코드 재발급(그룹장만) |
-| DELETE | /groups/{groupId}/members/me | 나가기 |
+| DELETE | /groups/{groupId}/members/me | 나가기. 마지막 멤버가 나가 그룹이 삭제되면 관련 업로드 파일도 커밋 후 삭제 |
 
 ### GET /groups
 
@@ -152,7 +152,7 @@
 
 `PUT /groups/{groupId}/members/me/profile`은 JSON `{ "nickname": "과대표 하늘", "characterId": 3 }`을 받아 200 프로필 객체 `{ userId, nickname, characterKey, profileImageUrl }`를 반환한다. `PUT /groups/{groupId}/members/me/profile-image`는 multipart `file`(이미지 1개)과 `nickname`을 받아 같은 객체를 반환한다. 닉네임은 trim 후 2~10자, 이미지는 10MB 이하의 지원 형식이어야 한다. `DELETE /groups/{groupId}/members/me/profile`은 기본 프로필로 되돌리고 204를 반환하며 반복 호출할 수 있다. 없는 그룹은 404 `GROUP_NOT_FOUND`, 비멤버는 403 `NOT_GROUP_MEMBER`다.
 
-그룹 프로필은 닉네임과 캐릭터 또는 사진을 한 벌로 선택한다. 설정된 그룹에서는 멤버 목록, 그룹 목록·상세, 초대 미리보기, 피드·제출 상세, 댓글의 사람 표시가 그룹 프로필을 쓴다. 설정되지 않은 그룹은 기본 프로필을 쓴다. 기본 프로필을 변경해도 설정된 그룹 프로필은 유지된다. 작성자가 그룹을 나가면 남아 있는 피드·댓글에는 기본 프로필이 표시된다. 멤버십 삭제나 그룹 삭제로 남는 사진 파일의 정리는 B4 범위다.
+그룹 프로필은 닉네임과 캐릭터 또는 사진을 한 벌로 선택한다. 설정된 그룹에서는 멤버 목록, 그룹 목록·상세, 초대 미리보기, 피드·제출 상세, 댓글의 사람 표시가 그룹 프로필을 쓴다. 설정되지 않은 그룹은 기본 프로필을 쓴다. 기본 프로필을 변경해도 설정된 그룹 프로필은 유지된다. 작성자가 그룹을 나가면 남아 있는 피드·댓글에는 기본 프로필이 표시된다. 나간 멤버의 그룹 프로필 사진은 커밋 후 삭제하며 작품·댓글 파일은 그룹에 남는다. 마지막 멤버가 나가 그룹이 삭제되면 제출물·댓글 이미지·그룹 프로필 사진도 커밋 후 삭제한다(B4).
 
 ### GET /invites/{code}
 
@@ -366,7 +366,11 @@ Response 204.
 
 ---
 
-## 9. 참고
+## 9. Group insights — `/api/groups/{groupId}/insights`
+
+`GET /groups/{groupId}/insights?month=YYYY-MM` is member only. Month defaults to this month in Asia/Seoul and may be up to 12 months old. It returns 202 `{groupId, month, status:"GENERATING", retryAfterSeconds:3}` during generation and 200 READY with `stale`, `empty`, `generatedAt`, `activityIndex`, `fastest`, `topWords`, `mostReacted`, and `highlights`. A current month expired cache is returned as `stale:true` while refreshing. Invalid month is 400, nonmember 403, unknown group 404. See [GROUP_INSIGHTS.md](GROUP_INSIGHTS.md) for the metric and privacy contract.
+
+## 10. 참고
 
 - DB 스키마: `docs/BACKEND/BACKEND_DB.md`
 - 서비스 컴포넌트 책임: `docs/BACKEND/BACKEND_DB.md`

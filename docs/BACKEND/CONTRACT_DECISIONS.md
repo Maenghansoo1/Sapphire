@@ -255,7 +255,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 - 그룹 내 프로필은 "닉네임 + (캐릭터 또는 사진)" 한 벌로 저장한다 (앱 `GroupMember.groupProfile`과 같은 단위). 닉네임 규칙은 가입과 같다(trim 후 2~10자).
 - 파일 규칙은 기본 프로필 사진(`API_DESIGN.md` §8 설계)과 같다: 이미지 ≤ 10MB, `jpg`/`png`/`webp`, 415 `UNSUPPORTED_FILE_TYPE`, 413 `FILE_TOO_LARGE`.
 - 기본 프로필을 바꿔도 그룹 내 프로필이 있는 그룹에는 반영되지 않는다 (앱 동작과 같음).
-- 그룹을 나간 작성자의 피드·댓글은 기본 프로필로 보인다. 멤버십·그룹 삭제 시 남는 사진 파일 정리는 B4 범위다.
+- 그룹을 나간 작성자의 피드·댓글은 기본 프로필로 보인다. 반영됨(B4): 멤버십이 삭제되면 그 멤버의 그룹 프로필 사진을 커밋 후 삭제한다. 제출물·댓글 파일은 그룹에 남긴다.
 
 ### 2-3. 수정 대상
 
@@ -269,7 +269,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 ### 2-4. 미결
 
 - 연인 시작일 변경 UI: 앱에는 생성 때만 고르는 화면이 있다. 서버는 `PATCH settings`로 바꿀 수 있게 열어 두고, 앱 화면 추가는 나중에 정한다.
-- **그룹 삭제 방식 (1차 확정)**: 마지막 멤버가 나가면 그룹과 DB 의존 행을 실삭제한다. 제출물 파일 정리는 파일 저장소를 구현하는 6단계에서 함께 다룬다.
+- **그룹 삭제 방식 (B4 반영)**: 마지막 멤버가 나가면 그룹과 DB 의존 행을 실삭제한다. 제출물 파일·댓글 이미지·그룹 프로필 사진은 트랜잭션 커밋 후 삭제한다. 파일 삭제 실패는 로그만 남긴다.
 - **초대 링크 도메인**: 앱이 쓰는 `https://hawe.app/invite/{code}`는 임시 도메인. Universal Links / App Links 검증 파일 호스팅이 필요하다.
 - **코드 대입 시도 제한 (확정)**: 사용자별로 미리보기·가입의 `INVITE_NOT_FOUND`를 공유해 센다. 10분 안에 실패 10회면 다음 요청부터 429 `TOO_MANY_REQUESTS`다. 유효한 코드도 차단되며 429는 실패 횟수를 늘리지 않는다. `ALREADY_MEMBER`·`GROUP_FULL`은 세지 않고 성공도 카운트를 초기화하지 않는다. 현재 인메모리·단일 인스턴스 가정이며, 다중 인스턴스 배포 시 재검토한다.
 
@@ -512,7 +512,7 @@ POST /api/missions/{missionId}/submissions   (multipart)
 
 ### 6-4. 미결
 
-- 1차는 로컬 디스크 저장과 `/files/**` 공개 URL로 결정. S3·CDN·서명 URL은 2차에서 검토한다. 그룹 삭제 후 파일 정리도 후속 단계다.
+- 1차는 로컬 디스크 저장과 `/files/**` 공개 URL로 결정. S3·CDN·서명 URL은 2차에서 검토한다. 그룹 삭제 시 제출물·댓글 이미지·그룹 프로필 사진을 커밋 후 정리한다(B4).
 - 사진·그림 파일 크기를 앱에서 줄여 보낼지(현재 원본 품질 그대로).
 
 ---
@@ -735,3 +735,8 @@ PATCH /api/notifications/read-all      204
 - ~~하루 여러 미션일 때 날짜 단위 도장 규칙(`PROJECT_OVERVIEW` §11-1)~~ — B7에서 **미션별 도장**으로 정함(날짜 단위로 합치지 않음).
 - 도장 3종 디자인 (지각 도장 포함). 지금은 임시 이미지: Android `res/drawable/stamp_good|late|penalty.xml`, iOS `Assets.xcassets/Stamps/stamp-good|late|penalty`. 디자인이 나오면 같은 이름으로 교체한다.
 - 멤버 목록의 `submissionCountThisMonth`·`stampedToday`는 앱이 쓰지 않는다. 유지·삭제를 반영 시 정한다. (뜻은 B7에서 정함: 제출한 날 수 / 현재 미션 중 하나라도 제출 — §2)
+
+## 10. Group insights (B11) — implemented
+
+- Decision #19: Monthly word counts aggregate text submissions across the group. Every current member may read the aggregate even if they did not submit. Source bodies, comments, captions, and media are excluded from the cache and response. Withdrawal deletes caches for groups touched by that user's submissions, reactions, or comments.
+- Decision #20: A closed mission contributes to monthly metrics by `mission_date`. The activity score uses 60% participation, 20% on time, and 20% interaction. Generation is asynchronous and stored in `group_insights`; results expire after 30 minutes until the third day of the following month, and become permanent only after that time when no mission from the month remains open. The previous month is generated at 00:10 Asia/Seoul on the first day of a month and may initially omit its still-open last mission. API fields and 200/202 states are specified in [GROUP_INSIGHTS.md](GROUP_INSIGHTS.md).

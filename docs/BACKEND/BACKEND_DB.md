@@ -356,6 +356,10 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ---
 
+### Group insights cache
+
+`group_insights` has one row per `(group_id, month)` with `GENERATING`, `READY`, or `FAILED` status, structured JSON payload, generation/expiration timestamps, attempts, and an updated timestamp for five minute abandoned job recovery. It references `groups` and is deleted before group deletion. Results expire through the second day of the following month; after that, they become permanent only when all missions from the month have closed. See [GROUP_INSIGHTS.md](GROUP_INSIGHTS.md).
+
 ## 4. 비동기·스케줄 처리
 - **EventBridge Scheduler** → 매일 그룹별·슬롯별 발행 시각(지정이 없으면 설정 파일의 기본 발행 시각)에 `MissionService.publishDailyMission(groupId, date, slotNo)` 호출
   - 같은 그룹·날짜·슬롯의 미션이 이미 있으면 중단 → 서버가 틀 선택 → LLM으로 `{content, category, params}` 생성 → 서버 검증(`MissionTemplateValidator`) → 대상 지정 틀이면 멤버 1명 무작위 선택 → 저장(`published_at`, `deadline_at` 고정) → `mission_open` 알림

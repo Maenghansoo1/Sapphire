@@ -6,6 +6,7 @@ import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.global.storage.FileStorage;
+import com.sapphire.hawe.global.storage.FileCleanup;
 import com.sapphire.hawe.global.ratelimit.AttemptLimiter;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
@@ -65,12 +66,13 @@ public class GroupService {
     private final String inviteBaseUrl;
     private final FileStorage storage;
     private final AttemptLimiter inviteLimiter;
+    private final FileCleanup fileCleanup;
 
     public GroupService(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper,
             GroupMissionSlotMapper slotMapper, MissionProperties missionProperties,
             @Value("${hawe.invite.base-url:https://hawe.app/invite}") String inviteBaseUrl,
             MissionService missionService, ApplicationEventPublisher events, FileStorage storage,
-            AttemptLimiter inviteLimiter) {
+            AttemptLimiter inviteLimiter, FileCleanup fileCleanup) {
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.slotMapper = slotMapper;
@@ -79,6 +81,7 @@ public class GroupService {
         this.events = events;
         this.storage = storage;
         this.inviteLimiter = inviteLimiter;
+        this.fileCleanup = fileCleanup;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
@@ -267,6 +270,7 @@ public class GroupService {
         }
         if (!GroupMember.ROLE_OWNER.equals(membership.getRole())) {
             groupMemberMapper.deleteByGroupIdAndUserId(groupId, userId);
+            fileCleanup.deleteAfterCommit(java.util.Collections.singletonList(membership.getProfileImageUrlOverride()));
             return;
         }
         if (groupMemberMapper.countByGroupId(groupId) == 1) {
@@ -282,6 +286,7 @@ public class GroupService {
         groupMapper.update(group);
         groupMemberMapper.updateRole(groupId, successorUserId, GroupMember.ROLE_OWNER);
         groupMemberMapper.deleteByGroupIdAndUserId(groupId, userId);
+        fileCleanup.deleteAfterCommit(java.util.Collections.singletonList(membership.getProfileImageUrlOverride()));
     }
 
     private Group findInviteGroup(Long userId, String rawCode, boolean lock) {
@@ -318,6 +323,11 @@ public class GroupService {
     }
 
     private void deleteGroupCascade(Long groupId) {
+        List<String> keys = new ArrayList<>();
+        keys.addAll(groupMapper.findSubmissionMediaKeysByGroupId(groupId));
+        keys.addAll(groupMapper.findCommentImageKeysByGroupId(groupId));
+        keys.addAll(groupMapper.findGroupProfileImageKeysByGroupId(groupId));
+        fileCleanup.deleteAfterCommit(keys);
         groupMapper.deleteCommentMentionsByGroupId(groupId);
         groupMapper.deleteCommentsByGroupId(groupId);
         groupMapper.deleteReactionsByGroupId(groupId);
@@ -327,6 +337,7 @@ public class GroupService {
         groupMapper.deletePokesByGroupId(groupId);
         groupMapper.deleteMissionsByGroupId(groupId);
         slotMapper.deleteByGroupId(groupId);
+        groupMapper.deleteInsightsByGroupId(groupId);
         groupMemberMapper.deleteByGroupId(groupId);
         groupMapper.deleteById(groupId);
     }

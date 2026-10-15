@@ -6,6 +6,7 @@ import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.time.SeoulTime;
 import com.sapphire.hawe.global.storage.FileStorage;
+import com.sapphire.hawe.global.storage.FileCleanup;
 import com.sapphire.hawe.global.ratelimit.AttemptLimiter;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberPreviewRow;
@@ -46,6 +47,7 @@ class GroupContractServiceTests {
     @Mock MissionService missionService;
     @Mock ApplicationEventPublisher events;
     @Mock FileStorage storage;
+    @Mock FileCleanup fileCleanup;
     @Mock AttemptLimiter inviteLimiter;
     GroupService service;
 
@@ -53,7 +55,7 @@ class GroupContractServiceTests {
     void setUp() {
         service = new GroupService(groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, MissionTemplateSelector.MVP_POOL), "https://hawe.app/invite",
-                missionService, events, storage, inviteLimiter);
+                missionService, events, storage, inviteLimiter, fileCleanup);
     }
 
     @Test
@@ -245,12 +247,14 @@ class GroupContractServiceTests {
     void leaveRequiresValidSuccessorAndTransfersOwnership() {
         Group group = group("FRIEND");
         GroupMember owner = member(GroupMember.ROLE_OWNER);
+        owner.setProfileImageUrlOverride("group-profiles/owner.jpg");
         when(groups.findByIdForUpdate(11L)).thenReturn(group);
         when(members.findByGroupIdAndUserId(11L, 7L)).thenReturn(owner);
         when(members.countByGroupId(11L)).thenReturn(2L);
         assertCode(GroupErrorCode.SUCCESSOR_REQUIRED, () -> service.leaveGroup(7L, 11L, null));
         assertCode(GroupErrorCode.INVALID_SUCCESSOR, () -> service.leaveGroup(7L, 11L, 7L));
         assertCode(GroupErrorCode.INVALID_SUCCESSOR, () -> service.leaveGroup(7L, 11L, 9L));
+        verifyNoInteractions(fileCleanup);
         verify(groups, never()).update(any(Group.class));
         when(members.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
         service.leaveGroup(7L, 11L, 8L);
@@ -259,16 +263,30 @@ class GroupContractServiceTests {
         order.verify(groups).update(group);
         order.verify(members).updateRole(11L, 8L, GroupMember.ROLE_OWNER);
         order.verify(members).deleteByGroupIdAndUserId(11L, 7L);
+        verify(fileCleanup).deleteAfterCommit(List.of("group-profiles/owner.jpg"));
     }
 
     @Test
     void ordinaryMemberLeavesWithoutSuccessorAndNonmemberCannotLeave() {
         when(groups.findByIdForUpdate(11L)).thenReturn(group("FRIEND"));
         assertCode(GroupErrorCode.NOT_GROUP_MEMBER, () -> service.leaveGroup(8L, 11L, null));
-        when(members.findByGroupIdAndUserId(11L, 8L)).thenReturn(member(GroupMember.ROLE_MEMBER));
+        GroupMember member = member(GroupMember.ROLE_MEMBER);
+        member.setProfileImageUrlOverride("group-profiles/member.jpg");
+        when(members.findByGroupIdAndUserId(11L, 8L)).thenReturn(member);
         service.leaveGroup(8L, 11L, null);
         verify(members).deleteByGroupIdAndUserId(11L, 8L);
+        verify(fileCleanup).deleteAfterCommit(List.of("group-profiles/member.jpg"));
+        verify(groups, never()).findSubmissionMediaKeysByGroupId(any());
         verify(groups, never()).update(any(Group.class));
+    }
+
+    @Test
+    void memberWithoutGroupPhotoDoesNotScheduleAFile() {
+        when(groups.findByIdForUpdate(11L)).thenReturn(group("FRIEND"));
+        when(members.findByGroupIdAndUserId(11L, 8L)).thenReturn(member(GroupMember.ROLE_MEMBER));
+        service.leaveGroup(8L, 11L, null);
+        verify(fileCleanup).deleteAfterCommit(argThat(keys -> keys.stream().noneMatch(key -> key != null && !key.isBlank())));
+        verify(groups, never()).findSubmissionMediaKeysByGroupId(any());
     }
 
     @Test
@@ -276,8 +294,15 @@ class GroupContractServiceTests {
         when(groups.findByIdForUpdate(11L)).thenReturn(group("FRIEND"));
         when(members.findByGroupIdAndUserId(11L, 7L)).thenReturn(member(GroupMember.ROLE_OWNER));
         when(members.countByGroupId(11L)).thenReturn(1L);
+        when(groups.findSubmissionMediaKeysByGroupId(11L)).thenReturn(List.of("submissions/photo.jpg"));
+        when(groups.findCommentImageKeysByGroupId(11L)).thenReturn(List.of("comments/photo.jpg"));
+        when(groups.findGroupProfileImageKeysByGroupId(11L)).thenReturn(List.of("group-profiles/photo.jpg"));
         service.leaveGroup(7L, 11L, null);
-        InOrder order = inOrder(groups, members, slots);
+        InOrder order = inOrder(groups, members, slots, fileCleanup);
+        order.verify(groups).findSubmissionMediaKeysByGroupId(11L);
+        order.verify(groups).findCommentImageKeysByGroupId(11L);
+        order.verify(groups).findGroupProfileImageKeysByGroupId(11L);
+        order.verify(fileCleanup).deleteAfterCommit(List.of("submissions/photo.jpg", "comments/photo.jpg", "group-profiles/photo.jpg"));
         order.verify(groups).deleteCommentMentionsByGroupId(11L);
         order.verify(groups).deleteCommentsByGroupId(11L);
         order.verify(groups).deleteReactionsByGroupId(11L);
@@ -287,6 +312,7 @@ class GroupContractServiceTests {
         order.verify(groups).deletePokesByGroupId(11L);
         order.verify(groups).deleteMissionsByGroupId(11L);
         order.verify(slots).deleteByGroupId(11L);
+        order.verify(groups).deleteInsightsByGroupId(11L);
         order.verify(members).deleteByGroupId(11L);
         order.verify(groups).deleteById(11L);
     }
