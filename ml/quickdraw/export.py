@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 VARIANTS = ("float32", "float16", "int8")
 MAX_DROP = 0.01
 CONFIDENCE_LEVELS = (0.2, 0.35, 0.5)
-UNSURE_THRESHOLD = 0.35  # 임시. 6단계(앱으로 그린 그림)에서 다시 정한다
+UNSURE_THRESHOLD = 0.55  # 6단계: 팀원이 앱 그림판으로 그린 249장(../EVAL.md)에서 점수가 가장 높은 값
 TARGETS = {"top1": 0.75, "top3": 0.90, "size_bytes": 1024 * 1024, "latency_ms": 30.0}
 
 
@@ -252,7 +252,8 @@ def model_card(report, labels_en, labels_ko):
     lines += [f"| {row['threshold']} | {percent(row['answered'])} | {percent(row['accuracy'])} |" for row in report["confidence"]]
     lines += [
         "",
-        f"**지금 기준은 {UNSURE_THRESHOLD} (임시).** 6단계에서 팀원이 앱으로 그린 그림으로 다시 정한다.",
+        f"**기준은 {UNSURE_THRESHOLD}.** 테스트셋이 아니라 팀원이 앱 그림판으로 그린 그림(범주 밖 그림 포함)으로 정했다 "
+        "— 근거와 다른 기준값 비교는 `../EVAL.md`. 앱(Android `AI_GUESS_THRESHOLD`)도 같은 값을 쓴다.",
         "",
         "## 범주",
         "",
