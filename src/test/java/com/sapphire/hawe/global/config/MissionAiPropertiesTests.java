@@ -24,7 +24,8 @@ class MissionAiPropertiesTests {
         // pom 의 surefire 설정이 .env 와 상관없이 꺼 둔다 — 테스트가 실제 AI 를 부르지 않게
         assertFalse(properties.enabled());
         assertFalse(properties.usable());
-        assertEquals("claude-haiku-5-5", properties.model());
+        // 모델은 .env 의 LLM_MODEL(예: bedrock-haiku)을 따르므로 이름은 고정하지 않는다
+        assertFalse(properties.model().isBlank());
         assertEquals(List.of("일상", "감성", "추억", "유머"), properties.categories());
         assertEquals(List.of("classpath:prompts/mission-create-prompt.md", "classpath:prompts/mission-template-prompt.md"),
                 properties.promptPaths());
