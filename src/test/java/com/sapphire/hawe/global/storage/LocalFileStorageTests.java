@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LocalFileStorageTests {
     @TempDir Path dir;
     @Test void storesAndDeletesFiles() throws Exception {
-        LocalFileStorage storage = new LocalFileStorage(new StorageProperties(dir.toString(), "/files"));
+        LocalFileStorage storage = new LocalFileStorage(new StorageProperties("local", dir.toString(), "/files", null));
         byte[] data = {1, 2, 3};
         String key = storage.store("submissions", data, "jpg");
         assertTrue(key.matches("submissions/[0-9a-f-]+\\.jpg"));
