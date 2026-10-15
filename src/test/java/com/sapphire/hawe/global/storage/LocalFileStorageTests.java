@@ -15,10 +15,13 @@ class LocalFileStorageTests {
         String key = storage.store("submissions", data, "jpg");
         assertTrue(key.matches("submissions/[0-9a-f-]+\\.jpg"));
         assertArrayEquals(data, Files.readAllBytes(dir.resolve(key)));
+        assertArrayEquals(data, storage.load(key));
         assertEquals("/files/" + key, storage.publicUrl(key));
         storage.delete(key);
         storage.delete(key);
         assertFalse(Files.exists(dir.resolve(key)));
         assertThrows(IllegalArgumentException.class, () -> storage.delete("../secret"));
+        assertThrows(IllegalArgumentException.class, () -> storage.load("../secret"));
+        assertThrows(java.io.UncheckedIOException.class, () -> storage.load(key));
     }
 }

@@ -83,6 +83,10 @@ public interface GroupMapper {
             + "JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId}")
     void deleteSubmissionGuessesByGroupId(@Param("groupId") Long groupId);
 
+    @Delete("DELETE ar FROM submission_ai_reviews ar JOIN submissions s ON s.id = ar.submission_id "
+            + "JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId}")
+    void deleteAiReviewsByGroupId(@Param("groupId") Long groupId);
+
     @Delete("DELETE s FROM submissions s JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId}")
     void deleteSubmissionsByGroupId(@Param("groupId") Long groupId);
 

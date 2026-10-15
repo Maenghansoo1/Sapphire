@@ -322,6 +322,7 @@ public class GroupService {
         groupMapper.deleteCommentsByGroupId(groupId);
         groupMapper.deleteReactionsByGroupId(groupId);
         groupMapper.deleteSubmissionGuessesByGroupId(groupId);
+        groupMapper.deleteAiReviewsByGroupId(groupId);
         groupMapper.deleteSubmissionsByGroupId(groupId);
         groupMapper.deletePokesByGroupId(groupId);
         groupMapper.deleteMissionsByGroupId(groupId);

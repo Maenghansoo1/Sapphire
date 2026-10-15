@@ -53,6 +53,7 @@ class WithdrawControllerTests {
             jdbc.update("INSERT INTO submissions (mission_id,user_id) VALUES (?,?)", mission, owner);
             Long mine = id("SELECT id FROM submissions WHERE user_id=?", leaving);
             Long theirs = id("SELECT id FROM submissions WHERE user_id=?", owner);
+            jdbc.update("INSERT INTO submission_ai_reviews (submission_id,status) VALUES (?,'DONE')", mine);
             jdbc.update("INSERT INTO comments (submission_id,user_id,content,image_url) VALUES (?,?,'other',?)", mine, owner, otherCommentKey);
             jdbc.update("INSERT INTO comments (submission_id,user_id,content,image_url) VALUES (?,?,'mine',?)", theirs, leaving, ownCommentKey);
             Long myComment = id("SELECT id FROM comments WHERE user_id=?", leaving);
@@ -74,6 +75,7 @@ class WithdrawControllerTests {
                     .andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
             assertEquals(0, count("SELECT COUNT(*) FROM users WHERE id=?", leaving));
             assertEquals(0, count("SELECT COUNT(*) FROM submissions WHERE id=?", mine));
+            assertEquals(0, count("SELECT COUNT(*) FROM submission_ai_reviews WHERE submission_id=?", mine));
             assertEquals(1, count("SELECT COUNT(*) FROM submissions WHERE id=?", theirs));
             assertEquals(1, count("SELECT COUNT(*) FROM comments WHERE id=?", keptComment));
             assertEquals(0, count("SELECT COUNT(*) FROM comment_mentions WHERE mentioned_user_id=?", leaving));

@@ -54,6 +54,10 @@ public interface WithdrawMapper {
     @Delete("DELETE FROM submission_guesses WHERE user_id = #{userId}")
     void deleteMyGuesses(@Param("userId") Long userId);
 
+    @Delete("DELETE ar FROM submission_ai_reviews ar JOIN submissions s ON s.id = ar.submission_id "
+            + "WHERE s.user_id = #{userId}")
+    void deleteAiReviewsOnMySubmissions(@Param("userId") Long userId);
+
     @Delete("DELETE FROM submissions WHERE user_id = #{userId}")
     void deleteMySubmissions(@Param("userId") Long userId);
 

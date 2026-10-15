@@ -282,6 +282,7 @@ class GroupContractServiceTests {
         order.verify(groups).deleteCommentsByGroupId(11L);
         order.verify(groups).deleteReactionsByGroupId(11L);
         order.verify(groups).deleteSubmissionGuessesByGroupId(11L);
+        order.verify(groups).deleteAiReviewsByGroupId(11L);
         order.verify(groups).deleteSubmissionsByGroupId(11L);
         order.verify(groups).deletePokesByGroupId(11L);
         order.verify(groups).deleteMissionsByGroupId(11L);

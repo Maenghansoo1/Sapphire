@@ -12,12 +12,13 @@ class SubmissionResponseTests {
     @Test void lateKeyAndOptionalFields() {
         var response = new SubmissionResponse(1L, 2L,
                 new MemberProfileResponse(3L, "Writer", null, null), "TEXT_FILL_BLANK",
-                null, null, null, "hello", null, null, null, List.of(), 0,
+                null, null, null, "hello", null, null, null, List.of(), 0, null,
                 OffsetDateTime.parse("2026-10-12T12:00:00+09:00"), true);
         String body = new ObjectMapper().writeValueAsString(response);
         assertTrue(body.contains("\"isLate\":true"));
         assertFalse(body.contains("\"late\":"));
         assertFalse(body.contains("\"mediaUrl\":"));
+        assertFalse(body.contains("\"aiReview\":"));
         assertTrue(body.contains("\"reactions\":[]"));
         assertFalse(body.contains("\"duration\""));
         assertFalse(body.contains("\"waveform\""));
@@ -25,9 +26,21 @@ class SubmissionResponseTests {
         assertFalse(body.contains("\"number\"") || body.contains("\"choice\"") || body.contains("\"guess\""));
     }
 
+    @Test void reviewHasNoScoreField() {
+        var response = new SubmissionResponse(1L, 2L, new MemberProfileResponse(3L, "Writer", null, null),
+                "PHOTO_NOW", null, null, null, null, null, null, null, List.of(), 0,
+                new AiReviewResponse("PERFECT_FIT", "주제를 잘 담았어요"),
+                OffsetDateTime.parse("2026-10-13T12:00:00+09:00"), false);
+        String body = new ObjectMapper().writeValueAsString(response);
+        assertTrue(body.contains("\"aiReview\""));
+        assertFalse(body.contains("fitScore"));
+        assertFalse(body.contains("cosine"));
+        assertFalse(body.contains("\"fit\""));
+    }
+
     @Test void scalarAnswersAppearWhenPresent() {
         var response = new SubmissionResponse(1L, 2L, new MemberProfileResponse(3L, "Writer", null, null),
-                "SLIDER_CONSENSUS", null, null, null, null, 70, null, 55, List.of(), 0,
+                "SLIDER_CONSENSUS", null, null, null, null, 70, null, 55, List.of(), 0, null,
                 OffsetDateTime.parse("2026-10-13T12:00:00+09:00"), false);
         String body = new ObjectMapper().writeValueAsString(response);
         assertTrue(body.contains("\"number\":70"));

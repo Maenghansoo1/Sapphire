@@ -160,6 +160,7 @@ erDiagram
 - `USERS` 인증 방식 — 소셜 로그인 대신 **이메일/비밀번호 자체 로그인**(`email` + `password_hash`) 사용. 필수 약관 동의 시각을 저장
 - `POKES.type` — `poke`(콕찌르기) / `fling`(똥뿌리기)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
+- `submission_ai_reviews` — 사진 주제 적합도 비동기 결과. `(submission_id, kind)` UNIQUE, `submissions.id` FK. `fit_score`는 DB에만 저장하고 API에는 배지·칭찬 문구만 보낸다. 그룹 삭제·탈퇴 시 제출물보다 먼저 삭제한다 (`VISION_TOPIC_FIT.md`).
 - `SUBMISSIONS.media_url` — 이미지 파일 위치(음성은 2026-10-12 제거). 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
 - `COMMENTS.image_url` — 첨부 이미지의 저장 키. API에는 공개 파일 URL을 내려준다. 이미지만 있는 댓글은 `content = ''`로 저장한다.
 - `REACTIONS` — `(submission_id, user_id, sticker_type)` 유니크 키로 같은 멤버의 같은 스티커 중복을 막는다. 서로 다른 스티커는 각각 누를 수 있다.

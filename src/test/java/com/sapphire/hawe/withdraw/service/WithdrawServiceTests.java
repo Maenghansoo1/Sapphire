@@ -72,6 +72,7 @@ class WithdrawServiceTests {
             order.verify(mapper).deleteMyComments(1L);
             order.verify(mapper).deleteMyReactions(1L);
             order.verify(mapper).deleteMyGuesses(1L);
+            order.verify(mapper).deleteAiReviewsOnMySubmissions(1L);
             order.verify(mapper).deleteMySubmissions(1L);
             order.verify(mapper).deleteMyPokes(1L);
             order.verify(mapper).deleteMyNotifications(1L);

@@ -42,5 +42,12 @@ public class LocalFileStorage implements FileStorage {
         catch (IOException e) { throw new UncheckedIOException(e); }
     }
 
+    public byte[] load(String key) {
+        Path target = root.resolve(key).normalize();
+        if (!target.startsWith(root)) throw new IllegalArgumentException("Invalid storage key");
+        try { return Files.readAllBytes(target); }
+        catch (IOException e) { throw new UncheckedIOException(e); }
+    }
+
     public String publicUrl(String key) { return publicBaseUrl + "/" + key; }
 }

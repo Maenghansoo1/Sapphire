@@ -74,6 +74,7 @@ class GroupContractMapperTests {
         Long retainedMission = mission(preserved);
         jdbc.update("INSERT INTO submissions (mission_id, user_id, media_url) VALUES (?, ?, 'test.png')", mission, owner);
         Long submission = jdbc.queryForObject("SELECT id FROM submissions WHERE mission_id = ?", Long.class, mission);
+        jdbc.update("INSERT INTO submission_ai_reviews (submission_id,status) VALUES (?,'DONE')", submission);
         jdbc.update("INSERT INTO comments (submission_id, user_id, content) VALUES (?, ?, 'hello')", submission, owner);
         Long comment = jdbc.queryForObject("SELECT id FROM comments WHERE submission_id = ?", Long.class, submission);
         jdbc.update("INSERT INTO comment_mentions (comment_id, mentioned_user_id) VALUES (?, ?)", comment, other);
@@ -88,6 +89,7 @@ class GroupContractMapperTests {
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE group_id = ?", Integer.class, removed));
         }
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM submissions WHERE id = ?", Integer.class, submission));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM submission_ai_reviews WHERE submission_id = ?", Integer.class, submission));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM comments WHERE id = ?", Integer.class, comment));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM comment_mentions WHERE comment_id = ?", Integer.class, comment));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM reactions WHERE submission_id = ?", Integer.class, submission));

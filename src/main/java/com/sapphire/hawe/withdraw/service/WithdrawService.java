@@ -58,6 +58,7 @@ public class WithdrawService {
         withdraw.deleteMyComments(userId);
         withdraw.deleteMyReactions(userId);
         withdraw.deleteMyGuesses(userId);
+        withdraw.deleteAiReviewsOnMySubmissions(userId);
         withdraw.deleteMySubmissions(userId);
         withdraw.deleteMyPokes(userId);
         withdraw.deleteMyNotifications(userId);

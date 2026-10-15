@@ -460,6 +460,8 @@ DELETE /api/me — 회원 탈퇴, 204
 
 ## 6. Submissions · Feed — 상태: 반영됨 (반응·댓글 집계 포함, 새 틀 6종 제출·집계 결과는 B5 백엔드 반영, 서명 URL 제외)
 
+사진 주제 적합도(B10): `PHOTO_NOW`·`PHOTO_COLOR` 제출 커밋 후 비동기로 판정한다. 기본 비활성이다. 틀별 임계값은 `VISION_TOPIC_FIT.md`를 따른다. 피드·상세의 선택적 `aiReview`에는 배지와 긍정 문구만 있으며 점수는 공개하지 않는다. 재처리 스케줄러는 없다.
+
 백엔드에 제출·피드·상세와 로컬 파일 저장·공개 서빙을 구현했다. `MISSIONS_API.md` §3·§4의 1차 계약을 따른다. B5(2026-10-13)에서 새 틀 6종의 제출과 `GET /api/missions/{missionId}/result`(집계 결과, `MISSIONS_API.md` §5)를 더했다. 앱 화면은 A4.
 
 ### 6-1. 결정
