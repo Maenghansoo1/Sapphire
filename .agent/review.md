@@ -1,13 +1,15 @@
-# B10 Spring 연동 리뷰
+# B12 단계 0 (Spring AI + Bedrock PoC) 리뷰
 
-대상: 미커밋 작업 트리(HEAD `fc4295e` 기준), `.agent/plan.md`, `.agent/report.md`.
-보고서상 `./mvnw.cmd clean package -q` 296 tests 통과. 직접 재실행은 하지 않았고 코드 정독으로 확인했다.
+대상: `.agent/plan.md`(PoC 계획), `.agent/report.md`, `.agent/poc-b12/`, `docs/BACKEND/MISSION_AI_SPRING_AI_BEDROCK.md` §9 추가분, 작업 트리.
+PoC 테스트(9개 중 8 통과 1 skip)와 앱 복사본 `HaweApplicationTests` 는 직접 재실행하지 않았다. 보고서의 핵심 주장 중 직접 대조 가능한 것은 대조했다.
 
-## 요구사항 충족 (확인됨)
+## 직접 대조한 것 (모두 일치)
 
-- 이벤트 → `@Async("visionExecutor")` + `AFTER_COMMIT` 리스너 → `TopicFitService.review`. `INSERT IGNORE` 멱등 가드, 재시도 1회, 로그 후 버림 거부 핸들러, 틀별 임계값(0.024/0.017, 0.132/0.104), 점수 비노출(`AiReviewResponse` 는 badge/comment 만), `enabled=false` 면 응답에서 조회도 생략.
-- 삭제 연쇄: `deleteAiReviewsByGroupId`(guesses 뒤, submissions 앞), `deleteAiReviewsOnMySubmissions`(submissions 앞). 순서 테스트와 DB 테스트 갱신됨.
-- `FileStorage.load` 루트 이탈 방지, V1 테이블, 문서 갱신(`VISION_TOPIC_FIT.md`, PROJECT_OVERVIEW §6 등) 있음. `ml/`, `CLAUDE.md`, `AGENTS.md`, `pom.xml` 변경 없음.
+- **저장소 production 코드 불변**: `pom.xml` diff 는 B11 의 Lucene Nori 속성·의존성뿐이고 Spring AI 관련 줄이 없다. `src/main` 변경은 B4/B11 의 기존 미커밋분이며 PoC 가 추가한 것으로 보이는 변경 없음. `application.properties`/스키마 불변.
+- **좌표·호환 근거**: Maven Central 의 `spring-ai-starter-model-bedrock-converse:2.0.1` POM 이 `spring-boot-starter:4.1.1` 에 직접 의존함을 확인(보고서와 일치). 보고서가 "배포된 `spring-ai-parent` POM 에는 Boot 버전 속성이 없어 스타터 POM 과 해결된 트리로 확인했다"고 한계를 밝힌 점도 적절.
+- **도구 강제 불가 결론**: 소스 JAR(`spring-ai-bedrock-converse-sources.jar`)에서 `toolChoice`/`ToolChoice` 문자열이 어디에도 없고, `BedrockProxyChatModel` 의 `ToolConfiguration.builder().tools(bedrockTools).build()` 한 곳만 확인됨 → "특정 도구 강제 없음" 판정은 근거가 있다.
+- **설계 문서 추가분**: §9 아래 결과 표의 판정(확인됨/막힘/미검증)이 보고서와 일치하고, 미검증 항목(5 효과, 6 전체)은 거짓 통과 없이 "미검증"으로 남음. 재실행 명령 포함. 다른 절은 건드리지 않음.
+- 자격증명 평문 없음(`AKIA`, `aws_secret` 검색 결과 없음). 실제 AWS 호출 없음.
 
 ## P0
 
@@ -19,33 +21,36 @@
 
 ## P2
 
-### 테스트 / 계획 대비 누락 (`src/test/.../submission/`)
+### `.agent/poc-b12/app-copy/.env` 에 실제 로컬 DB 비밀번호·JWT 시크릿 사본이 남아 있음
 #### Problem
-계획의 Tests Required 중 아래가 없다.
-- `AiReviewMapperTests`(실 DB): `findBySubmissionIds` 가 DONE 만 반환하는지, `insertPendingIfAbsent` 둘째 호출 0 / 없는 submission_id(FK 무시) 0 인지 직접 검증하는 테스트가 없다(통합 테스트가 DONE 한 경로만 간접 확인).
-- `TopicFitReviewListenerTests`: `enabled=false` 면 서비스 미호출, 서비스 예외를 삼키는지.
-- `SubmissionServiceTests`: 생성자 인자만 바뀌었고, 사진 틀 제출 시 `SubmissionCreatedEvent` 발행 / `PHOTO_GALLERY`·그림·글 틀 미발행 / 발행 예외가 제출을 깨지 않음 / `enabled=true` 일 때 `findBySubmissionIds` 가 `feed` 에서 **한 번만** 호출(N+1 없음) / `enabled=false` 면 호출 0회 테스트가 없다.
+앱 공존 시험을 위해 저장소 `.env` 를 복사한 파일이 `.agent/poc-b12/app-copy/.env` 에 있다. 보고서도 이를 밝혔고 `.agent/` 는 gitignore 대상이라 커밋될 위험은 낮다.
 #### Why It Matters
-핵심 경로인 `submit` 에 추가된 이벤트 발행 조건(`key != null && 사진 2종`)과 비활성 시 조회 생략은 이 작업의 주요 회귀 가드인데 단위 수준에서 보호되지 않는다. 나중에 B4·A7 작업 중 조건이 깨져도 통과할 수 있다.
+의도치 않은 공유(폴더 압축·복사)나 `.gitignore` 변경 시 비밀값이 노출될 수 있다. 시험이 끝났으므로 보관 이유가 없다.
 #### Recommended Fix
-위 세 군데에 최소 테스트를 추가한다(각 2~4개). 새 의존성 불필요.
+PoC 결과 확인이 끝나면 `.agent/poc-b12/app-copy/` 전체(또는 최소 `.env`)를 삭제한다. 라이브 스모크 재실행에는 필요 없다(별도 `pom.xml` 로 실행). 필요하면 사용자가 직접 지운다.
 
-### `TopicFitService.review` — DONE 저장 실패가 비전 재호출로 이어짐 (`TopicFitService.java`, 재시도 루프)
+### 결론의 전제: Spring AI 경로의 실제 모델 동작은 미검증
 #### Problem
-`reviews.complete(DONE, …)` 가 같은 `try`(`catch RuntimeException`) 안에 있어, DB 오류로 DONE 저장이 실패하면 "비전 실패"로 취급되어 재시도(두 번째 비전 호출)와 FAILED 저장을 시도한다.
+"조건부 진행" 권고는 타당하나, 구조화 출력(`outputConfig.textFormat=json_schema`)이 실제 Bedrock 모델에서 지원·준수되는지, 캐시 히트, 지연·비용, 모델/리전 접근은 모두 AWS 계정이 필요해 미검증이다(보고서가 명시).
 #### Why It Matters
-DB 장애 시 불필요한 추론 호출 1회와 오해를 부르는 로그/상태가 생긴다. 영향은 작다(발생 드묾, 데이터 손상 없음).
+현재 계약은 `submit_mission` 도구를 **강제**하는 방식이다. Spring AI 경로는 이를 유지할 수 없으므로(막힘), 구조화 출력으로 바꾸면 응답 안정성이 달라질 수 있다.
 #### Recommended Fix
-`client.call` 과 `load` 만 재시도 대상 `try` 에 두고, 판정·`complete(DONE)` 은 try 밖으로 뺀다(바깥 catch 가 로그 처리). 필수는 아님.
+조치 없음(PoC 범위 밖). 아래 "의사결정" 참고.
 
-### 참고 (조치 불필요)
-- Codex 가 로컬 `hawe` DB 테이블을 drop 후 Flyway 로 재생성했다(사용자·그룹·제출 0건 확인, `.agent/hawe-before-b10.sql` 백업, `.agent/` 는 gitignore). 보고서에 근거가 있어 수용. 다른 사람은 pull 후 각자 DB 를 재생성해야 한다.
-- 극소 경합(삭제 직후 PENDING 삽입으로 FK 실패)은 계획대로 문서화만 됨.
-- `TopicFitIntegrationTests` 는 5초 타임아웃 후 `aiReview()` 가 null 이면 NPE 로 실패한다(느린 CI 에서만 영향). 실패 원인이 명확하도록 `assertNotNull` 한 줄이면 충분.
+## 의사결정 (사용자 몫 — 구현으로 넘어가기 전)
+
+PoC 결과에 따른 선택지:
+
+| 선택 | 내용 | 비용/위험 |
+|---|---|---|
+| **A. AWS SDK `bedrockruntime` 직접 호출** (설계 §11) | 현재와 같은 "도구 강제 호출" 계약을 그대로 유지. `MissionLlm` 경계 뒤에 `BedrockMissionLlm` | Spring AI 를 쓰지 않는다는 요구와 어긋남. 구현 단순, 중괄호 문제 없음 |
+| **B. Spring AI 2.0.1 + 구조화 출력** | Spring AI 사용, 도구 강제 대신 JSON schema 출력 | 실제 모델의 schema 준수·캐시·지연을 AWS 에서 먼저 검증해야 함. 검증기·재시도로 보완 가능 |
+| **C. 보류** | AWS 접근(모델 접근·자격증명) 확보 후 `LiveBedrockSmokeTests` 로 6번·5번 효과를 먼저 확인 | 일정 지연, 근거는 가장 확실 |
+
+권장: **먼저 AWS 에서 라이브 스모크를 한 번 돌려(C) 구조화 출력의 실제 신뢰성을 본 뒤 A/B 를 정한다.** Spring AI 사용이 확정된 요구라면 B, 아니면 A.
 
 ## 병렬 작업과의 충돌
-B4 가 이 변경 뒤에 같은 `FileStorage`·`GroupService.deleteGroupCascade`·`WithdrawService` 를 건드린다 → 이 작업 커밋·푸시 후 시작. B11 은 `AsyncConfig` 에 `insightExecutor` 를 추가하면 된다. A7 은 `aiReview.badge/comment` 만 사용.
+저장소 코드 변경이 없어 충돌 없음. 이후 구현 시 `MissionAiProperties`, `AiMissionGenerator`, `AnthropicClient`, `pom.xml` 이 우준(B8/B9) 영역과 겹친다.
 
-## 결론: 수정 후 재리뷰 필요 (경미)
-
-기능·안전성에는 막는 결함이 없다. 위 P2 의 누락 테스트(특히 `SubmissionServiceTests` 이벤트 발행/비활성 조회 생략, `AiReviewMapperTests`, 리스너 테스트)를 추가하면 승인 가능. 테스트만 보강하면 되므로 사용자가 이 상태로 커밋하기로 한다면 그것도 수용 가능한 수준이다.
+## 결론: 승인 가능
+PoC 는 계획한 6개 질문에 근거와 함께 답했고, 미검증 항목을 정직하게 구분했으며 production 코드를 건드리지 않았다. Codex 수정 요청은 필요 없다.

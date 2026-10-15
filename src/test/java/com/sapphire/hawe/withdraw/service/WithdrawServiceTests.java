@@ -63,6 +63,7 @@ class WithdrawServiceTests {
             InOrder order = inOrder(groups, mapper);
             order.verify(groups).leaveGroup(1L, 7L, null);
             order.verify(groups).leaveGroup(1L, 8L, null);
+            order.verify(mapper).deleteInsightsInvolvingUser(1L);
             order.verify(mapper).deleteMentionsOnMySubmissions(1L);
             order.verify(mapper).deleteCommentsOnMySubmissions(1L);
             order.verify(mapper).deleteReactionsOnMySubmissions(1L);

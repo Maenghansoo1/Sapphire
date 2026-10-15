@@ -49,6 +49,7 @@ public class WithdrawService {
             }
         }
 
+        withdraw.deleteInsightsInvolvingUser(userId);
         withdraw.deleteMentionsOnMySubmissions(userId);
         withdraw.deleteCommentsOnMySubmissions(userId);
         withdraw.deleteReactionsOnMySubmissions(userId);
