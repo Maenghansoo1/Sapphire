@@ -36,15 +36,16 @@ class AiGuessTest {
         val catFirst = guesses("고양이" to 0.8f, "강아지" to 0.1f, "토끼" to 0.05f)
         assertEquals(AiVerdict.Correct(catFirst), aiVerdict(catFirst, cat))
         assertEquals(AiVerdict.Guessed(catFirst), aiVerdict(catFirst, null))
-        val dogFirst = guesses("강아지" to 0.5f, "고양이" to 0.3f, "토끼" to 0.1f)
+        val dogFirst = guesses("강아지" to 0.6f, "고양이" to 0.3f, "토끼" to 0.1f)
         assertEquals(AiVerdict.Close(dogFirst, cat, 2), aiVerdict(dogFirst, cat))
         assertEquals(AiVerdict.Missed(dogFirst, category("해")), aiVerdict(dogFirst, category("해")))
         // 주제가 3등이어도 0%에 가까우면 "아깝게"가 아니라 못 맞힘(에뮬레이터에서 고양이 그림에 '해' 0%가 3등으로 나왔던 경우)
         val catDrawing = guesses("고양이" to 0.99f, "토끼" to 0.004f, "해" to 0.001f)
         assertEquals(AiVerdict.Missed(catDrawing, category("해")), aiVerdict(catDrawing, category("해")))
         assertTrue(aiVerdict(guesses("강아지" to 0.6f, "고양이" to 0.15f), cat) is AiVerdict.Close)
-        // 기준 경계: 0.35 와 같으면 답해요
-        assertTrue(aiVerdict(guesses("고양이" to 0.35f), cat) is AiVerdict.Correct)
+        // 기준 경계: 기준(0.55)과 같으면 답하고, 조금이라도 낮으면 "잘 모르겠어요"
+        assertTrue(aiVerdict(guesses("고양이" to AI_GUESS_THRESHOLD), cat) is AiVerdict.Correct)
+        assertTrue(aiVerdict(guesses("고양이" to 0.54f), cat) is AiVerdict.Unsure)
     }
 
     @Test fun copyUsesParticlesAndNeverBlames() {

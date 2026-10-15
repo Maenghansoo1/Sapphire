@@ -101,5 +101,8 @@ class InkPreprocessorTest {
         // 범주 순서 = 모델 출력 순서 = labels_ko.txt 줄 순서
         val categories = parseDrawCategories(File("src/main/assets/quickdraw/categories.json").readText())
         assertEquals(File(ml, "export/labels_ko.txt").readLines().filter { it.isNotBlank() }, categories.map { it.ko })
+        // "잘 모르겠어요" 기준도 모델 설명서와 같아야 해요(M1 에서 다시 정하면 앱도 같이 바꾸도록)
+        val unsure = Json.parseToJsonElement(File(ml, "export/export.json").readText()).jsonObject["unsure_threshold"]!!
+        assertEquals(unsure.jsonPrimitive.float, AI_GUESS_THRESHOLD, 1e-6f)
     }
 }

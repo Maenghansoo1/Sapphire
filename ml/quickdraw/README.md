@@ -1,6 +1,7 @@
 # M1 — Quick, Draw! 그림 인식 모델
 
-앱의 "AI가 맞혀볼게요" 게임에 쓸 그림 분류 모델을 직접 학습하는 폴더다. 계획: `docs/해야될거/2번_우준/M1-quickdraw-model.md`.
+앱의 "AI가 맞혀볼게요" 게임에 쓸 그림 분류 모델을 직접 학습하는 폴더다. 계획: `docs/해야될거/2번_우준/M1(완료)-quickdraw-model.md`.
+**결과 정리(데이터·구조·학습 곡선·정확도·경량화·팀원 그림 평가·한계)는 `REPORT.md`**, 팀원 그림 평가의 자세한 표는 `EVAL.md`.
 범주 50개는 `categories.json`(모델 출력 순서 = `id`), 고른 이유는 `categories.proposed.md`.
 
 ## 준비 (Windows, Python 3.12)
