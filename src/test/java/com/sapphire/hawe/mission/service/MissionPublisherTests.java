@@ -40,6 +40,27 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class MissionPublisherTests {
+    @Test void forcePublishesBeforeScheduledTimeUsingRequestedTemplate() {
+        LocalDateTime now = LocalDateTime.of(2026, 10, 12, 7, 0);
+        Group group = group(now.minusDays(2));
+        group.setDailyMissionCount(2);
+        when(groups.findById(11L)).thenReturn(group);
+        when(generator.generate(eq(MissionTemplate.TEXT_ONE_WORD), anyLong(), any(), anyBoolean()))
+                .thenReturn(new GeneratedMission("한 단어", "일상", Map.of()));
+        doAnswer(call -> {
+            MissionInsertRow row = call.getArgument(0);
+            row.setId((long) row.getSlotNo() + 100);
+            return null;
+        }).when(missions).insert(any());
+        when(missions.existsByGroupIdAndDateAndSlot(eq(11L), eq(now.toLocalDate()), anyInt()))
+                .thenAnswer(call -> (int) call.getArgument(2) == 2);
+        assertEquals(List.of(101L), publisher.forcePublish(11L, now, MissionTemplate.TEXT_ONE_WORD));
+        ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
+        verify(missions).insert(inserted.capture());
+        assertEquals(now, inserted.getValue().getPublishedAt());
+        assertEquals(MissionTemplate.TEXT_ONE_WORD.name(), inserted.getValue().getTemplate());
+        assertEquals(now.toLocalDate().atTime(23, 0), inserted.getValue().getDeadlineAt());
+    }
     @Mock MissionMapper missions;
     @Mock GroupMapper groups;
     @Mock GroupMemberMapper members;

@@ -78,6 +78,9 @@ class ApiClient(
         execute("DELETE", path, null, auth)
     }
 
+    suspend inline fun <reified T> deleteReturning(path: String, auth: Boolean = true): T =
+        decode(execute("DELETE", path, null, auth))
+
     @PublishedApi internal inline fun <reified T> decode(result: Pair<Int, String>): T = try {
         json.decodeFromString<T>(result.second)
     } catch (e: SerializationException) {

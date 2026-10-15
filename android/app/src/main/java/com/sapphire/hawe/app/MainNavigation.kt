@@ -30,6 +30,8 @@ import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.data.GroupsState
 import com.sapphire.hawe.core.net.CalendarRepository
+import com.sapphire.hawe.core.net.DevRepository
+import com.sapphire.hawe.core.dev.DevMode
 import com.sapphire.hawe.core.net.AuthRepository
 import com.sapphire.hawe.core.net.GroupRepository
 import com.sapphire.hawe.core.net.InsightRepository
@@ -43,6 +45,7 @@ import com.sapphire.hawe.core.push.PushGroupSnapshot
 import com.sapphire.hawe.core.push.PushTarget
 import com.sapphire.hawe.core.push.pushTarget
 import com.sapphire.hawe.feature.groups.*
+import com.sapphire.hawe.feature.dev.DevToolsScreen
 import com.sapphire.hawe.feature.insight.GroupInsightScreen
 import com.sapphire.hawe.feature.mission.MissionScreen
 import com.sapphire.hawe.feature.mission.MissionPerformScreen
@@ -80,6 +83,7 @@ sealed interface MainRoute {
     @Serializable data object UserInfo : MainRoute
     @Serializable data object ChangePassword : MainRoute
     @Serializable data object AppInfo : MainRoute
+    @Serializable data object DevTools : MainRoute
     @Serializable data object Licenses : MainRoute
     @Serializable data object Withdraw : MainRoute
 }
@@ -87,7 +91,9 @@ sealed interface MainRoute {
 @Composable
 fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, push: PushCenter, groups: GroupRepository,
     missions: MissionRepository, pokes: PokeRepository, submissions: SubmissionRepository, calendar: CalendarRepository,
-    insights: InsightRepository) {
+    insights: InsightRepository, dev: DevRepository? = null,
+    onSwitchUser: (Long) -> Unit = {}, switchBusy: Boolean = false,
+    switchMessage: String? = null, onSwitchMessageShown: () -> Unit = {}) {
     val nav = rememberNavController()
     val context = LocalContext.current
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
@@ -233,7 +239,7 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
                     nav.navigate(MainRoute.Results(id, missionId)) { launchSingleTop = true }
                 }, onCalendar = {
                     nav.navigate(MainRoute.Calendar(id)) { launchSingleTop = true }
-                })
+                }, dev = if (DevMode.enabled) dev else null)
         }
         composable<MainRoute.Calendar> { entry ->
             val route = entry.toRoute<MainRoute.Calendar>()
@@ -346,7 +352,17 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
                 onNotifications = { nav.navigate(MainRoute.NotificationSettings) { launchSingleTop = true } },
                 onUserInfo = { nav.navigate(MainRoute.UserInfo) { launchSingleTop = true } },
                 onAppInfo = { nav.navigate(MainRoute.AppInfo) { launchSingleTop = true } },
-                onWithdraw = { nav.navigate(MainRoute.Withdraw) { launchSingleTop = true } })
+                onWithdraw = { nav.navigate(MainRoute.Withdraw) { launchSingleTop = true } },
+                dev = dev, onDevTools = { nav.navigate(MainRoute.DevTools) { launchSingleTop = true } },
+                onSwitchUser = onSwitchUser, switchBusy = switchBusy,
+                switchMessage = switchMessage, onSwitchMessageShown = onSwitchMessageShown)
+        }
+        composable<MainRoute.DevTools> {
+            if (DevMode.enabled && dev != null) DevToolsScreen(session, store, dev, groups, missions,
+                onBack = { nav.popBackStack() },
+                onInsight = { nav.navigate(MainRoute.GroupInsight(it)) },
+                onLogout = { session.signOut() })
+            else LaunchedEffect(Unit) { nav.popBackStack() }
         }
         composable<MainRoute.ProfileEdit> {
             ProfileEditScreen(session, store, auth, onBack = { nav.popBackStack() })

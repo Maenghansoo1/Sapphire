@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,9 +21,12 @@ import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.AppLinks
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.dev.DevMode
 import com.sapphire.hawe.core.model.ActivityStats
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.net.CalendarRepository
+import com.sapphire.hawe.core.net.DevRepository
+import com.sapphire.hawe.core.net.DevUser
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.*
@@ -40,12 +44,29 @@ fun rememberAppVersionName(): String {
 @Composable
 fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarRepository, onBack: () -> Unit,
     onProfileEdit: () -> Unit, onNotifications: () -> Unit, onUserInfo: () -> Unit,
-    onAppInfo: () -> Unit, onWithdraw: () -> Unit) {
+    onAppInfo: () -> Unit, onWithdraw: () -> Unit, dev: DevRepository? = null,
+    onDevTools: () -> Unit = {}, onSwitchUser: (Long) -> Unit = {}, switchBusy: Boolean = false,
+    switchMessage: String? = null, onSwitchMessageShown: () -> Unit = {}) {
     val context = LocalContext.current
     val account = session.account
     val version = rememberAppVersionName()
     var confirmLogout by remember { mutableStateOf(false) }
     val toast = rememberHToastState()
+    var devUsers by remember { mutableStateOf<List<DevUser>?>(null) }
+    var usersError by remember { mutableStateOf(false) }
+    var userRetry by remember { mutableIntStateOf(0) }
+    LaunchedEffect(DevMode.enabled, userRetry) {
+        if (DevMode.enabled && dev != null) try {
+            devUsers = dev.users()
+            usersError = false
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            usersError = true
+        }
+    }
+    LaunchedEffect(switchMessage) {
+        if (switchMessage != null) { toast.show(switchMessage); onSwitchMessageShown() }
+    }
     LaunchedEffect(Unit) {
         try {
             val stats = calendar.stats()
@@ -81,6 +102,15 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
             }
             StatsCard(stats, Modifier.padding(top = 22.dp))
             TypeCounts(stats, Modifier.padding(top = 14.dp))
+            if (DevMode.enabled && dev != null) {
+                // 임시 UI: 개발자 모드에서만 계정을 한 번 눌러 전환한다.
+                Column(Modifier.padding(top = 18.dp)) {
+                    HListRow("개발자 도구", height = 48.dp, onClick = onDevTools)
+                    Text("유저 전환", style = HType.plex(15, FontWeight.SemiBold), color = HColors.ink)
+                    if (usersError) HListRow("목록을 불러오지 못했어요 · 다시 시도", height = 48.dp) { userRetry++ }
+                    DevUserChips(devUsers.orEmpty(), account.userId, switchBusy, onSwitchUser)
+                }
+            }
             Column(Modifier.padding(top = 18.dp)) {
                 HListRow("알림 설정", height = 48.dp, onClick = onNotifications)
                 HListRow("유저 정보", height = 48.dp, onClick = onUserInfo)
@@ -100,6 +130,22 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
     if (confirmLogout) HAlert("로그아웃할까요?", "다시 로그인하면 그룹과 기록은\n그대로 남아 있어요.",
         "로그아웃", onCancel = { confirmLogout = false }, onConfirm = { session.signOut() })
     HToastHost(toast)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DevUserChips(users: List<DevUser>, current: Long, busy: Boolean, onClick: (Long) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+        users.forEach { user ->
+            val selected = user.userId == current
+            Text((if (selected) "✓ " else "") + user.nickname,
+                Modifier.background(if (selected) HColors.accentSubtle else HColors.surface, CircleShape)
+                    .clickable(enabled = !busy && !selected) { onClick(user.userId) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                style = HType.plex(13), color = HColors.ink)
+        }
     }
 }
 

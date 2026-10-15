@@ -1,135 +1,142 @@
-# A6. Android — 하루 여러 개 미션 (05 화면 · 홈 · 수행 · 콕 · 푸시)
+# 개발자 모드 ② Android — 숨김 진입(버전 10탭) + 개발자 도구 화면 + 원클릭 유저 전환 + 앱 시계
 
-> 이전 `.agent/plan.md`(A9)는 덮어쓴다. 원본 계획: `docs/해야될거/2번_우준/A6-android-multi-mission.md` (이 파일이 코드 확인 후의 최신판).
-> 범위: **`android/` 만**. 서버(B7 — 하루 여러 개 개방)는 이미 구현돼 있다. iOS·알림 설정·그룹 설정 UI(하루 미션 수 변경)는 **만들지 않는다**. 디자인(Figma) 없음 → 기존 컴포넌트 조합 + 텍스트의 임시 UI.
-> 전제: A2·A3·A9 변경이 worktree 에 **미커밋으로 섞여 있다**(`MainNavigation.kt`, `AppViewModel.kt`, `RootScreen.kt`, `GroupInfoScreen.kt` 등). **덮어쓰거나 되돌리지 말 것.**
-> 빌드/테스트: JDK 21 권장(없으면 설치된 JDK 17 로도 빌드됨). `android\gradlew.bat :app:testDebugUnitTest --offline`.
+> 이 파일은 **서버 작업(`.agent/plan.md` — `/api/dev/**` API)이 끝난 뒤** `.agent/plan.md` 로 복사해 실행한다(한 번에 한 계획). 서버 API 계약은 `.agent/plan.md` 의 "API 계약" 표가 정본이다. 서버가 아직 없으면 이 작업은 시작하지 않는다.
+> 범위: **`android/` 만**. 사용자 결정(확정): 서버 시계까지 변경(앱은 같은 오프셋을 표시용으로 반영), 유저 전환은 서버 시드 계정, **release 빌드에서도 열림**, **안전장치 금지**(빌드 타입/플래그로 숨기지 않는다 — 10번 탭이 유일한 진입 조건).
+> 전제: A2·A3·A9·A6 변경이 worktree 에 미커밋으로 섞여 있을 수 있다(`MainNavigation.kt`, `AppViewModel.kt`, `RootScreen.kt`, `MyPageScreen.kt`, `MissionScreen.kt` 등). **덮어쓰거나 되돌리지 말 것.**
+> 빌드/테스트: JDK 21 권장(없으면 JDK 17 — 셸의 `JAVA_HOME` 이 JDK 25 면 Gradle 이 실패하므로 `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot` 로 지정). `android\gradlew.bat :app:testDebugUnitTest --offline`.
 
 ## Goal
 
-한 그룹에 현재 열린 미션이 2개 이상일 때 앱이 모두 보여 주고, 각각 **수행·열람·콕**이 동작한다. **미션이 1개인 그룹(기본)의 동작·화면은 변하지 않는다**(기존 테스트가 그대로 통과해야 함).
+1. **마이페이지 → 앱 정보**에서 "버전 1.0.0" 글자를 10번 누르면 개발자 모드가 켜진다(유지됨, 앱 재실행 후에도).
+2. 개발자 모드에서:
+   - 마이페이지에서 **원클릭 유저 전환**(서버 시드 계정 목록, 탭 한 번).
+   - **개발자 도구 화면**: 상태 표시, 서버 시계 변경(앱 시계도 동기), 미션 생성(슬롯 강제 발행, 틀 선택), 마감 당기기, 대리 제출/콕/반응/댓글, 시드 데이터 일괄 생성/초기화, 인사이트 강제 재생성, 그룹 설정(하루 미션 수·발행 시각), 로컬 초기화·그룹 삭제, 네트워크 오류 주입.
+   - 05(미션) 화면에도 개발자용 **"미션 생성"** 버튼.
 
 ## Findings (코드로 확인함)
 
-경로 접두: 앱 `J/` = `android/app/src/main/java/com/sapphire/hawe/`, 테스트 `T/` = `android/app/src/test/java/com/sapphire/hawe/`, 서버 `S/` = `src/main/java/com/sapphire/hawe/`.
+경로 접두 `J/` = `android/app/src/main/java/com/sapphire/hawe/`, 테스트 `T/` = `android/app/src/test/java/com/sapphire/hawe/`.
 
-### 서버 계약 (모두 구현됨)
-- `GET /api/groups/{id}/missions/today` → `{date, dailyMissionCount, nextPublishAt, missions:[MissionResponse…]}` (`S/mission/service/MissionService.java` `getTodayMissions`): `missions` 는 **현재 열려 있는 미션만, 슬롯 오름차순**(`findCurrentByGroupId`). `nextPublishAt` 은 모든 슬롯 중 가장 빠른 다음 발행 시각이라 항상 값이 있다(`nextPublishAt()` 209행~). 앱 `MissionDto`(`J/core/net/MissionApi.kt`)는 이미 `slotNo, number, submittedByMe, members[]` 를 받는다.
-- `GET /api/groups` 항목: 기존 `todayMission`(가장 작은 슬롯 하나) + `todayMissions: [{missionId, media, content, submittedCount, submittedByMe}…]`(`S/group/dto/GroupSummaryResponse.java`, 슬롯 순). 앱 `GroupSummaryDto`(`J/core/net/GroupApi.kt` 7~10행)에는 `todayMission` 만 있다.
-- 콕 `POST /api/groups/{id}/pokes` 요청 `{toUserId, type, missionId?}`(`S/poke/dto/PokeRequest.java`): `missionId` 없으면 가장 작은 슬롯의 현재 미션, 있으면 **그 그룹의 현재(열린) 미션**이어야 하고 아니면 409 `NO_OPEN_MISSION`(`PokeService` 46~50행). 응답 `{id, toUserId, type, missionId, sentAt}`.
-- 제출 `POST /api/missions/{missionId}/submissions`(앱 `SubmissionRepository.submit(missionId, …)` 이미 미션 id 기반). 도장·피드 잠금은 미션별. 달력은 이미 미션별 행.
-
-### 앱 — 단일 미션 가정이 박혀 있는 곳 (전수)
-- `J/core/net/MissionRepository.kt`: `CurrentMissionState(mission: ServerMission?, nextPublishAt)`; `current()` 가 `response.missions.firstOrNull()?.toModel()` 만 변환. `ServerMission` 에는 `slotNo` 가 없다(순서는 리스트 순서로 충분).
-- `J/core/data/DataStore.kt`:
-  - `StoredGroup(detail, missions: List<StoredMission>, summary: MissionSummary?, nextPublishAt, missionState)`; `StoredMission(id, type, topic, number, opensAt, closesAt, submissions, poked, deadlineAt, template, spec, serverMembers, serverSubmittedByMe, feedLoaded)`.
-  - `applyCurrentMission`(≈109행): `previous = group.missions.lastOrNull()?.takeIf { it.id == row?.id }`, 결과 `missions = listOfNotNull(current)` — **미션 하나만 저장**.
-  - `todayMission(groupID)`: `missions.lastOrNull()` 하나를 `TodayMission` 으로 변환. `applyFeed`(`isCurrent = …missions?.lastOrNull()?.id == missionID`), `applyCurrentFeed`(`lastOrNull` → `listOf(mission.copy(…))` 로 **목록을 하나로 덮어씀**), `applySubmitted`(`lastOrNull` → `missions = listOf(updated)`, `summary` 갱신은 `summary.missionId == missionID` 일 때만), `markPoked`(`lastOrNull`, `dropLast(1) + …`), `needsMissionSpec`(이미 `none { id }`), `result()`(이미 `firstOrNull { id }`), `markMissionFailed`, `replaceMissionsForTest`, `summaries`(홈 요약 = `summary` 단일), `applyServerGroups`(`previous?.missions` 보존, `loaded.mission` → `summary`).
-- `J/core/net/GroupRepository.kt`: `data class MissionSummary(missionId, type, topic, submittedCount, submittedByMe)`, `LoadedGroup(detail, mission: MissionSummary?)`, `loadAll` 이 `summary.todayMission` 으로 채움.
-- `J/core/model/GroupSummary.kt`: `GroupSummary(id, name, relationship, members, startDate, missionType, topic, submittedCount, didSubmit)` 단일 미션 요약. `J/feature/groups/HomeScreen.kt` `GroupCard`: `group.missionType == null` 이면 "아직 오늘의 미션이 열리지 않았어요", 아니면 "오늘의 미션 · 유형" + 주제 + "k / N명 완료" + (`didSubmit` ? "열어보기" : "내 미션 남음").
-- `J/core/model/TodayMission.kt`: 미션 단위 모델(`id, group, type, topic, number, opensAt, closesAt, members, deadlineAt, template, spec`, `doneCount`, `didSubmit`). 변경 불필요.
-- `J/feature/mission/MissionScreen.kt`(277줄): `val mission = store.todayMission(id)` 하나, `MissionCard(mission, onPerform = { onPerform(null) }, onResults = onResults)`, 참여 현황·콕 행, 잠금 안내. 콜백 시그니처 `onPerform: (MissionType?) -> Unit`, `onResults: () -> Unit`. 새로고침: 진입/`ON_RESUME`/`nextPublishAt` 도달 시 `missions.current` → `store.applyCurrentMission`. 제출 토스트 "오늘의 미션을 올렸어요"/"지각으로 올렸어요"(`submittedSignal`, `submittedLate`). 콕: `sendPoke(missionID, member, kind)` 가 `pokes.send(id, member.id, kind)`(missionId 없음) → 응답 `sent.missionId` 로 `store.markPoked(id, sent.missionId, …)`; 실패 시 `classifyPokeFailure`(`NO_OPEN_MISSION` → REFRESH).
-- `J/app/MainNavigation.kt`: `MainRoute.MissionPerform(groupId, type: String? = null)`(72행, **missionId 없음**), `Mission` composable 의 `onPerform = { type -> nav.navigate(MissionPerform(id, type?.name)) }`, `onResults = { store.todayMission(id)?.let { nav.navigate(Results(id, it.id)) } }`; `MissionPerform` composable 은 `store.todayMission(id)` + `performEntryDecision(mission, requestedType)`, 제출은 `submissions.submit(mission.id, …)` → `store.applySubmitted(id, mission.id, submitted)` → `previousBackStackEntry.savedStateHandle["submitted"/"submittedLate"] = …`; `Results` composable 의 가드: `current = store.todayMission(groupID)`, `canOpen = if (current?.id == missionID) current.didSubmit else store.calendarRecord(groupID, missionID)?.didSubmit == true` (**현재 미션이 둘 이상이면 두 번째 미션이 달력 경로로 빠져 막힘**). 푸시 스냅샷(≈105행): `group.missions.lastOrNull()` → `PushGroupSnapshot(group.id, last?.id, last?.serverSubmittedByMe == true)`.
-- `J/feature/mission/MissionPerformCommon.kt` `performEntryDecision(mission: TodayMission?, requestedType)`; `MissionPerformScreen`(topic/template/spec 받음). `J/core/push/PushModel.kt` `pushTarget(destination, groups: List<PushGroupSnapshot>)`: COMMENT 푸시이고 `lastMissionSubmittedByMe` 면 `Results(group.id, lastMissionId)`, 아니면 `Mission(group.id)`.
-- `J/core/net/PokeRepository.kt` `send(groupId, toUserId, kind): SentPoke`, `PokeApi.kt` `PokeRequestDto(toUserId, type)`.
-- 영향받는 기존 테스트(수정 필요 가능): `T/core/data/DataStoreTest.kt`, `T/core/net/GroupRepositoryTest.kt`, `T/core/net/MissionRepositoryTest.kt`(`current()`/`CurrentMissionState` 사용), `T/core/net/PokeRepositoryTest.kt`, `T/core/push/PushModelTest.kt`, `T/feature/groups/GroupFormatTest.kt`, `T/feature/mission/MissionPerformCommonTest.kt`. 수정 전 `rg "CurrentMissionState|\.mission\b|LoadedGroup\(|MissionSummary\(|replaceMissionsForTest|todayMission\(|\.summary\b" android/app/src` 로 호출부 전수 확인.
+- **앱 정보 화면** `J/feature/mypage/AppInfoScreen.kt`: `Text("버전 $version", style = HType.plex(14), color = HColors.textSecondary)` 가 "버전 1.0.0" 표시(`rememberAppVersionName()`). 여기에 탭 카운터를 건다.
+- **마이페이지** `J/feature/mypage/MyPageScreen.kt`: 시그니처 `MyPageScreen(session, store, calendar, onBack, onProfileEdit, onNotifications, onUserInfo, onAppInfo, onWithdraw)`, 목록 행은 `HListRow("알림 설정"|"유저 정보"|"앱 정보"|…)`, `DangerRow("로그아웃")`/`DangerRow("회원 탈퇴")`. 개발자 모드일 때 맨 위(통계 아래)에 "개발자 도구" 행과 유저 전환 칩 목록을 추가한다.
+- **세션** `J/core/AppSession.kt`: `state` (SIGNED_OUT/SIGNED_IN/RESTORING), `account`, `beginRestoring()`, `failRestoring()`, `signIn(account)`, `signOut()`(= `onCleared()` + SIGNED_OUT; `onCleared` 는 `AppViewModel` 에서 `{ auth.clearSession(); dataStore.reset() }`). `J/app/RootScreen.kt` 가 `state` 로 `AuthNavHost`/`MainNavHost`/빈 화면을 고르므로 **상태를 RESTORING 으로 한 번 내렸다 SIGNED_IN 으로 올리면 `MainNavHost` 가 새로 구성**된다(백스택 초기화) — 유저 전환에 이 방식을 쓴다(`signOut()` 은 토큰을 지우므로 쓰지 않는다).
+- **ViewModel** `J/app/AppViewModel.kt`: `tokens = KeystoreTokenStore(application)`, `api = ApiClient(BuildConfig.API_BASE_URL, tokens, onSessionExpired = …)`, `auth/groups/missions/pokes/submissions/calendar/insights` 레포지토리, `appSession`, `dataStore`. `init` 에서 RESTORING 이면 `auth.restore()` → `dataStore.setMyProfile` → `appSession.signIn`.
+- **ApiClient** `J/core/net/ApiClient.kt`: 생성자 `ApiClient(baseUrl, tokens, http: OkHttpClient = …, json, onSessionExpired)`. `get/post/patch/put/delete`(+ `auth: Boolean = true` 로 인증 없이 호출 가능), `postMultipart/putMultipart`. 2xx 는 모두 성공(202 도 디코드). `Json { ignoreUnknownKeys = true; explicitNulls = false }`. 업로드용 `uploadHttp` 는 `http.newBuilder()` 파생.
+- **TokenStore** `J/core/net/TokenStore.kt`: `save(access, refresh)`/`clear()`. `KeystoreTokenStore` 가 실제 구현.
+- **시간 사용처(앱)**: `Instant.now()`/`LocalDate.now` 를 직접 쓰는 곳 — `J/core/model/GroupSummary.kt`(`daysTogether`), `J/feature/groups/CreateGroupScreen.kt`(50·142행), `GroupFormat.kt`(34행 `groupCardSubtitle`), `HomeScreen.kt`(47), `J/feature/insight/GroupInsightScreen.kt`(42), `J/feature/mission/MissionScreen.kt`(93·251·253: 다음 미션 대기·카운트다운), `J/feature/records/RecordCalendarScreen.kt`(50), `J/feature/results/ResultsFormat.kt`(26 `koreanRelativeText`), `ResultsScreen.kt`(103). 그 외 `DataStore(clock = Clock.systemUTC())`(데모 초대 전용, 변경 불필요), `SketchTimer`/`AiGuessDialog`(경과 시간 측정, 변경 금지). 한국 시간 유틸 `J/core/HaweTime.kt`(`HaweTime.SEOUL`).
+- **재사용 UI**: `HNavBar`, `HButton`, `HListRow`, `HAlert`, `HToggle`, `HTextField`, `HToastHost/rememberHToastState`, `HAvatar`, `FlowRow`(`CreateGroupScreen.kt` 선례, `@OptIn(ExperimentalLayoutApi::class)`), `WheelPicker`(`J/designsystem/components/WheelPicker.kt`), 시간 선택 시트 `TopicTimeSheet`(`GroupInfoScreen.kt` private — 필요하면 `internal` 로 승격), 날짜 선택 Material3 `DatePicker`(`CreateGroupScreen.kt` 선례).
+- 라우트 `MainRoute`(`J/app/MainNavigation.kt` sealed interface, `@Serializable`), `MainNavHost(session, store, auth, push, groups, missions, pokes, submissions, calendar, insights)` — 새 파라미터로 `dev: DevRepository` 와 `devMode` 상태를 넘긴다.
+- 빌드 정보: `BuildConfig.VERSION_NAME`, `BuildConfig.VERSION_CODE`(없으면 `PackageManager`), `BuildConfig.BUILD_TYPE`, `BuildConfig.API_BASE_URL`(debug 기본 `http://10.0.2.2:8080`, 폰은 `adb reverse` + `-PhaweApiBaseUrl=http://localhost:8080`). `buildFeatures { buildConfig = true }` 이미 켜짐.
+- 서버 계약은 `.agent/plan.md` 의 표(`/api/dev/...`)가 정본: `status`, `clock`(PUT/DELETE), `missions/publish`, `missions/{id}/deadline-now`, `groups/{id}/deadline-now`, `missions/{id}/submissions`, `missions/{id}/submit`, `missions/{id}/submit-missing`, `groups/{id}/poke`, `submissions/{id}/react`, `submissions/{id}/comment`, `groups/{id}/insights/regenerate`, `groups/{id}/settings`(PATCH), `users`, `login-as`, `seed`, `groups/{id}`(DELETE), `reset`.
 
 ## Root Cause / Key Implementation Points
 
-앱 전체가 "그룹당 현재 미션 = 1개"를 가정한다. 데이터 층을 목록으로 일반화하고, 화면은 "선택된 미션"을 기준으로 동작시키며, **미션이 1개면 기존 UI 경로와 동일**하게 한다.
+### 1. 상태와 시계 (`J/core/dev/`)
+- `DevMode`(싱글톤 `object` 또는 `AppViewModel` 이 보유하는 클래스): SharedPreferences(`context.getSharedPreferences("hawe_dev", MODE_PRIVATE)`, 토큰 저장소와 별개)에 `enabled: Boolean`, `clockOffsetSeconds: Long` 저장. Compose 에서 관찰 가능한 `mutableStateOf` 로 노출(`enabled`, `offsetSeconds`). 초기화는 `AppViewModel`/`Application` 에서 `init(context)` 한 번.
+- `AppClock`: `now(): Instant = Instant.now().plusSeconds(offsetSeconds)`, `today(): LocalDate`(서울 기준). 오프셋 0 이면 `Instant.now()` 와 동일해야 한다. **Findings 의 시간 사용처 중 "표시/판정용" 8곳**(`GroupSummary.daysTogether`, `CreateGroupScreen`, `groupCardSubtitle`, `HomeScreen`, `GroupInsightScreen`, `MissionScreen` 93·251·253, `RecordCalendarScreen`, `ResultsFormat.koreanRelativeText`, `ResultsScreen` 103)을 `AppClock.now()` 로 교체(기본 인자값 `Instant.now()` → `AppClock.now()`). 타이머/경과시간 측정(`SketchTimer`, `AiGuessDialog`)은 건드리지 않는다.
+- 서버와 동기: 개발자 모드가 켜져 있을 때 앱 시작(그리고 Dev 도구 열 때·시계 변경 후)에 `GET /api/dev/status` → `AppClock.offsetSeconds = status.offsetSeconds`. 서버 시계 변경 API 의 응답으로도 즉시 갱신. 개발자 모드가 꺼지면 오프셋 0.
 
-1. **레포지토리/모델** (`MissionRepository.kt`):
-   - `CurrentMissionState(missions: List<ServerMission>, nextPublishAt: Instant?)` 로 변경. `current()` 가 `response.missions.map { it.toModel() }`(슬롯 순 유지). 기존 호출부(`MissionScreen`, 테스트)는 `missions.firstOrNull()` 로 대응.
-2. **DataStore 일반화** (`DataStore.kt`):
-   - `applyCurrentMission`: 새 `state.missions` 각각에 대해 **같은 id 의 이전 `StoredMission`** 이 있으면 `submissions/poked/serverMembers(완료만)/serverSubmittedByMe/feedLoaded` 보존(기존 합치기 규칙 그대로, id 별로), 없으면 새로 생성. 결과 `missions = 변환 목록`(서버 순서). 서버 목록에 없는(닫힌) 미션은 버린다.
-   - `todayMissions(groupID): List<TodayMission>`(전체, 슬롯 순) 추가 + `todayMission(groupID, missionID): TodayMission?` 추가. 기존 `todayMission(groupID)` 는 **첫 번째 미션**(= 가장 작은 슬롯, 서버 `todayMission` 규약과 동일)을 돌려준다(기존 `lastOrNull` 은 미션 1개일 때 같은 값). 내부 변환은 공통 private 함수로 분리(`TodayMission` 생성 로직 복제 금지).
-   - `applyFeed`: `isCurrent = missions.any { it.id == missionID }`. `applyCurrentFeed`/`applySubmitted`/`markPoked`: **목록에서 id 로 찾아 그 항목만 `map` 으로 교체**(`lastOrNull`/`listOf(...)`/`dropLast(1)` 제거), id 가 없으면 변경 없음.
-   - 홈 요약: `StoredGroup.summary: MissionSummary?` → **`summaries: List<MissionSummary>`**(슬롯 순). `applyServerGroups` 가 `loaded.missions` 를 넣는다. `applySubmitted` 는 `summaries` 중 `missionId == missionID` 항목을 `submittedByMe = true`, `submittedCount` +1(이미 내가 제출이면 +0)로 갱신. 호환을 위해 `val summary: MissionSummary? get() = summaries.firstOrNull()` 를 두면 기존 호출부 수정이 적다(필요한 곳만 사용).
-   - `summaries`(GroupSummary 목록) 계산: 첫 요약으로 `missionType/topic/submittedCount` 를 채우고, 새 필드 `missionCount = summaries.size`, `mySubmittedCount = summaries.count { it.submittedByMe }`, `didSubmit = summaries.isNotEmpty() && mySubmittedCount == missionCount`. (미션 1개면 기존과 같은 값.)
-   - `replaceMissionsForTest`, `DataStore.preview`, `DemoSeed` 의 `StoredGroup(...)` 생성부를 새 필드에 맞게 수정(데모/프리뷰는 기존과 동일하게 동작).
-3. **홈 요약 데이터** (`GroupApi.kt`, `GroupRepository.kt`, `GroupSummary.kt`, `HomeScreen.kt`):
-   - `GroupSummaryDto` 에 `todayMissions: List<TodayMissionSummaryDto> = emptyList()` 추가. `LoadedGroup(detail, missions: List<MissionSummary>)`; `loadAll` 은 `summary.todayMissions` 가 비어 있고 `todayMission` 이 있으면 `[todayMission]` 으로 폴백(구서버 호환), 둘 다 없으면 빈 목록. 기존 `MissionSummary` 데이터 클래스는 그대로 재사용.
-   - `GroupSummary` 에 `missionCount: Int = 0`, `mySubmittedCount: Int = 0` 추가(기본값으로 기존 생성부 호환). `GroupCard`: 미션 ≥ 2 이면 주제 위 라벨을 "오늘의 미션 · 유형 · 외 {N-1}개" 로 하고, 하단 상태는 "{내 제출 수} / {미션 수} 제출" 형태를 완료 인원 문구 옆에 추가(임시), 배지는 `didSubmit`(전부 제출) ? "열어보기" : "내 미션 남음". **미션 ≤ 1 이면 현재 문구 그대로.** 카드 탭은 기존대로 05 로 이동.
-4. **05 화면** (`MissionScreen.kt`, `MissionFormat.kt`):
-   - `val missions = store.todayMissions(id)`. 선택 상태 `var selectedId by rememberSaveable(id) { mutableStateOf<Long?>(null) }`; 실제 표시 미션 = `missions.firstOrNull { it.id == selectedId } ?: missions.firstOrNull()` (선택한 id 가 사라지면 첫 미션으로). **미션이 1개면 칩 행을 그리지 않고 현재 UI 그대로.**
-   - 2개 이상: `HNavBar` 아래에 가로 칩 행(임시 UI — `Row` + 둥근 `Box`, 선택은 `ink`/`bg` 반전, 내가 제출한 미션은 체크 `HIcon.CHECK_SMALL`), 칩 라벨은 리스트 순서의 "1", "2"… (`number` 는 그룹 누적 번호라 라벨에 쓰지 않음). `MissionCard` 의 헤더에 "{index+1}번째" 를 표시(`#number` 유지). 칩 선택은 `selectedId` 만 바꾼다(재조회 없음).
-   - 콜백: `onPerform: (missionId: Long, type: MissionType?) -> Unit`, `onResults: (missionId: Long) -> Unit` 로 변경(선택된 미션 id 전달). `MainNavigation` 의 호출부 갱신.
-   - 참여 현황·콕 행·잠금 안내는 **선택된 미션**의 `members`/`didSubmit` 기준. `sendPoke(missionID, member, kind)` 는 `pokes.send(id, member.id, kind, missionID)`; `sending` 키를 `(memberId, kind)` 에서 `(missionId, memberId, kind)` 로 확장(미션별 독립). `classifyPokeFailure` 로 `NO_OPEN_MISSION`/`TARGET_ALREADY_SUBMITTED` → `refresh++` 는 그대로.
-   - 제출 후 복귀: `savedStateHandle` 에 `submittedMissionId: Long`(수행 화면이 설정) 추가. `MissionScreen` 은 `submittedMissionId` 를 받으면 그 미션을 선택하고, 미션이 2개 이상이면 토스트를 "{N}번째 미션을 올렸어요"/"{N}번째 미션을 지각으로 올렸어요", 1개면 기존 "오늘의 미션을 올렸어요"/"지각으로 올렸어요"(순수 함수 `submittedToastText(index, total, late)` 로 `MissionFormat.kt` 에 두고 테스트).
-   - 새로고침/카운트다운: 기존 `LaunchedEffect(id, nextPublishAt)`(서버 `nextPublishAt` 도달 시 3회 재조회)로 새 슬롯이 열리면 칩이 늘어난다 — 변경하지 않는다. 미션이 없을 때 빈 상태 문구·카운트다운도 그대로. 카드 안의 `MissionCountdown(closesAt, deadlineAt)` 는 미션별 값이라 그대로.
-5. **수행 라우트** (`MainNavigation.kt`, `MissionPerformCommon.kt`):
-   - `MainRoute.MissionPerform(groupId: Long, type: String? = null, missionId: Long? = null)` — 기본값 null 이면 첫 미션(직렬화/기존 백스택 호환). composable 이 `val mission = route.missionId?.let { store.todayMission(id, it) } ?: store.todayMission(id)`; 이후 `performEntryDecision`/제출은 그 `mission` 기준(이미 `mission.id` 사용). 제출 성공 시 `previousBackStackEntry.savedStateHandle["submittedMissionId"] = mission.id` 추가(기존 `submitted`, `submittedLate` 유지). `MISSION_CLOSED`/`AlreadySubmitted` 분기 동작 불변.
-   - `performEntryDecision` 시그니처는 변경하지 않는다(미션을 인자로 받음).
-6. **결과 연결** (`MainNavigation.kt`): `Mission` composable `onResults = { missionId -> nav.navigate(Results(id, missionId)) }`. **`Results` 가드**: `current = store.todayMission(groupID, missionID)`; `canOpen = if (current != null) current.didSubmit else store.calendarRecord(groupID, missionID)?.didSubmit == true`.
-7. **푸시** (`MainNavigation.kt` ≈105행, `PushModel.kt`): 스냅샷은 `group.missions` 중 `serverSubmittedByMe` 인 가장 뒤 미션(없으면 마지막 미션)으로 `PushGroupSnapshot(group.id, thatMission?.id, thatMission?.serverSubmittedByMe == true)` 를 만든다. `PushModel.kt` 의 모델·`pushTarget` 은 **변경하지 않는다**. (푸시 페이로드에 missionId 가 없어 정확한 미션 매핑은 불가 — 이 한계를 보고서에 기록.)
-8. **콕 API**: `PokeApi.kt` `PokeRequestDto(toUserId, type, missionId: Long? = null)`(`explicitNulls=false` 라 null 이면 키 생략), `PokeRepository.send(groupId, toUserId, kind, missionId: Long? = null)`.
-9. **달력**: 변경 없음. 같은 날 미션 여러 행이 한 날짜 칸에서 어떻게 합쳐지는지(`recordsByDate`, `J/feature/records/RecordCalendarLogic.kt`)만 읽어서 확인하고, 문제가 있으면 보고서에 적기만 한다(필요한 최소 수정이 아니면 손대지 않음).
+### 2. 진입(10탭)
+- 순수 함수/클래스 `DevUnlock`(예: `fun registerTap(state, nowMs): TapResult`): 연속 10회 탭(탭 사이 간격이 3초를 넘으면 카운트 리셋)이면 `DevMode.enabled = true`. 5회부터 토스트 "개발자 모드까지 N번" 표시, 10회에 "개발자 모드가 켜졌어요", 이미 켜져 있으면 "이미 개발자 모드예요". `AppInfoScreen` 의 `Text("버전 $version")` 에 `clickable`(리플 없이) 로 연결하고 토스트(`HToastHost`)를 붙인다. 로직은 컴포저블 밖 순수 함수로 두어 단위 테스트 가능하게.
+
+### 3. 서버 레포지토리 (`J/core/net/DevApi.kt`, `DevRepository.kt`)
+- DTO + `DevRepository(api: ApiClient)`: 서버 계약 표의 각 엔드포인트를 1:1 메서드로(`status()`, `setClock(now|plusSeconds)`, `resetClock()`, `publish(groupId?, template?)`, `deadlineNow(missionId)`, `groupDeadlineNow(groupId)`, `submissionsOf(missionId)`, `submitAs(missionId, userId)`, `submitMissing(missionId)`, `poke(groupId, from, to, type, missionId?)`, `react(submissionId, userId, stickerType)`, `comment(submissionId, userId, content)`, `regenerateInsight(groupId, month)`, `updateSettings(groupId, dailyMissionCount?, slotPublishTimes)`, `users()`, `loginAs(userId): TokenResponseDto`, `seed(days, memberCount, dailyMissionCount, relationType)`, `deleteGroup(groupId)`, `reset()`). **인증이 필요 없는 호출은 `auth = false`** (login-as, users, status, clock 등 전부 `auth=false` 로 통일해도 무방 — 서버가 인증을 요구하지 않는다).
+- 응답 DTO 는 서버 계약 표 그대로(`@Serializable internal data class …`, 누락 필드 기본값). `AppViewModel` 에 `val dev = DevRepository(api)`.
+
+### 4. 원클릭 유저 전환
+- `AppViewModel.switchUser(userId: Long)`(`viewModelScope.launch`): `dev.loginAs(userId)` → `tokens.save(access, refresh)` → `appSession.beginRestoring()` → `dataStore.reset()` → `auth.restore()` → `dataStore.setMyProfile(account.profile)` → `appSession.signIn(account)`. 실패 시 이전 토큰 복구(`tokens.save(oldAccess, oldRefresh)`)하고 `appSession` 을 다시 SIGNED_IN 으로 되돌리며 토스트. 이전 토큰은 호출 전에 읽어 둔다(`tokens.accessToken/refreshToken`). 서버 `login-as` 는 이메일/비번 없이 userId 로 토큰을 발급한다.
+- `MyPageScreen` 개발자 모드 섹션: `LaunchedEffect` 로 `dev.users()` 로딩 → `FlowRow` 칩(닉네임, 현재 사용자(`session.account.userId`)는 강조/체크), 칩 탭 = `switchUser`(진행 중 비활성). 목록 로딩 실패 시 "다시 시도". 마이페이지 시그니처에 `dev: DevRepository`, `onDevTools`, `onSwitchUser: (Long) -> Unit`, 개발자 모드 상태를 전달(`MainNavigation` 에서 연결).
+
+### 5. 개발자 도구 화면 `J/feature/dev/DevToolsScreen.kt` (+ 섹션 분리 파일)
+라우트 `MainRoute.DevTools`. 위에서 아래로 섹션(임시 UI: `Column` 카드 + `HButton`/`HListRow`, 코드 주석 `임시 UI`):
+1. **상태 줄**: `서버 {API_BASE_URL} · 유저 {닉네임}(#{id}) · 서버시간 {serverNow} (오프셋 {n}초) · 빌드 {VERSION_NAME}({code}) {BUILD_TYPE}` — 한 블록(복사 가능 `SelectionContainer`), "새로고침" 버튼(`dev.status()`).
+2. **시간**: 날짜(Material3 `DatePicker`)+시각 선택 → `setClock(now=…)`; 빠른 버튼 `+1시간` `+1일` `+7일`(→ `plusSeconds`), `다음 발행 시각으로`(선택 그룹의 `nextPublishAt` 까지), `초기화`(→ `resetClock`). 성공 시 `AppClock.offsetSeconds` 갱신 + `groups.loadAll` → `store.applyServerGroups` 로 홈 데이터 새로고침 + 결과 토스트(경고 `warning` 표시).
+3. **대상 그룹/미션 선택**: 내 그룹(`store.groups`) 드롭다운(칩 행), 선택된 그룹의 현재 미션(`store.todayMissions`) 칩. 이 선택이 아래 섹션들에 쓰인다.
+4. **미션**: `미션 생성`(= `publish(groupId)`), 틀 선택 칩 13종(`MissionTemplates` 모델에 있는 이름/서버 enum 문자열) 후 `선택 틀로 생성`, `마감 당기기`(선택 미션 `deadline-now`), `그룹 전체 마감 당기기`. 완료 후 `missions.current` → `store.applyCurrentMission` 새로고침.
+5. **대리 행동**: 멤버 선택(`GroupDetail.members`), 선택 미션에 `대리 제출`, `미제출자 전원 제출`, 선택 멤버→다른 멤버 `콕`/`똥`, 선택 미션의 제출 목록(`submissionsOf`)에서 하나 선택 → 스티커 5종으로 `반응`, 간단 입력창으로 `댓글`. 결과/오류 코드는 토스트 + 화면 하단 "최근 결과" 텍스트 박스(최근 20줄).
+6. **시드**: `일수`(기본 30), `멤버 수`(기본 5), `하루 미션 수` 입력 → `시드 생성`(응답의 그룹 id 로 홈 새로고침), `[DEV] 그룹 전체 삭제`(`reset`, `HAlert` 확인).
+7. **인사이트**: 월 이전/다음 + `강제 재생성`(→ `regenerateInsight`) 후 `인사이트 열기` 버튼(`MainRoute.GroupInsight(groupId)`).
+8. **그룹 설정**: `하루 미션 수` 스테퍼(1..5), 슬롯별 발행 시각(슬롯 수만큼 시각 선택 — 기존 시간 시트 재사용) → `dev.updateSettings` 후 `groups.detail` 재조회/`applyServerGroup`.
+9. **초기화**: `로컬 캐시 초기화`(`dataStore.reset()` + `groups.loadAll` 재조회), `토큰 삭제 후 로그아웃`(`appSession.signOut()`), `선택 그룹 삭제`(`dev.deleteGroup`, `HAlert` 확인 후 `store.leave`).
+10. **네트워크 오류 주입**: 아래 6번의 토글 목록.
+11. **개발자 모드 끄기**: `DevMode.enabled=false`(오프셋 0, 주입 해제).
+- 모든 서버 호출은 `rememberCoroutineScope` + 진행 중 비활성(`busy` 플래그) + `try/catch`(`CancellationException` 재던짐, 오류는 `toUserMessage()` 대신 **원문 코드·메시지**를 결과 박스에 표시 — 개발 도구이므로 `ApiException.code/message` 그대로).
+
+### 6. 네트워크 오류 주입 (앱 전용)
+- `J/core/dev/DevFaults.kt`: 규칙 enum + 남은 횟수 — `INSIGHT_GENERATING`(GET `*/insights*` → 202 `{"groupId":…,"month":…,"status":"GENERATING","retryAfterSeconds":2}`; 요청 URL 의 groupId/month 를 채워 반환), `FEED_LOCKED`(GET `/api/missions/*/submissions*` → 423 `{"code":"FEED_LOCKED","message":"…"}`), `SERVER_ERROR`(임의 요청 → 500 `{"code":"INTERNAL_ERROR","message":"…"}`), `NETWORK_DOWN`(요청 시 `IOException` 던짐). 각 규칙은 on/off + "다음 N회" 카운터. OkHttp `Interceptor` 로 구현하고 **`AppViewModel` 의 `ApiClient` 생성 시 `http` 에 추가**(`DevMode.enabled` 가 true 일 때만 동작, 아니면 `chain.proceed`). `/api/dev/**` 호출은 주입 대상에서 제외.
+- 토글 UI 는 Dev 도구 10번 섹션(체크 + 횟수).
+
+### 7. 05 화면 "미션 생성" 버튼
+- `MissionScreen` 에 `devMode` 이면(미션이 없을 때의 빈 상태와 평소 미션 카드 아래 모두) `HButton("[개발자] 미션 생성")` → `dev.publish(groupId)` 후 `refresh++`(기존 `LaunchedEffect(id, refresh)` 재사용), 결과 토스트. `MissionScreen` 시그니처에 `dev: DevRepository? = null`(null 이면 버튼 없음) 추가, `MainNavigation` 이 `devMode` 일 때만 전달.
+
+### 8. 내비게이션/배선
+- `MainRoute.DevTools`(`@Serializable data object` 또는 기존 object 라우트 방식 따라), composable, `MyPageScreen` 의 "개발자 도구" 행 → 이동. `MainNavHost` 에 `dev: DevRepository`, `onSwitchUser: (Long) -> Unit` 파라미터 추가, `RootScreen` → `viewModel.dev`, `viewModel::switchUser`. `AppInfoScreen(onBack, onLicenses)` 는 개발자 모드 켜기 위해 토스트 호스트와 `DevMode` 접근을 내부에서 처리(시그니처 변경 최소).
 
 ## Files / Functions to Change
 
 | 파일 | 변경 |
 |---|---|
-| `J/core/net/MissionRepository.kt` | `CurrentMissionState.missions`, `current()` 전체 변환 |
-| `J/core/net/GroupApi.kt`, `GroupRepository.kt` | `todayMissions` DTO, `LoadedGroup.missions`, 폴백 |
-| `J/core/model/GroupSummary.kt` | `missionCount`, `mySubmittedCount` |
-| `J/core/data/DataStore.kt`, `DemoSeed.kt` | 목록 보존/갱신, `todayMissions`, `todayMission(group, mission)`, id 기반 `apply*`/`markPoked`, `summaries` 목록화 |
-| `J/feature/mission/MissionScreen.kt`, `MissionFormat.kt` | 선택 칩, 선택 미션 기준 UI, 콜백 시그니처, 토스트 문구 |
-| `J/feature/groups/HomeScreen.kt` | 다중 미션 카드 문구 |
-| `J/app/MainNavigation.kt` | `MissionPerform.missionId`, 수행/결과 연결, `Results` 가드, 푸시 스냅샷 |
-| `J/core/net/PokeApi.kt`, `PokeRepository.kt` | `missionId` |
+| `J/core/dev/DevMode.kt`, `AppClock.kt`, `DevUnlock.kt`, `DevFaults.kt` (신규) | 상태·시계·탭 카운터·오류 주입 |
+| `J/core/net/DevApi.kt`, `DevRepository.kt` (신규) | 서버 dev API 클라이언트 |
+| `J/app/AppViewModel.kt` | `dev`, `switchUser`, 오류 주입 인터셉터 등록, 시작 시 서버 시계 동기, `DevMode.init` |
+| `J/app/RootScreen.kt`, `J/app/MainNavigation.kt` | `dev`/`switchUser` 전달, `MainRoute.DevTools`, 05 화면 `dev` 전달 |
+| `J/feature/mypage/AppInfoScreen.kt` | 버전 텍스트 10탭 |
+| `J/feature/mypage/MyPageScreen.kt` | 개발자 섹션(유저 전환 칩, 도구 진입 행) |
+| `J/feature/dev/DevToolsScreen.kt`, `DevSections.kt` (신규) | 개발자 도구 UI |
+| `J/feature/mission/MissionScreen.kt` | 개발자 "미션 생성" 버튼, `AppClock` 교체 |
+| 시간 사용처 8곳 (`GroupSummary.kt`, `CreateGroupScreen.kt`, `GroupFormat.kt`, `HomeScreen.kt`, `GroupInsightScreen.kt`, `RecordCalendarScreen.kt`, `ResultsFormat.kt`, `ResultsScreen.kt`) | `Instant.now()` → `AppClock.now()` |
 | 테스트 | 아래 Tests Required |
 
 ## Implementation Steps
 
-1. `MissionRepository`/`CurrentMissionState` 다중화 + 기존 테스트 수정 → 미션 1개 동작 동일 확인. 2. `DataStore` 일반화(`todayMissions`, id 기반 갱신, `summaries` 목록화) + `DataStoreTest` 정비·추가. 3. `GroupApi`/`GroupRepository`/`GroupSummary`/`HomeScreen`. 4. `PokeApi`/`PokeRepository`. 5. `MissionScreen` 선택 칩·콜백·토스트, `MissionFormat`. 6. `MainNavigation`(`MissionPerform.missionId`, `Mission` 콜백, `Results` 가드, 푸시 스냅샷). 7. `rg` 전수 점검 → 전체 단위 테스트·assemble(·lint).
+1. `DevMode`/`AppClock` + 시간 사용처 교체(오프셋 0 이면 동작 동일) + 테스트. 2. `DevUnlock` + `AppInfoScreen` 10탭. 3. `DevApi`/`DevRepository` + MockWebServer 계약 테스트. 4. `AppViewModel`(`dev`, `switchUser`, 시계 동기) + 마이페이지 유저 전환. 5. `DevToolsScreen` 섹션들(상태→시간→선택→미션→대리→시드→인사이트→설정→초기화). 6. `DevFaults` 인터셉터 + 토글 UI. 7. 05 화면 버튼. 8. 라우트·배선·전체 테스트·assemble(·lint).
 
 ## Constraints
 
-- `android/` 만 수정(`docs/` 포함 다른 곳 금지). 백엔드·iOS 변경 금지. 새 라이브러리 금지. 커밋/푸시 금지.
-- **미션 1개 그룹의 화면·동작·문구 불변**(칩 행·"외 N개"·번째 문구는 미션 ≥ 2 일 때만).
-- 서버 값이 진실: 슬롯 번호·마감 시각을 앱이 계산하지 않는다. 그룹 설정 UI(하루 미션 수)·알림·푸시 페이로드 변경 금지.
-- A2/A3/A9 변경 보존. `MainNavigation.kt`·`MissionScreen.kt` 수정은 위 목적에 한정.
-- 코드 스타일은 주변(짧은 DTO, 한국어 문구, 한 줄 `@Test`)에 맞춘다. 임시 UI 는 코드 주석 `임시 UI` 로만 표기.
+- `android/` 만 수정(`docs/`·백엔드·iOS 금지, `.agent/report.md` 만 예외). 새 라이브러리 금지. 커밋/푸시 금지.
+- **안전장치 금지**: `BuildConfig.DEBUG`/`BuildType` 으로 개발자 기능을 숨기지 않는다. 10탭만이 진입 조건.
+- 개발자 모드가 꺼져 있을 때 앱의 모든 동작·화면은 **현재와 동일**(오프셋 0, 인터셉터 비활성, 개발자 UI 비노출).
+- A2·A3·A9·A6 의 기존 변경 보존. `MissionScreen`/`MainNavigation`/`MyPageScreen` 수정은 최소 범위.
+- 타이머/AI 추론 시간 측정(`SketchTimer`, `AiGuessDialog`)은 건드리지 않는다.
+- 코드 스타일은 주변(한국어 문구, 짧은 DTO, 한 줄 `@Test`)에 맞춘다. 임시 UI 는 주석 `임시 UI`.
 
 ## Edge Cases
 
-- 미션 수가 2→3 으로 늘어남(새 슬롯 발행) / 3→2 로 줄어듦(슬롯 마감): 새로고침 후 선택 id 가 목록에 없으면 첫 미션으로. 같은 id 는 `submissions/feedLoaded/poked` 보존, 다른 id 는 폐기.
-- 일부만 제출: 칩 체크는 미션별, 홈은 "k/N 제출" + "내 미션 남음".
-- 같은 틀이 한 날에 두 번: UI·상태 모두 id 로 구분(주제 문자열로 구분 금지).
-- 수행 화면에서 그 미션이 닫힘 → 제출 시 `MISSION_CLOSED`(기존 `classifySubmitFailure`) → 05 복귀 + 새로고침.
-- 선택 미션 B 에서 콕 → 응답 `missionId` 로 B 의 `poked` 갱신(A 에는 영향 없음). 콕 도중 B 가 닫힘 → 409 `NO_OPEN_MISSION` → `refresh++`.
-- `ResultsScreen` 에서 두 번째 미션 열기: `Results` 가드가 현재 미션 목록을 먼저 보므로 달력 캐시 없이도 열림(내가 제출한 경우), 제출 안 했으면 막힘.
-- 구서버(`todayMissions` 없음) 폴백, `missions` 가 빈 목록(미개방), 앱이 모르는 `media`/`template` 미션(`type == null`) 칩·카드 처리(기존 `UNSUPPORTED_MISSION_TEXT` 경로 유지).
-- 프로세스 복원: `selectedId` 는 `rememberSaveable`, `MissionPerform.missionId` 는 직렬화 기본값 null 이라 옛 백스택과 호환.
+- 10탭: 중간에 3초 이상 멈추면 리셋, 다른 화면으로 이동했다 오면 리셋, 이미 켜진 상태에서 탭, 화면 회전(`rememberSaveable` 불필요 — 리셋 허용).
+- 유저 전환: `login-as` 실패/네트워크 오류 → 이전 세션 복구, 전환 도중 `onSessionExpired` 중복 발생 방지(전환 중 플래그), 전환 직후 홈에서 `groups.loadAll` 이 새 유저 기준으로 실행(RESTORING→SIGNED_IN 으로 `MainNavHost` 재구성), 시드 계정이 아닌 유저로 로그인했을 때 현재 사용자 칩 표시.
+- 시계: 서버가 꺼져 있거나 `status` 실패 → 오프셋 유지, 앱 시작 지연 금지(비동기, 타임아웃 짧게). 오프셋이 큰 값일 때 `Duration.between(now, nextPublishAt)` 음수 처리(`coerceAtLeast(0)` 기존). 개발자 모드 해제 시 오프셋 0 으로 되돌려 서버와 불일치가 남아도 일반 동작에 영향 없게(서버 시계는 `reset` 안내 토스트).
+- 대리 행동: 선택 그룹/미션/멤버가 없을 때 버튼 비활성, 서버의 `ALREADY_SUBMITTED`/`MISSION_CLOSED` 등 오류 코드를 결과 박스에 그대로.
+- 시드 직후: 새 그룹이 홈에 보이도록 `loadAll`; 시드된 그룹은 현재 로그인 유저가 멤버가 아닐 수 있음(소유자 dev1) → 안내 토스트("dev1 로 전환하세요") 또는 현재 유저가 dev1~devN 중 하나일 때만 홈에 보임을 문구로 안내.
+- 오류 주입: `INSIGHT_GENERATING` 이 `InsightLoader` 재시도(최대 8회) 안에서 소진되도록 "N회" 지정, `NETWORK_DOWN` 이 `/api/dev/**` 호출까지 막지 않음(제외), 개발자 모드 해제 시 전체 해제.
+- 설정 변경: `dailyMissionCount` 를 줄일 때 슬롯 시각 목록 길이 동기화, 서버 검증 오류(`VALIDATION_ERROR`) 표시.
 
 ## Regression Risks
 
-- `StoredGroup.missions`/`summary` 를 `listOf(single)`·`lastOrNull`·`dropLast` 로 다루던 코드를 빠뜨리면 두 번째 미션 상태가 사라지거나 덮어써진다 → `rg "missions\.(last|first)|listOf\(mission|dropLast|\.summary\b|lastOrNull" android/app/src/main` 로 전수 점검하고 결과를 보고서에 기록.
-- `MissionScreen` 콜백 시그니처 변경 → 호출부(`MainNavigation`, 프리뷰, 테스트) 컴파일.
-- `todayMission(groupID)` 의 의미가 `lastOrNull` → `firstOrNull` 로 바뀐다(미션 1개에서는 동일). 사용처: `MissionScreen`, `MainNavigation`(Results 가드·수행·결과), `DataStore.preview`.
-- `MainRoute.MissionPerform` 필드 추가(기본값 있음) → 직렬화 호환 확인, 푸시 딥링크는 `Mission` 라우트만 사용.
-- 홈 `GroupSummary` 필드 추가는 기본값으로 호환. `GroupFormatTest`/`HomeScreen` 미션 1개 문구 불변.
-- `SubmissionRepository`·`DataStore` 는 우준의 다른 Android 작업과 겹칠 수 있으나 A4/A7/A8 은 이미 커밋돼 충돌 가능성은 낮음.
+- `Instant.now()` → `AppClock.now()` 교체: 오프셋 0 일 때 결과 동일해야 함 → 기존 단위 테스트(특히 `GroupFormatTest`, `ResultsFormat` 관련) 통과 확인. 기본 인자값으로 쓰인 곳은 호출부 시그니처 호환 유지.
+- `MyPageScreen`/`MissionScreen`/`MainNavHost` 시그니처 변경 → 호출부·프리뷰·테스트 컴파일(`rg "MyPageScreen(\|MissionScreen(\|MainNavHost("`). 새 파라미터는 기본값을 줘서 기존 호출을 최대한 유지.
+- OkHttp 인터셉터 추가가 개발자 모드 꺼짐 상태에서 요청을 바꾸지 않아야 함(단위 테스트로 pass-through 고정).
+- `AppViewModel.switchUser` 가 `appSession` 상태 전이(RESTORING→SIGNED_IN)로 `RootScreen` 을 재구성 — 토큰 저장 순서와 `dataStore.reset()` 타이밍(이전 유저 데이터가 새 유저에게 보이지 않게).
+- SharedPreferences 키 충돌 없음(`hawe_dev` 파일 분리).
 
 ## Tests Required
 
-JVM 단위 테스트(`T/…`) — 기존 테스트는 **미션 1개 회귀 보호용으로 그대로 통과**해야 하며, 시그니처 변경분만 최소 수정:
-- `MissionRepositoryTest`(MockWebServer): 여러 미션 매핑·순서(slotNo 순 유지), 빈 목록, 단일 미션 회귀.
-- `DataStoreTest`: 다중 미션 `applyCurrentMission`(같은 id 는 `submissions/poked/feedLoaded/serverSubmittedByMe` 보존, 새 id 는 새로 생성, 사라진 id 는 제거), `todayMissions` 순서, `todayMission(group, mission)`, `applyFeed`/`applySubmitted`/`markPoked` 가 **해당 id 만** 바꾸고 나머지는 보존, 모르는 id 무시, 미션 1개 회귀, 홈 `summaries`(`missionCount`, `mySubmittedCount`, `didSubmit` 전부 제출 기준) 및 `applySubmitted` 가 요약 갱신.
-- `GroupRepositoryTest`: `todayMissions` 매핑(2개), `todayMissions` 비고 `todayMission` 만 있는 폴백, 둘 다 없음.
-- `PokeRepositoryTest`: 요청 본문에 `missionId` 포함(지정 시)/생략(미지정 시).
-- `MissionFormatTest` 또는 신규: `submittedToastText`(1개/2개 이상/지각), 선택 미션 해석 순수 함수(선택 id 존재/없음 → 첫 미션)를 순수 함수로 분리해 테스트.
-- `GroupFormatTest`/신규: 홈 카드 문구 순수 함수가 있다면(미션 1개 불변, ≥2 "외 N개") 테스트 — 문구 생성을 `GroupFormat.kt` 의 순수 함수로 분리하는 편이 테스트하기 쉽다.
-- `PushModelTest`: 변경 없음(모델 불변) — 스냅샷 선택 로직을 별도 순수 함수로 뺀다면 그 테스트 추가.
+JVM 단위 테스트(`T/…`):
+- `AppClockTest`: 오프셋 0 → `Instant.now()` 와 근접, 오프셋 설정 시 이동, `today()` 서울 기준 날짜 경계.
+- `DevUnlockTest`: 9탭 미해제, 10탭 해제, 간격 3초 초과 리셋, 5~9탭 진행 문구, 이미 켜짐.
+- `DevRepositoryTest`(MockWebServer): 각 엔드포인트의 메서드·경로·쿼리·본문(`now` 서울 시각 문자열, `plusSeconds`, `userId`, `stickerType`, `month`)과 응답 파싱, `auth=false`(Authorization 헤더 없음), 오류 응답이 `ApiException` 코드로 전파.
+- `DevFaultsTest`: 규칙별 가짜 응답(202/423/500, `IOException`), "다음 N회" 소진, 개발자 모드 꺼짐 시 pass-through, `/api/dev/**` 제외.
+- 유저 전환 순수 로직(토큰 보관/복구 순서)을 함수로 분리했다면 그 테스트(성공 시 새 토큰 저장, 실패 시 이전 토큰 복구).
+- 시간 교체한 포맷 함수들의 기존 테스트 통과.
 - UI 테스트 없음(컴파일 + 수동 확인).
 
 ## Validation Steps
 
-1. `android\gradlew.bat :app:testDebugUnitTest --offline` 전체 통과(출력 요약 기록). 가능하면 `:app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline`.
-2. 위 Regression Risks 의 `rg` 점검 결과를 보고서에 포함. `rg "COMING_SOON"` 에 신규 사용이 없는지 확인.
-3. 사용자 수동 확인(서버+기기, 미검증이면 "미검증" 명시): 서버에서 `dailyMissionCount=3`(관리 경로로 설정) 그룹으로 — 05 칩 전환, 각 미션 제출→"N번째 미션을 올렸어요", 각 미션 결과 열기, 홈 카드 "외 N개"/"k/N 제출", 미션별 콕(다른 미션 선택 후 콕), 슬롯 발행 시각 경과 후 칩 증가, 미션 1개 그룹 UI 불변.
+1. `android\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline` 통과 기록(JDK 17 사용 시 명시).
+2. `rg "Instant.now\(\)" android/app/src/main` 로 남은 곳이 타이머/AI 시간 측정/`DataStore` 데모 시계뿐인지 확인.
+3. `rg "BuildConfig.DEBUG|BuildType" android/app/src/main/java` 에 개발자 기능 게이트가 없는지 확인.
+4. 수동(기기+서버, 미검증이면 "미검증"): 앱 정보 버전 10탭 → 개발자 모드 켜짐 → 앱 재실행 후에도 유지 → 마이페이지 시드 유저 칩 한 번 탭으로 전환 → Dev 도구에서 `시드 생성` → dev1 전환 → 달력 도장(GOOD/LATE/PENALTY)·인사이트 확인 → 시계 `+1일` → 새 미션 발행·이전 미션 닫힘 → `미션 생성`/틀 선택/마감 당기기/대리 제출·콕·반응·댓글 → 인사이트 강제 재생성(202→200) → 그룹 설정(하루 미션 3개) → 05 화면 칩 → 오류 주입 → 개발자 모드 끄기.
 
 ## Potential Merge Conflicts
 
-- `MainNavigation.kt`, `MissionScreen.kt`, `DataStore.kt`, `GroupRepository.kt`, `HomeScreen.kt`: A2·A3·A9 미커밋 변경과 같은 파일(특히 `MainNavigation.kt`·`DataStore.kt`). 변경 범위를 이 계획에 한정하고 기존 변경을 보존.
-- 우준의 후속 작업이 없다면 A6 이 Android 마지막 항목. iOS 이식(A5 항목 7)은 별도.
+- `AppViewModel.kt`, `RootScreen.kt`, `MainNavigation.kt`, `MyPageScreen.kt`, `MissionScreen.kt`, `AppInfoScreen.kt`, `GroupFormat.kt`, `HomeScreen.kt`: A2·A3·A9·A6 미커밋 변경과 같은 파일. 기존 변경 보존, 변경은 이 계획 범위에 한정.
+- 서버 계획(`.agent/plan.md`)이 먼저 병합돼 있어야 한다(`DevRepository` 계약).

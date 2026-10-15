@@ -202,7 +202,8 @@ public class GroupService {
 
         int safePage = Math.max(page, 0);
         int safeSize = clampSize(size);
-        List<GroupMemberRow> rows = groupMemberMapper.findMembersByGroupId(groupId, (long) safePage * safeSize, safeSize);
+        List<GroupMemberRow> rows = groupMemberMapper.findMembersByGroupId(groupId, (long) safePage * safeSize,
+                safeSize, SeoulTime.today().withDayOfMonth(1));
         long total = groupMemberMapper.countByGroupId(groupId);
 
         List<GroupMemberResponse> content = rows.stream()

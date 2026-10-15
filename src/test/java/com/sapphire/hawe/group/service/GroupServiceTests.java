@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -184,9 +185,10 @@ class GroupServiceTests {
         verify(groupMapper).findSummariesByUserId(7L, 214748364700L, 100);
         when(groupMapper.findById(11L)).thenReturn(group(11L, 7L));
         when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
-        when(groupMemberMapper.findMembersByGroupId(11L, 214748364700L, 100)).thenReturn(List.of());
+        when(groupMemberMapper.findMembersByGroupId(eq(11L), eq(214748364700L), eq(100), any()))
+                .thenReturn(List.of());
         service.listMembers(7L, 11L, Integer.MAX_VALUE, 100);
-        verify(groupMemberMapper).findMembersByGroupId(11L, 214748364700L, 100);
+        verify(groupMemberMapper).findMembersByGroupId(eq(11L), eq(214748364700L), eq(100), any());
     }
 
     @Test

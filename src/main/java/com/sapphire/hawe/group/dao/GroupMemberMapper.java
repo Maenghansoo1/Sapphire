@@ -11,6 +11,8 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
+import java.time.LocalDate;
+import com.sapphire.hawe.global.time.SeoulTime;
 
 @Mapper
 public interface GroupMemberMapper {
@@ -53,7 +55,7 @@ public interface GroupMemberMapper {
             + DISPLAY_CHARACTER + ", (gm.nickname_override IS NOT NULL) AS group_profile, gm.role AS role, "
             + "(SELECT COUNT(DISTINCT m.mission_date) FROM submissions s JOIN missions m ON m.id = s.mission_id "
             + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id "
-            + "AND m.mission_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) AS submission_count_this_month, "
+            + "AND m.mission_date >= #{monthStart}) AS submission_count_this_month, "
             + "EXISTS (SELECT 1 FROM submissions s JOIN missions m ON m.id = s.mission_id "
             + "WHERE s.user_id = gm.user_id AND m.group_id = gm.group_id AND " + MissionMapper.CURRENT
             + ") AS stamped_today "
@@ -62,7 +64,11 @@ public interface GroupMemberMapper {
             + GROUP_CHARACTER_JOIN
             + "WHERE gm.group_id = #{groupId} ORDER BY gm.joined_at ASC, gm.id ASC LIMIT #{limit} OFFSET #{offset}")
     List<GroupMemberRow> findMembersByGroupId(@Param("groupId") Long groupId, @Param("offset") long offset,
-            @Param("limit") int limit);
+            @Param("limit") int limit, @Param("monthStart") LocalDate monthStart);
+
+    default List<GroupMemberRow> findMembersByGroupId(Long groupId, long offset, int limit) {
+        return findMembersByGroupId(groupId, offset, limit, SeoulTime.today().withDayOfMonth(1));
+    }
 
     @Select("SELECT COUNT(*) FROM group_members WHERE group_id = #{groupId}")
     long countByGroupId(@Param("groupId") Long groupId);

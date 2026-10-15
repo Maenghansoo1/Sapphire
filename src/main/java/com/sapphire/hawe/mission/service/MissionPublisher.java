@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,8 +63,18 @@ public class MissionPublisher {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishIfDue(Long groupId, LocalDateTime now) {
+        publish(groupId, now, false, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<Long> forcePublish(Long groupId, LocalDateTime now, MissionTemplate template) {
+        return publish(groupId, now, true, template);
+    }
+
+    private List<Long> publish(Long groupId, LocalDateTime now, boolean forced, MissionTemplate requestedTemplate) {
         Group group = groups.findById(groupId);
-        if (group == null) return;
+        if (group == null) return List.of();
+        List<Long> created = new ArrayList<>();
         LocalDate date = now.toLocalDate();
         Map<Integer, GroupMissionSlot> configured = new HashMap<>();
         for (GroupMissionSlot slot : slots.findByGroupId(groupId)) configured.put(slot.getSlotNo(), slot);
@@ -80,12 +91,13 @@ public class MissionPublisher {
             LocalTime deadlineTime = slot != null && slot.getDeadlineTime() != null
                     ? slot.getDeadlineTime() : properties.defaultDeadlineTime();
             LocalDateTime scheduled = MissionTiming.scheduledPublishAt(date, publishTime);
-            if (now.isBefore(scheduled) || missions.existsByGroupIdAndDateAndSlot(groupId, date, slotNo)) continue;
+            if ((!forced && now.isBefore(scheduled)) || missions.existsByGroupIdAndDateAndSlot(groupId, date, slotNo)) continue;
 
-            LocalDateTime publishedAt = scheduled.isBefore(group.getCreatedAt()) ? group.getCreatedAt() : scheduled;
+            LocalDateTime publishedAt = forced ? now :
+                    (scheduled.isBefore(group.getCreatedAt()) ? group.getCreatedAt() : scheduled);
             long seed = MissionTemplateSelector.seed(groupId, date, slotNo);
-            MissionTemplate template = MissionTemplateSelector.select(groupId, date, slotNo,
-                    group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates());
+            MissionTemplate template = requestedTemplate == null ? MissionTemplateSelector.select(groupId, date, slotNo,
+                    group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates()) : requestedTemplate;
             boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
             // 실험 군은 (그룹, 날짜) 단위라 같은 날 슬롯은 모두 같은 군이다. 위의 틀·대상 선택은 군과 무관하다
             if (groupContext == null)
@@ -115,8 +127,9 @@ public class MissionPublisher {
             mission.setDeadlineAt(MissionTiming.deadlineAfter(publishedAt, deadlineTime));
             mission.setGenerationSource(generated.source().name());
             mission.setExperimentArm(groupContext.experimentArm() == null ? null : groupContext.experimentArm().name());
-            try { missions.insert(mission); }
+            try { missions.insert(mission); if (mission.getId() != null) created.add(mission.getId()); }
             catch (DuplicateKeyException ignored) { /* Another publisher already committed this slot. */ }
         }
+        return created;
     }
 }

@@ -2,6 +2,7 @@ package com.sapphire.hawe.global.time;
 
 import com.sapphire.hawe.poke.dto.PokeResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -14,6 +15,19 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SeoulTimeTests {
+    @AfterEach void resetClock() { SeoulTime.reset(); }
+
+    @Test void offsetMovesServerTimeButNotRealTime() {
+        LocalDateTime before = SeoulTime.realNow();
+        SeoulTime.setOffset(Duration.ofDays(2));
+        assertEquals(Duration.ofDays(2), SeoulTime.offset());
+        assertTrue(Duration.between(before.plusDays(2), SeoulTime.now()).abs().toSeconds() < 5);
+        assertTrue(Duration.between(before, SeoulTime.realNow()).abs().toSeconds() < 5);
+        assertEquals(SeoulTime.now().toLocalDate(), SeoulTime.today());
+        SeoulTime.reset();
+        assertEquals(Duration.ZERO, SeoulTime.offset());
+        assertTrue(Duration.between(SeoulTime.realNow(), SeoulTime.now()).abs().toSeconds() < 5);
+    }
 
     @Test
     void attachesSeoulOffsetEvenWhenJvmDefaultIsUtc() {

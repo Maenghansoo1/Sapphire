@@ -1,6 +1,7 @@
 package com.sapphire.hawe.feature.groups
 
 import com.sapphire.hawe.core.HaweTime
+import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.model.GroupDetail
 import com.sapphire.hawe.core.model.GroupMember
 import com.sapphire.hawe.core.model.GroupSummary
@@ -31,7 +32,7 @@ fun leaveMessage(group: GroupDetail): String = buildString {
         append("나가면 이 그룹이 삭제돼요. 초대 코드도 더는 쓸 수 없어요.")
     else append("'${group.name}'에서 나가도 내가 올린 작품과 댓글은 그룹에 남아요. 다시 들어오려면 초대 코드가 필요해요.")
 }
-fun groupCardSubtitle(summary: GroupSummary, now: Instant = Instant.now()): String = buildString {
+fun groupCardSubtitle(summary: GroupSummary, now: Instant = AppClock.now()): String = buildString {
     append("${summary.relationship.displayName} · ${summary.members.size}명")
     summary.daysTogether(now)?.let { append(" · 함께한 지 ${it}일") }
 }

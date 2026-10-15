@@ -30,6 +30,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.data.MissionState
 import com.sapphire.hawe.core.AppSession
+import com.sapphire.hawe.core.dev.AppClock
+import com.sapphire.hawe.core.net.DevRepository
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.PokeFollowUp
 import com.sapphire.hawe.core.net.PokeRepository
@@ -58,7 +60,7 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
     refreshSignal: Boolean = false, onRefreshHandled: () -> Unit = {},
     notice: String? = null, onNoticeHandled: () -> Unit = {},
     onPerform: (Long, MissionType?) -> Unit = { _, _ -> }, onResults: (Long) -> Unit = {},
-    onCalendar: () -> Unit = {}) {
+    onCalendar: () -> Unit = {}, dev: DevRepository? = null) {
     val group = store.groups.firstOrNull { it.id == id } ?: return
     val currentMissions = store.todayMissions(id)
     var selectedId by rememberSaveable(id) { mutableStateOf<Long?>(null) }
@@ -90,7 +92,7 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
     val nextPublishAt = group.nextPublishAt
     LaunchedEffect(id, nextPublishAt) {
         if (nextPublishAt != null) {
-            delay(Duration.between(Instant.now(), nextPublishAt).toMillis().coerceAtLeast(0))
+            delay(Duration.between(AppClock.now(), nextPublishAt).toMillis().coerceAtLeast(0))
             repeat(3) { attempt ->
                 refresh++
                 if (attempt < 2) delay(30_000)
@@ -108,6 +110,21 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
     LaunchedEffect(refreshSignal) { if (refreshSignal) { refresh++; onRefreshHandled() } }
     LaunchedEffect(notice) { if (notice != null) { toast.show(notice); onNoticeHandled() } }
     val scope = rememberCoroutineScope()
+    var creating by remember(id) { mutableStateOf(false) }
+    fun createMission() {
+        if (dev == null || creating) return
+        creating = true
+        scope.launch {
+            try {
+                val result = dev.publish(id)
+                refresh++
+                toast.show(result.message ?: "미션 ${result.created.size}개를 생성했어요")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                toast.show("미션 생성 실패: ${error.message}")
+            } finally { creating = false }
+        }
+    }
     var sending by remember(id) { mutableStateOf(emptySet<Triple<Long, Long, PokeKind>>()) }
     fun sendPoke(missionID: Long, member: MissionMember, kind: PokeKind) {
         val key = Triple(missionID, member.id, kind)
@@ -167,10 +184,14 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("아직 오늘의 미션이 열리지 않았어요", style = HType.sectionTitle, color = HColors.ink)
                     nextPublishAt?.let { MissionCountdown(it) }
+                    if (dev != null) HButton("[개발자] 미션 생성", Modifier.padding(top = 20.dp),
+                        enabled = !creating, onClick = ::createMission)
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = bottom + 8.dp)) {
                 MissionCard(mission, currentMissions.indexOfFirst { it.id == mission.id }, currentMissions.size,
                     onPerform = { onPerform(mission.id, null) }, onResults = { onResults(mission.id) })
+                if (dev != null) HButton("[개발자] 미션 생성", Modifier.padding(top = 12.dp),
+                    enabled = !creating, onClick = ::createMission)
                 Row(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("참여 현황", style = HType.sectionTitle, color = HColors.ink)
@@ -248,9 +269,9 @@ private fun MissionCountdown(closesAt: Instant, deadlineAt: Instant? = null) {
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    var now by remember(closesAt) { mutableStateOf(Instant.now()) }
+    var now by remember(closesAt) { mutableStateOf(AppClock.now()) }
     LaunchedEffect(closesAt, started) {
-        if (started) while (true) { now = Instant.now(); delay(1000) }
+        if (started) while (true) { now = AppClock.now(); delay(1000) }
     }
     Text(if (now.isBefore(closesAt)) "다음 미션까지 ${countdownText(closesAt, now)}" else "곧 열려요",
         style = HType.caption13.copy(fontFeatureSettings = "tnum"), color = HColors.textSecondary)

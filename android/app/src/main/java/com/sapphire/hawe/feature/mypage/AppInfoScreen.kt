@@ -6,12 +6,15 @@ import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,10 +26,15 @@ import com.sapphire.hawe.designsystem.assets.HIconView
 import com.sapphire.hawe.designsystem.brand.HLogoSymbol
 import com.sapphire.hawe.designsystem.brand.HWordmark
 import com.sapphire.hawe.designsystem.components.HListRow
+import com.sapphire.hawe.designsystem.components.HToastHost
+import com.sapphire.hawe.designsystem.components.rememberHToastState
 import com.sapphire.hawe.designsystem.components.HNavBar
 import com.sapphire.hawe.designsystem.components.HNavLeading
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.*
+import com.sapphire.hawe.core.dev.DevMode
+import com.sapphire.hawe.core.dev.DevUnlock
+import android.os.SystemClock
 
 private const val contactEmail = "devleeekh@gmail.com"
 
@@ -40,6 +48,10 @@ fun AppInfoScreen(onBack: () -> Unit, onLicenses: () -> Unit) {
     val context = LocalContext.current
     val version = rememberAppVersionName()
     val latestVersion = version // TODO: 서버 연결 시 최신 버전을 읽어요.
+    val unlock = remember { DevUnlock() }
+    val toast = rememberHToastState()
+    val taps = remember { MutableInteractionSource() }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = HLayout.screenPaddingCompact)) {
         HNavBar("앱 정보", leading = HNavLeading.BACK, onLeading = onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -50,7 +62,11 @@ fun AppInfoScreen(onBack: () -> Unit, onLicenses: () -> Unit) {
                     contentAlignment = Alignment.Center) { HLogoSymbol(62.dp) }
                 HWordmark(26)
                 Text("Hi + We, 매일 건네는 우리의 인사", style = HType.caption13, color = HColors.textSecondary)
-                Text("버전 $version", style = HType.plex(14), color = HColors.textSecondary)
+                Text("버전 $version", Modifier.clickable(interactionSource = taps, indication = null) {
+                    val result = unlock.registerTap(SystemClock.elapsedRealtime(), DevMode.enabled)
+                    if (result.unlocked) DevMode.changeEnabled(true)
+                    result.message?.let(toast::show)
+                }, style = HType.plex(14), color = HColors.textSecondary)
             }
             Row(Modifier.fillMaxWidth().padding(top = 22.dp)
                 .background(HColors.surface, RoundedCornerShape(16.dp)).padding(16.dp),
@@ -76,5 +92,7 @@ fun AppInfoScreen(onBack: () -> Unit, onLicenses: () -> Unit) {
         Text(AppVersionInfo.footer, Modifier.fillMaxWidth().padding(top = 12.dp,
             bottom = ctaBottomPadding(32.dp)), style = HType.plex(12, lineHeightMultiple = 1.6f),
             color = HColors.textSecondary, textAlign = TextAlign.Center)
+    }
+    HToastHost(toast)
     }
 }

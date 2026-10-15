@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.model.GroupInsight
 import com.sapphire.hawe.core.net.ApiException
 import com.sapphire.hawe.core.net.CalendarRepository
@@ -39,7 +40,7 @@ import kotlinx.coroutines.CancellationException
 @Composable
 fun GroupInsightScreen(groupId: Long, store: DataStore, insights: InsightRepository,
     calendar: CalendarRepository, onBack: () -> Unit, onLeft: () -> Unit, onResults: (Long) -> Unit) {
-    val current = currentMonth(Instant.now())
+    val current = currentMonth(AppClock.now())
     var month by rememberSaveable { mutableStateOf(current) }
     var retry by remember { mutableIntStateOf(0) }
     var outcome by remember(month) { mutableStateOf<InsightOutcome?>(null) }

@@ -1,6 +1,7 @@
 package com.sapphire.hawe.feature.groups
 
 import androidx.compose.foundation.background
+import com.sapphire.hawe.core.dev.AppClock
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -44,7 +45,7 @@ fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (Long) -> Unit,
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = HLayout.screenPaddingCompact)
                 .padding(bottom = bottom + 24.dp)) {
-                Text("${homeDateText(Instant.now())} · 그룹 ${groups.size}개",
+                Text("${homeDateText(AppClock.now())} · 그룹 ${groups.size}개",
                     Modifier.padding(top = 6.dp, bottom = 20.dp), style = HType.plex(14), color = HColors.textSecondary)
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     groups.forEach { group ->

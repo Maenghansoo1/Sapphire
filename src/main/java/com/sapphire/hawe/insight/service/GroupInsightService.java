@@ -54,7 +54,7 @@ public class GroupInsightService {
         if (groups.findById(groupId) == null) throw new BusinessException(GroupErrorCode.GROUP_NOT_FOUND);
         if (!members.existsByGroupIdAndUserId(groupId, userId))
             throw new BusinessException(GroupErrorCode.NOT_GROUP_MEMBER);
-        YearMonth current = YearMonth.now(SeoulTime.ZONE);
+        YearMonth current = YearMonth.from(SeoulTime.today());
         YearMonth month = requestedMonth == null ? current : requestedMonth;
         if (month.isAfter(current) || month.isBefore(current.minusMonths(12)))
             throw new BusinessException(CommonErrorCode.VALIDATION_ERROR);

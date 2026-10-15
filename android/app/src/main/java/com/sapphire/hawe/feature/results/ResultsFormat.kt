@@ -1,6 +1,7 @@
 package com.sapphire.hawe.feature.results
 
 import com.sapphire.hawe.core.HaweTime
+import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.model.ConsensusRank
 import com.sapphire.hawe.core.model.MissionSpec
 import com.sapphire.hawe.core.model.MissionType
@@ -23,7 +24,7 @@ fun koreanMonthDayText(instant: Instant): String {
     return "${date.monthValue}월 ${date.dayOfMonth}일"
 }
 
-fun koreanRelativeText(createdAt: Instant, now: Instant = Instant.now()): String {
+fun koreanRelativeText(createdAt: Instant, now: Instant = AppClock.now()): String {
     val seconds = Duration.between(createdAt, now).seconds.coerceAtLeast(0)
     return when {
         seconds < 60 -> "방금"

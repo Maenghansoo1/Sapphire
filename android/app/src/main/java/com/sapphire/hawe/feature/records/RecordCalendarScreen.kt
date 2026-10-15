@@ -28,6 +28,7 @@ import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.DayRecord
 import com.sapphire.hawe.core.model.Stamp
+import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.net.CalendarRepository
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
@@ -47,7 +48,7 @@ fun RecordCalendarScreen(groupID: Long, store: DataStore, calendar: CalendarRepo
     onBack: () -> Unit, onResults: (Long) -> Unit) {
     val group = store.group(groupID)
     if (group == null) { Box(Modifier.fillMaxSize().background(HColors.bg)); return }
-    val now = Instant.now()
+    val now = AppClock.now()
     val today = seoulDate(now)
     val first = firstMonth(group.createdAt)
     val last = currentMonth(now)

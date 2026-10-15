@@ -4,6 +4,7 @@ import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.sapphire.hawe.global.time.SeoulTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -54,30 +55,40 @@ public interface InsightMapper {
     List<InsightRow> findDisplayProfiles(@Param("groupId") Long groupId, @Param("ids") List<Long> ids);
 
     @Select("SELECT group_id, month, status, payload, generated_at, expires_at, updated_at, "
-            + "(expires_at IS NOT NULL AND expires_at <= NOW()) AS expired, "
-            + "(updated_at < NOW() - INTERVAL 5 MINUTE) AS abandoned "
+            + "(expires_at IS NOT NULL AND expires_at <= #{now}) AS expired, "
+            + "(updated_at < DATE_SUB(#{now}, INTERVAL 5 MINUTE)) AS abandoned "
             + "FROM group_insights WHERE group_id=#{groupId} AND month=#{month}")
-    InsightRow findCache(@Param("groupId") Long groupId, @Param("month") String month);
+    InsightRow findCache(@Param("groupId") Long groupId, @Param("month") String month,
+            @Param("now") LocalDateTime now);
+    default InsightRow findCache(Long groupId, String month) { return findCache(groupId, month, SeoulTime.now()); }
 
-    @Insert("INSERT IGNORE INTO group_insights (group_id, month, status, attempts) "
-            + "VALUES (#{groupId}, #{month}, 'GENERATING', 1)")
-    int tryStart(@Param("groupId") Long groupId, @Param("month") String month);
+    @Insert("INSERT IGNORE INTO group_insights (group_id, month, status, attempts, updated_at) "
+            + "VALUES (#{groupId}, #{month}, 'GENERATING', 1, #{now})")
+    int tryStart(@Param("groupId") Long groupId, @Param("month") String month,
+            @Param("now") LocalDateTime now);
+    default int tryStart(Long groupId, String month) { return tryStart(groupId, month, SeoulTime.now()); }
 
-    @Update("UPDATE group_insights SET status='GENERATING', attempts=attempts+1, updated_at=NOW() "
+    @Update("UPDATE group_insights SET status='GENERATING', attempts=attempts+1, updated_at=#{now} "
             + "WHERE group_id=#{groupId} AND month=#{month} AND (status='FAILED' "
-            + "OR (status='READY' AND expires_at IS NOT NULL AND expires_at <= NOW()) "
-            + "OR (status='GENERATING' AND updated_at < NOW() - INTERVAL 5 MINUTE))")
-    int restart(@Param("groupId") Long groupId, @Param("month") String month);
+            + "OR (status='READY' AND expires_at IS NOT NULL AND expires_at <= #{now}) "
+            + "OR (status='GENERATING' AND updated_at < DATE_SUB(#{now}, INTERVAL 5 MINUTE)))")
+    int restart(@Param("groupId") Long groupId, @Param("month") String month,
+            @Param("now") LocalDateTime now);
+    default int restart(Long groupId, String month) { return restart(groupId, month, SeoulTime.now()); }
 
-    @Update("UPDATE group_insights SET status='READY', payload=#{payload}, generated_at=NOW(), "
-            + "expires_at=CASE WHEN NOW() >= #{finalizeAt} AND NOT (#{hasCurrentMission}) THEN NULL "
-            + "WHEN NOW() < #{finalizeAt} THEN LEAST(DATE_ADD(NOW(), INTERVAL #{ttlSeconds} SECOND), #{finalizeAt}) "
-            + "ELSE DATE_ADD(NOW(), INTERVAL #{ttlSeconds} SECOND) END "
+    @Update("UPDATE group_insights SET status='READY', payload=#{payload}, generated_at=#{now}, updated_at=#{now}, "
+            + "expires_at=CASE WHEN #{now} >= #{finalizeAt} AND NOT (#{hasCurrentMission}) THEN NULL "
+            + "WHEN #{now} < #{finalizeAt} THEN LEAST(DATE_ADD(#{now}, INTERVAL #{ttlSeconds} SECOND), #{finalizeAt}) "
+            + "ELSE DATE_ADD(#{now}, INTERVAL #{ttlSeconds} SECOND) END "
             + "WHERE group_id=#{groupId} AND month=#{month} AND status='GENERATING'")
     int complete(@Param("groupId") Long groupId, @Param("month") String month,
             @Param("payload") String payload, @Param("finalizeAt") LocalDateTime finalizeAt,
             @Param("hasCurrentMission") boolean hasCurrentMission,
-            @Param("ttlSeconds") long ttlSeconds);
+            @Param("ttlSeconds") long ttlSeconds, @Param("now") LocalDateTime now);
+    default int complete(Long groupId, String month, String payload, LocalDateTime finalizeAt,
+            boolean hasCurrentMission, long ttlSeconds) {
+        return complete(groupId, month, payload, finalizeAt, hasCurrentMission, ttlSeconds, SeoulTime.now());
+    }
 
     @Update("UPDATE group_insights SET status='FAILED' WHERE group_id=#{groupId} AND month=#{month} AND status='GENERATING'")
     int fail(@Param("groupId") Long groupId, @Param("month") String month);
