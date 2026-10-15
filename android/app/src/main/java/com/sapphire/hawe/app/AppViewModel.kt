@@ -12,6 +12,7 @@ import com.sapphire.hawe.core.net.ApiClient
 import com.sapphire.hawe.core.net.AuthRepository
 import com.sapphire.hawe.core.net.CalendarRepository
 import com.sapphire.hawe.core.net.GroupRepository
+import com.sapphire.hawe.core.net.InsightRepository
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.PokeRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
@@ -33,6 +34,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val pokes = PokeRepository(api)
     val submissions = SubmissionRepository(api)
     val calendar = CalendarRepository(api)
+    val insights = InsightRepository(api)
     val appSession: AppSession = AppSession(initialState = if (auth.hasSession) AppSession.State.RESTORING else AppSession.State.SIGNED_OUT,
         onCleared = { auth.clearSession(); dataStore.reset() })
     val push = PushCenter()

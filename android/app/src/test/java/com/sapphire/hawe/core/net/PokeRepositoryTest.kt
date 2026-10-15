@@ -8,6 +8,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PokeRepositoryTest {
+    @Test fun sendsSelectedMissionId() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(201).setBody(
+                """{"id":1,"toUserId":7,"type":"poke","missionId":20}"""))
+            val sent = PokeRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
+                .send(3L, 7L, PokeKind.POKE, 20L)
+            assertEquals(20L, sent.missionId)
+            assertEquals("""{"toUserId":7,"type":"poke","missionId":20}""",
+                server.takeRequest().body.readUtf8())
+        }
+    }
     @Test fun sendsKindAndMapsResponse() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(201).setBody(

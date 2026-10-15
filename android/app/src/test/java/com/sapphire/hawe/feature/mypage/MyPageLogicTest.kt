@@ -1,10 +1,22 @@
 package com.sapphire.hawe.feature.mypage
 
 import com.sapphire.hawe.core.model.*
+import com.sapphire.hawe.core.data.StoredGroup
 import org.junit.Assert.*
 import org.junit.Test
 
 class MyPageLogicTest {
+    @Test fun withdrawalBlockersRequireAnotherMemberAndOwnership() {
+        val base = GroupDetail.mock
+        val owner = StoredGroup(base.copy(name = "Owned"))
+        val solo = StoredGroup(base.copy(name = "Solo", members = base.members.take(1)))
+        val member = StoredGroup(base.copy(name = "Joined", members = base.members.map {
+            if (it.isMe) it.copy(isOwner = false) else it
+        }))
+        assertEquals(listOf("Owned"), withdrawBlockers(listOf(owner, solo, member)))
+        assertTrue(withdrawBlockers(emptyList()).isEmpty())
+    }
+
     @Test fun accountAndStats() {
         val base = MyAccount.mock
         assertEquals(listOf("sky@email.com"), accountLines(base.copy(signUpProvider = LoginProvider.EMAIL)))

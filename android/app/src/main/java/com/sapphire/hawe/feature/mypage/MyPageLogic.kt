@@ -1,6 +1,7 @@
 package com.sapphire.hawe.feature.mypage
 
 import com.sapphire.hawe.core.model.*
+import com.sapphire.hawe.core.data.StoredGroup
 
 fun accountLines(account: MyAccount): List<String> = buildList {
     account.email?.takeIf { it.isNotBlank() }?.let { add(it) }
@@ -50,6 +51,10 @@ data class ProfileEditState(val avatar: AvatarContent, val nickname: String) {
     val profileToSave get() = Profile(avatar, nickname.trim())
 }
 data class WithdrawState(val agreed: Boolean = false) { val canWithdraw get() = agreed }
+
+fun withdrawBlockers(groups: List<StoredGroup>): List<String> = groups.mapNotNull { group ->
+    group.detail.name.takeIf { group.detail.amIOwner && group.detail.members.size > 1 }
+}
 
 object AppVersionInfo {
     const val footer = "Made by Sapphire Developers\n© 2026 Sapphire Developers. All rights reserved."

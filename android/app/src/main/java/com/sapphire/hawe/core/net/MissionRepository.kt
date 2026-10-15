@@ -9,7 +9,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-data class CurrentMissionState(val mission: ServerMission?, val nextPublishAt: Instant?)
+data class CurrentMissionState(val missions: List<ServerMission>, val nextPublishAt: Instant?) {
+    constructor(mission: ServerMission?, nextPublishAt: Instant?) : this(listOfNotNull(mission), nextPublishAt)
+    val mission: ServerMission? get() = missions.firstOrNull()
+}
 data class ServerMission(val id: Long, val number: Int, val topic: String, val type: MissionType?,
     val template: String, val spec: MissionSpec, val publishedAt: Instant, val deadlineAt: Instant,
     val closesAt: Instant, val submittedByMe: Boolean, val members: Map<Long, Boolean>,
@@ -37,8 +40,8 @@ internal fun paramsToSpec(params: JsonObject): MissionSpec {
 class MissionRepository(private val api: ApiClient) {
     suspend fun current(groupId: Long, myUserId: Long): CurrentMissionState {
         val response: TodayMissionsDto = api.get("/api/groups/$groupId/missions/today")
-        val mission = response.missions.firstOrNull()?.toModel()
-        return CurrentMissionState(mission, response.nextPublishAt?.let { OffsetDateTime.parse(it).toInstant() })
+        return CurrentMissionState(response.missions.map { it.toModel() },
+            response.nextPublishAt?.let { OffsetDateTime.parse(it).toInstant() })
     }
 
     /** 미션 한 개(지난 미션 포함). 달력에서 연 지난 미션의 틀·빈칸을 알아낼 때 써요. */

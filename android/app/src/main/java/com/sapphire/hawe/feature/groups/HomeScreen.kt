@@ -78,7 +78,7 @@ fun GroupCard(group: GroupSummary, modifier: Modifier = Modifier) {
                 Text("아직 오늘의 미션이 열리지 않았어요", style = HType.plex(15, FontWeight.SemiBold),
                     color = HColors.ink)
             } else {
-                Text("오늘의 미션 · ${group.missionType.displayName}",
+                Text(homeMissionLabel(group),
                     style = HType.plex(12, FontWeight.SemiBold), color = HColors.textSecondary)
                 Text(group.topic.orEmpty(), style = HType.plex(15, FontWeight.SemiBold), color = HColors.ink)
             }
@@ -86,6 +86,9 @@ fun GroupCard(group: GroupSummary, modifier: Modifier = Modifier) {
         if (group.missionType != null) Row(verticalAlignment = Alignment.CenterVertically) {
             Text("${group.submittedCount} / ${group.members.size}명 완료", style = HType.caption13,
                 color = HColors.textSecondary)
+            homeSubmissionProgress(group)?.let {
+                Text(" · $it", style = HType.caption13, color = HColors.textSecondary)
+            }
             Spacer(Modifier.weight(1f))
             Text(if (group.didSubmit) "열어보기" else "내 미션 남음",
                 Modifier.height(28.dp).background(if (group.didSubmit) HColors.surface else HColors.accent, CircleShape)

@@ -8,10 +8,21 @@ import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.HCtaScaffold
 import com.sapphire.hawe.designsystem.tokens.HLayout
+import com.sapphire.hawe.core.net.ApiException
+import com.sapphire.hawe.core.net.AuthRepository
+import com.sapphire.hawe.core.net.toUserMessage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
-fun ChangePasswordScreen(onBack: () -> Unit) {
+fun ChangePasswordScreen(auth: AuthRepository, onBack: () -> Unit) {
     var state by remember { mutableStateOf(ChangePasswordState()) }
+    var saving by remember { mutableStateOf(false) }
+    var currentError by remember { mutableStateOf<String?>(null) }
+    val toast = rememberHToastState()
+    val scope = rememberCoroutineScope()
+    Box {
     Column {
         Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
             HNavBar("비밀번호 변경", leading = HNavLeading.BACK, onLeading = onBack)
@@ -19,8 +30,8 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
         HCtaScaffold(content = {
             Column(Modifier.padding(top = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                HTextField(state.current, { state = state.copy(current = it) }, "지금 쓰는 비밀번호",
-                    label = "현재 비밀번호", isSecure = true, imeAction = ImeAction.Next)
+                HTextField(state.current, { state = state.copy(current = it); currentError = null }, "지금 쓰는 비밀번호",
+                    label = "현재 비밀번호", isSecure = true, error = currentError, imeAction = ImeAction.Next)
                 HTextField(state.new, { state = state.copy(new = it) }, "8자 이상, 영문·숫자 포함",
                     label = "새 비밀번호", isSecure = true, error = state.newError,
                     imeAction = ImeAction.Next)
@@ -29,10 +40,24 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                     imeAction = ImeAction.Done)
             }
         }, cta = {
-            HButton("변경하기", enabled = state.canSave) {
-                // TODO: 서버 연결 시 현재 비밀번호 확인과 변경을 요청해요.
-                onBack()
+            HButton(if (saving) "변경 중" else "변경하기", enabled = state.canSave && !saving) {
+                saving = true
+                scope.launch {
+                    try {
+                        auth.changePassword(state.current, state.new)
+                        toast.show("비밀번호를 바꿨어요")
+                        delay(1600)
+                        onBack()
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        if (e is ApiException && e.code == "WRONG_CURRENT_PASSWORD")
+                            currentError = "현재 비밀번호가 맞지 않아요"
+                        else toast.show(e.toUserMessage())
+                    } finally { saving = false }
+                }
             }
         })
+    }
+    HToastHost(toast)
     }
 }

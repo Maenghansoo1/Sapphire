@@ -22,8 +22,9 @@ fun RootScreen(viewModel: AppViewModel) {
         Box(Modifier.fillMaxSize().statusBarsPadding()) {
             when (viewModel.appSession.state) {
                 AppSession.State.SIGNED_OUT -> AuthNavHost(viewModel.appSession, viewModel.dataStore, viewModel.auth)
-                AppSession.State.SIGNED_IN -> MainNavHost(viewModel.appSession, viewModel.dataStore, viewModel.push,
-                    viewModel.groups, viewModel.missions, viewModel.pokes, viewModel.submissions, viewModel.calendar)
+                AppSession.State.SIGNED_IN -> MainNavHost(viewModel.appSession, viewModel.dataStore, viewModel.auth, viewModel.push,
+                    viewModel.groups, viewModel.missions, viewModel.pokes, viewModel.submissions, viewModel.calendar,
+                    viewModel.insights)
                 AppSession.State.RESTORING -> Box(Modifier.fillMaxSize().background(HColors.bg))
             }
         }

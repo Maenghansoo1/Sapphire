@@ -1,123 +1,135 @@
-# B12 단계 0 — Spring AI + AWS Bedrock PoC (개념 검증)
+# A6. Android — 하루 여러 개 미션 (05 화면 · 홈 · 수행 · 콕 · 푸시)
 
-> 설계 정본: `docs/BACKEND/MISSION_AI_SPRING_AI_BEDROCK.md` §9, 실행 계획: `docs/해야될거/1번_찬희/B12-mission-ai-spring-ai-bedrock.md` 의 "Implementation Steps 0". 이전 `.agent/plan.md`(B11)는 덮어쓴다.
-> **이 작업은 PoC(버려도 되는 시험)이며 production code 를 바꾸지 않는다.** 목적은 "Spring AI 로 Bedrock 을 쓰는 구현을 시작해도 되는가"에 대한 근거 수집이다. 결과에 따라 사용자가 (a) Spring AI 로 진행 / (b) AWS SDK 직접 호출로 대체 / (c) 보류 를 정한다.
-> 이 PC 사실(확인함): **AWS 자격증명 없음**(`~/.aws` 없음, `AWS_*` 환경변수 없음, `aws` CLI 없음), Maven Central 접속 가능, JDK 25(`C:\Program Files\Eclipse Adoptium\jdk-25.0.4.101-hotspot`), 로컬 MariaDB 있음. 따라서 **실제 Bedrock 호출이 필요한 항목은 "미검증"으로 남기는 것이 정상 결과**다(거짓으로 통과시키지 말 것).
+> 이전 `.agent/plan.md`(A9)는 덮어쓴다. 원본 계획: `docs/해야될거/2번_우준/A6-android-multi-mission.md` (이 파일이 코드 확인 후의 최신판).
+> 범위: **`android/` 만**. 서버(B7 — 하루 여러 개 개방)는 이미 구현돼 있다. iOS·알림 설정·그룹 설정 UI(하루 미션 수 변경)는 **만들지 않는다**. 디자인(Figma) 없음 → 기존 컴포넌트 조합 + 텍스트의 임시 UI.
+> 전제: A2·A3·A9 변경이 worktree 에 **미커밋으로 섞여 있다**(`MainNavigation.kt`, `AppViewModel.kt`, `RootScreen.kt`, `GroupInfoScreen.kt` 등). **덮어쓰거나 되돌리지 말 것.**
+> 빌드/테스트: JDK 21 권장(없으면 설치된 JDK 17 로도 빌드됨). `android\gradlew.bat :app:testDebugUnitTest --offline`.
 
 ## Goal
 
-설계 문서 §9 의 6개 질문에 근거(실행 결과·로그·요청 JSON)와 함께 답한다. 판정은 항목마다 `확인됨 / 막힘 / 미검증` 셋 중 하나이며, 막힘이면 원인과 우회안(AWS SDK 직접 호출 등)을 쓴다.
+한 그룹에 현재 열린 미션이 2개 이상일 때 앱이 모두 보여 주고, 각각 **수행·열람·콕**이 동작한다. **미션이 1개인 그룹(기본)의 동작·화면은 변하지 않는다**(기존 테스트가 그대로 통과해야 함).
 
-| # | 질문 | AWS 없이 확인 가능? |
-|---|---|---|
-| 1 | Spring Boot **4.1.1** 에서 동작하는 Spring AI 버전과 Bedrock Converse 스타터 좌표 | 가능 |
-| 2 | **AWS 자격증명·리전 없이** 컨텍스트가 정상 기동하는가 (꺼짐 조건), 이 프로젝트에 넣어도 기존 `@SpringBootTest` 가 깨지지 않는가 | 가능 |
-| 3 | 프롬프트의 **중괄호 `{ }`** 가 템플릿 변수로 치환되지 않는 호출 경로 | 가능 (모델 스텁 + 와이어 캡처) |
-| 4 | 특정 도구(`submit_mission`) **강제 호출** 또는 신뢰할 수 있는 **구조화 출력**이 가능한가 | 요청 형태는 가능, 실제 모델 동작은 AWS 필요 |
-| 5 | **프롬프트 캐시 포인트**를 보낼 수 있는가 / 실제 효과 | 요청 형태는 가능, 효과(토큰 절감)는 AWS 필요 |
-| 6 | 모델 ID·리전·접근 권한·쿼터·지연 | **AWS 필요** (자격증명 있을 때만) |
+## Findings (코드로 확인함)
 
-## Findings
+경로 접두: 앱 `J/` = `android/app/src/main/java/com/sapphire/hawe/`, 테스트 `T/` = `android/app/src/test/java/com/sapphire/hawe/`, 서버 `S/` = `src/main/java/com/sapphire/hawe/`.
 
-(확인한 사실)
+### 서버 계약 (모두 구현됨)
+- `GET /api/groups/{id}/missions/today` → `{date, dailyMissionCount, nextPublishAt, missions:[MissionResponse…]}` (`S/mission/service/MissionService.java` `getTodayMissions`): `missions` 는 **현재 열려 있는 미션만, 슬롯 오름차순**(`findCurrentByGroupId`). `nextPublishAt` 은 모든 슬롯 중 가장 빠른 다음 발행 시각이라 항상 값이 있다(`nextPublishAt()` 209행~). 앱 `MissionDto`(`J/core/net/MissionApi.kt`)는 이미 `slotNo, number, submittedByMe, members[]` 를 받는다.
+- `GET /api/groups` 항목: 기존 `todayMission`(가장 작은 슬롯 하나) + `todayMissions: [{missionId, media, content, submittedCount, submittedByMe}…]`(`S/group/dto/GroupSummaryResponse.java`, 슬롯 순). 앱 `GroupSummaryDto`(`J/core/net/GroupApi.kt` 7~10행)에는 `todayMission` 만 있다.
+- 콕 `POST /api/groups/{id}/pokes` 요청 `{toUserId, type, missionId?}`(`S/poke/dto/PokeRequest.java`): `missionId` 없으면 가장 작은 슬롯의 현재 미션, 있으면 **그 그룹의 현재(열린) 미션**이어야 하고 아니면 409 `NO_OPEN_MISSION`(`PokeService` 46~50행). 응답 `{id, toUserId, type, missionId, sentAt}`.
+- 제출 `POST /api/missions/{missionId}/submissions`(앱 `SubmissionRepository.submit(missionId, …)` 이미 미션 id 기반). 도장·피드 잠금은 미션별. 달력은 이미 미션별 행.
 
-- Maven Central 의 `org.springframework.ai:spring-ai-bom` 버전 목록에 `2.0.0-M2 … 2.0.0-RC1, 2.0.0-RC2, 2.0.0, 2.0.1, 2.1.0-M1` 이 있다. `2.0.1` 의 BOM 이 `spring-ai-starter-model-bedrock-converse`, `spring-ai-bedrock-converse`, `spring-ai-autoconfigure-model-bedrock-ai`, `spring-ai-starter-model-bedrock`(구형 Invoke 계열) 을 관리한다. 스타터 `spring-ai-starter-model-bedrock-converse:2.0.1` 은 `spring-boot-starter`, `spring-ai-autoconfigure-model-bedrock-ai`, `spring-ai-bedrock-converse`, `spring-ai-client-chat` 등에 의존한다. **어느 Spring AI 버전이 Boot 4.1.1 과 맞는지는 아직 모른다** — 후보(`2.0.1`, 필요하면 `2.0.0`/`2.1.0-M1`)의 `spring-ai-parent` POM 이 가리키는 Spring Boot/Spring Framework/Jackson/AWS SDK 버전을 직접 읽어 확인한다.
-- 이 프로젝트: Spring Boot `4.1.1` parent, `java.version=25`, **Jackson 3(`tools.jackson.*`)** 사용(`ObjectMapper` import 가 `tools.jackson.databind`). Spring AI 가 Jackson 2(`com.fasterxml.jackson.*`)에 의존한다면 공존 시 충돌/이중 직렬화 문제가 있을 수 있다 → 확인 대상.
-- `pom.xml` 현재: 의존성 약 10개(actuator, security, validation, webmvc, jdbc, mariadb/mysql, flyway, mybatis-spring-boot-starter 3.0.4, springdoc, jjwt, **lucene-analysis-nori**(B11)). 이 프로젝트는 Boot 4 에서 `mybatis-spring-boot-starter` 의 자동 구성 순서 문제 때문에 `global/config/MyBatisConfig` 가 `SqlSessionFactory` 를 직접 구성한다(`CLAUDE.md`). 새 자동 구성 스타터가 비슷한 문제를 일으키는지 확인해야 한다.
-- 현재 LLM 호출: `mission/service/AiMissionGenerator.java` → `AnthropicClient.callTool(system, user, TOOL)` (도구 `submit_mission`: `content`/`category`/`params`, `input_schema` 포함). 시스템 프롬프트는 팀원 프롬프트 + `mission-ai/server-guide.txt`, 사용자 메시지는 `objectMapper.writeValueAsString(input)` 의 **중괄호가 많은 JSON**. 이 두 문자열이 템플릿 렌더링 없이 그대로 가야 한다(`CLAUDE.md` 의 "프롬프트에 `{ }` 금지" 제약의 이유).
-- 현재 캐시: `AnthropicClient` 가 시스템 프롬프트에 `cache_control: ephemeral` 을 붙인다.
-- 테스트 환경: `HaweApplicationTests` 는 `@SpringBootTest` 하나(`contextLoads`)이며 로컬 MariaDB·`.env`(`DB_USERNAME`/`DB_PASSWORD`/`JWT_SECRET`)가 필요하다.
-- `.agent/` 는 `.gitignore` 대상이다(새 파일은 무시됨). PoC 산출물을 거기에 둔다.
+### 앱 — 단일 미션 가정이 박혀 있는 곳 (전수)
+- `J/core/net/MissionRepository.kt`: `CurrentMissionState(mission: ServerMission?, nextPublishAt)`; `current()` 가 `response.missions.firstOrNull()?.toModel()` 만 변환. `ServerMission` 에는 `slotNo` 가 없다(순서는 리스트 순서로 충분).
+- `J/core/data/DataStore.kt`:
+  - `StoredGroup(detail, missions: List<StoredMission>, summary: MissionSummary?, nextPublishAt, missionState)`; `StoredMission(id, type, topic, number, opensAt, closesAt, submissions, poked, deadlineAt, template, spec, serverMembers, serverSubmittedByMe, feedLoaded)`.
+  - `applyCurrentMission`(≈109행): `previous = group.missions.lastOrNull()?.takeIf { it.id == row?.id }`, 결과 `missions = listOfNotNull(current)` — **미션 하나만 저장**.
+  - `todayMission(groupID)`: `missions.lastOrNull()` 하나를 `TodayMission` 으로 변환. `applyFeed`(`isCurrent = …missions?.lastOrNull()?.id == missionID`), `applyCurrentFeed`(`lastOrNull` → `listOf(mission.copy(…))` 로 **목록을 하나로 덮어씀**), `applySubmitted`(`lastOrNull` → `missions = listOf(updated)`, `summary` 갱신은 `summary.missionId == missionID` 일 때만), `markPoked`(`lastOrNull`, `dropLast(1) + …`), `needsMissionSpec`(이미 `none { id }`), `result()`(이미 `firstOrNull { id }`), `markMissionFailed`, `replaceMissionsForTest`, `summaries`(홈 요약 = `summary` 단일), `applyServerGroups`(`previous?.missions` 보존, `loaded.mission` → `summary`).
+- `J/core/net/GroupRepository.kt`: `data class MissionSummary(missionId, type, topic, submittedCount, submittedByMe)`, `LoadedGroup(detail, mission: MissionSummary?)`, `loadAll` 이 `summary.todayMission` 으로 채움.
+- `J/core/model/GroupSummary.kt`: `GroupSummary(id, name, relationship, members, startDate, missionType, topic, submittedCount, didSubmit)` 단일 미션 요약. `J/feature/groups/HomeScreen.kt` `GroupCard`: `group.missionType == null` 이면 "아직 오늘의 미션이 열리지 않았어요", 아니면 "오늘의 미션 · 유형" + 주제 + "k / N명 완료" + (`didSubmit` ? "열어보기" : "내 미션 남음").
+- `J/core/model/TodayMission.kt`: 미션 단위 모델(`id, group, type, topic, number, opensAt, closesAt, members, deadlineAt, template, spec`, `doneCount`, `didSubmit`). 변경 불필요.
+- `J/feature/mission/MissionScreen.kt`(277줄): `val mission = store.todayMission(id)` 하나, `MissionCard(mission, onPerform = { onPerform(null) }, onResults = onResults)`, 참여 현황·콕 행, 잠금 안내. 콜백 시그니처 `onPerform: (MissionType?) -> Unit`, `onResults: () -> Unit`. 새로고침: 진입/`ON_RESUME`/`nextPublishAt` 도달 시 `missions.current` → `store.applyCurrentMission`. 제출 토스트 "오늘의 미션을 올렸어요"/"지각으로 올렸어요"(`submittedSignal`, `submittedLate`). 콕: `sendPoke(missionID, member, kind)` 가 `pokes.send(id, member.id, kind)`(missionId 없음) → 응답 `sent.missionId` 로 `store.markPoked(id, sent.missionId, …)`; 실패 시 `classifyPokeFailure`(`NO_OPEN_MISSION` → REFRESH).
+- `J/app/MainNavigation.kt`: `MainRoute.MissionPerform(groupId, type: String? = null)`(72행, **missionId 없음**), `Mission` composable 의 `onPerform = { type -> nav.navigate(MissionPerform(id, type?.name)) }`, `onResults = { store.todayMission(id)?.let { nav.navigate(Results(id, it.id)) } }`; `MissionPerform` composable 은 `store.todayMission(id)` + `performEntryDecision(mission, requestedType)`, 제출은 `submissions.submit(mission.id, …)` → `store.applySubmitted(id, mission.id, submitted)` → `previousBackStackEntry.savedStateHandle["submitted"/"submittedLate"] = …`; `Results` composable 의 가드: `current = store.todayMission(groupID)`, `canOpen = if (current?.id == missionID) current.didSubmit else store.calendarRecord(groupID, missionID)?.didSubmit == true` (**현재 미션이 둘 이상이면 두 번째 미션이 달력 경로로 빠져 막힘**). 푸시 스냅샷(≈105행): `group.missions.lastOrNull()` → `PushGroupSnapshot(group.id, last?.id, last?.serverSubmittedByMe == true)`.
+- `J/feature/mission/MissionPerformCommon.kt` `performEntryDecision(mission: TodayMission?, requestedType)`; `MissionPerformScreen`(topic/template/spec 받음). `J/core/push/PushModel.kt` `pushTarget(destination, groups: List<PushGroupSnapshot>)`: COMMENT 푸시이고 `lastMissionSubmittedByMe` 면 `Results(group.id, lastMissionId)`, 아니면 `Mission(group.id)`.
+- `J/core/net/PokeRepository.kt` `send(groupId, toUserId, kind): SentPoke`, `PokeApi.kt` `PokeRequestDto(toUserId, type)`.
+- 영향받는 기존 테스트(수정 필요 가능): `T/core/data/DataStoreTest.kt`, `T/core/net/GroupRepositoryTest.kt`, `T/core/net/MissionRepositoryTest.kt`(`current()`/`CurrentMissionState` 사용), `T/core/net/PokeRepositoryTest.kt`, `T/core/push/PushModelTest.kt`, `T/feature/groups/GroupFormatTest.kt`, `T/feature/mission/MissionPerformCommonTest.kt`. 수정 전 `rg "CurrentMissionState|\.mission\b|LoadedGroup\(|MissionSummary\(|replaceMissionsForTest|todayMission\(|\.summary\b" android/app/src` 로 호출부 전수 확인.
 
 ## Root Cause / Key Implementation Points
 
-### 방법 (핵심 설계 — 변경하지 말 것)
+앱 전체가 "그룹당 현재 미션 = 1개"를 가정한다. 데이터 층을 목록으로 일반화하고, 화면은 "선택된 미션"을 기준으로 동작시키며, **미션이 1개면 기존 UI 경로와 동일**하게 한다.
 
-1. **프로젝트와 분리된 PoC 프로젝트**를 `.agent/poc-b12/` 에 만든다(자체 `pom.xml`: `spring-boot-starter-parent` 4.1.1, `java.version` 25, 후보 Spring AI BOM + `spring-ai-starter-model-bedrock-converse` + `spring-boot-starter-test`). 저장소의 `pom.xml`/`src/` 는 건드리지 않는다. `mvnw` 가 없으므로 저장소 루트의 `mvnw.cmd` 를 `-f .agent/poc-b12/pom.xml` 로 재사용하거나 설치된 `mvn` 사용.
-2. **AWS 없이 와이어 수준 검증**: Bedrock Runtime SDK 가 보내는 HTTP 요청을 직접 본다. 로컬 `com.sun.net.httpserver.HttpServer`(추가 의존성 없음)를 스텁 서버로 띄워 SDK 클라이언트의 `endpointOverride` 를 그 주소로 지정하고, 더미 자격증명(`aws.accessKeyId`/`aws.secretAccessKey` 시스템 속성 또는 정적 자격증명 공급자 — **실제 키 아님**), 리전 `us-east-1` 같은 값을 준다. 스텁은 Converse 응답(고정 JSON, 도구 사용 응답 형태 포함)을 돌려주고 **요청 본문(JSON)을 캡처**한다. 이 방식으로 3·4·5 번의 "요청 형태"를 AWS 없이 검증한다. Spring AI 모델이 SDK 클라이언트를 외부에서 주입받는지(빌더/자동 구성 빈 교체 가능 여부) 또는 `endpointOverride` 를 설정 속성으로 받는지는 코드/소스 JAR 로 확인하고, 불가하면 가장 가까운 방법(자동 구성된 `BedrockRuntimeClient` 빈 교체 등)을 쓰고 그 사실을 기록한다.
-3. **이 프로젝트와의 공존은 임시 복사본에서 시험**한다(2번 항목): 저장소를 직접 고치지 않고, 저장소 루트의 `pom.xml`, `src/`, `mvnw*`, `.mvn/` 를 `%TEMP%` 아래 새 디렉터리(스크래치패드 또는 `.agent/poc-b12/app-copy/`)로 복사한 뒤 **그 복사본의** `pom.xml` 에만 BOM·스타터를 추가하고 `.\mvnw.cmd clean test`(전체 또는 최소 `HaweApplicationTests`)를 실행한다. `.env` 도 복사해 DB 접속이 되게 한다(복사본이 같은 로컬 DB 를 쓰므로 Flyway 는 이미 적용된 상태에서 no-op). **복사본의 결과만 근거로 삼고 저장소 원본은 변경하지 않는다.** 끝나면 복사본은 `.agent/poc-b12/` 안에 남겨도 되고 지워도 된다(둘 다 ignore 대상).
-4. **실제 AWS 호출(6번, 5번 효과)은 선택적**이다: 환경변수 `HAWE_POC_BEDROCK_MODEL`(모델 또는 inference profile ID)과 `AWS_REGION`, 표준 자격증명(환경변수/프로필)이 **모두 있을 때만** 실행되는 테스트(`Assumptions.assumeTrue` 로 건너뜀)로 만든다. 지금 이 PC 에는 자격증명이 없으므로 건너뛰는 것이 정상이다. 자격증명을 파일·로그·보고서에 쓰지 않는다. 실제 호출에 보내는 내용은 **가짜 샘플 입력**(실제 그룹/사용자 데이터 금지, 예: 저장소 `AiMissionGenerator.input(...)` 형태를 흉내 낸 하드코딩 JSON).
-
-### 항목별 구체 검증
-
-**① 버전·좌표** — (a) 후보 버전(`2.0.1` 먼저; 막히면 `2.0.0`, `2.1.0-M1`, `1.x` 최신)의 `spring-ai-parent` POM 에서 `spring-boot`, `spring-framework`, `jackson`, `awssdk` 버전 속성을 읽어 표로 정리한다. (b) PoC 프로젝트(Boot 4.1.1)에서 BOM + 스타터로 `compile` 과 빈 `@SpringBootTest` 컨텍스트 로드가 되는지 실행한다. (c) `mvnw dependency:tree` 로 Jackson 2/3 공존, AWS SDK(`software.amazon.awssdk`) 버전, Netty 등 눈에 띄는 충돌을 기록한다. 결론: "Boot 4.1.1 + Spring AI X.Y.Z 에서 컴파일·기동 확인됨 / 불가". 불가하면 오류 메시지 요약.
-
-**② 자격증명 없는 기동 + 프로젝트 공존** — (a) PoC 프로젝트에서 `AWS_*` 환경변수·프로필 없이 컨텍스트가 뜨는지(기본 설정), (b) 뜨지 않으면 꺼짐 방법을 찾는다: Spring AI 의 모델 선택 속성(예: `spring.ai.model.chat=none` 류 — **정확한 속성 이름은 해당 버전의 자동 구성 클래스/문서에서 확인**), `@ConditionalOnProperty`, 자동 구성 제외(`spring.autoconfigure.exclude`) 중 실제로 동작한 것을 기록. (c) 임시 복사본(방법 3번)에서 전체 테스트 또는 `HaweApplicationTests` 가 통과하는지, MyBatis/Flyway/Security 자동 구성과 충돌하는 로그가 없는지. (d) `ChatModel`/`ChatClient` 빈이 켜졌을 때(자격증명 없음) 기동만으로 AWS 를 호출하지 않는지(네트워크 호출 없음), 첫 호출 시점에 어떤 예외 타입이 나오는지(→ `AiGenerationException` 으로 변환할 대상).
-
-**③ 중괄호** — (a) 시스템 메시지와 사용자 메시지에 `{ }`, `{"a":{"b":1}}`, `{변수}`, `{{x}}`, `{0}` 를 섞은 문자열을 만든다(실제 `server-guide.txt` 내용과 JSON 입력 모양 포함). (b) 후보 호출 경로 세 가지를 각각 시도: ① `ChatClient.prompt().system(String).user(String)` ② `ChatClient.prompt().system(s -> s.text(..))`/`PromptTemplate` 류 ③ `new Prompt(List.of(new SystemMessage(text), new UserMessage(text)))` 를 `ChatModel.call(prompt)` 또는 `ChatClient.prompt(prompt)` 로 직접 호출. (c) 각 경로에서 모델에 **실제로 전달된 텍스트**를 캡처한다 — `ChatModel` 스텁(전달받은 `Prompt` 기록)과, 가능하면 와이어 캡처(요청 JSON 의 `system`/`messages[].content[].text`)로 이중 확인. (d) 표로 정리: 경로별 치환 여부(원문과 바이트 동일한지), 예외 발생 여부(예: 템플릿 변수 누락 오류). 결론: "치환 없이 전달되는 경로 = ○○" 또는 "없음".
-
-**④ 도구 강제/구조화 출력** — (a) Spring AI Bedrock Converse 의 옵션 클래스(`BedrockChatOptions` 류)·소스 JAR 에서 **tool choice** 를 지정하는 API 가 있는지 확인(있으면 클래스/메서드명 기록, 없으면 "없음"). (b) 와이어 캡처에서 `toolConfig.tools[].toolSpec.inputSchema`(기존 `AiMissionGenerator.TOOL` 의 `input_schema` 를 그대로 옮긴 JSON)와 `toolConfig.toolChoice`(특정 도구 지정, 예: `{"tool":{"name":"submit_mission"}}`)가 요청에 실리는지. (c) 응답 스텁이 도구 사용 응답(`toolUse` 블록의 `input` 객체)을 돌려줄 때 Spring AI 가 이를 앱 코드가 읽을 수 있는 형태(도구 호출 인자 JSON)로 노출하는지, 자동 도구 실행(함수 호출 루프)이 개입해 서버 코드를 호출하려 하지 않는지(우리는 **도구를 실행하지 않고 인자만 받는다**) — "도구 실행 비활성/내부 실행 없이 인자만 얻기"가 가능한지가 핵심. (d) 대안으로 구조화 출력(`.entity(...)`)을 시도: 요청에 어떤 지시문이 덧붙는지(와이어 캡처)와, 응답 스텁이 JSON 문자열을 줄 때 파싱되는지. 결론: "A(도구 강제) 가능 / 불가능, B(구조화 출력) 가능 / 불가능, 권장 = ○".
-
-**⑤ 프롬프트 캐시** — (a) 옵션/메시지 API 에 Bedrock 캐시 포인트(`cachePoint`) 또는 캐시 전략 옵션이 있는지 확인(클래스/메서드명). (b) 와이어 캡처에서 시스템 메시지 뒤에 `cachePoint` 블록이 실리는지. (c) 실제 효과(응답 `usage` 의 `cacheReadInputTokens`)는 AWS 호출이 있어야 하므로 자격증명이 없으면 **미검증**. 현재 구현(`cache_control`)과 동등한 기능이 가능한지 결론.
-
-**⑥ 모델·리전·접근·쿼터·지연** — AWS 자격증명과 `HAWE_POC_BEDROCK_MODEL`/`AWS_REGION` 이 있을 때만: 샘플 입력으로 5회 호출해 성공 여부·지연(p50/p95)·토큰 사용량·오류 유형(접근 거부, 모델 없음, 스로틀링)을 기록. 없으면 **"미검증 — 사용자가 모델 접근 활성화 후 재실행 필요"** 로 쓰고, 재실행 방법(환경변수 이름, 실행 명령)을 보고서에 적는다. 모델 ID 를 추측해서 하드코딩하지 않는다.
+1. **레포지토리/모델** (`MissionRepository.kt`):
+   - `CurrentMissionState(missions: List<ServerMission>, nextPublishAt: Instant?)` 로 변경. `current()` 가 `response.missions.map { it.toModel() }`(슬롯 순 유지). 기존 호출부(`MissionScreen`, 테스트)는 `missions.firstOrNull()` 로 대응.
+2. **DataStore 일반화** (`DataStore.kt`):
+   - `applyCurrentMission`: 새 `state.missions` 각각에 대해 **같은 id 의 이전 `StoredMission`** 이 있으면 `submissions/poked/serverMembers(완료만)/serverSubmittedByMe/feedLoaded` 보존(기존 합치기 규칙 그대로, id 별로), 없으면 새로 생성. 결과 `missions = 변환 목록`(서버 순서). 서버 목록에 없는(닫힌) 미션은 버린다.
+   - `todayMissions(groupID): List<TodayMission>`(전체, 슬롯 순) 추가 + `todayMission(groupID, missionID): TodayMission?` 추가. 기존 `todayMission(groupID)` 는 **첫 번째 미션**(= 가장 작은 슬롯, 서버 `todayMission` 규약과 동일)을 돌려준다(기존 `lastOrNull` 은 미션 1개일 때 같은 값). 내부 변환은 공통 private 함수로 분리(`TodayMission` 생성 로직 복제 금지).
+   - `applyFeed`: `isCurrent = missions.any { it.id == missionID }`. `applyCurrentFeed`/`applySubmitted`/`markPoked`: **목록에서 id 로 찾아 그 항목만 `map` 으로 교체**(`lastOrNull`/`listOf(...)`/`dropLast(1)` 제거), id 가 없으면 변경 없음.
+   - 홈 요약: `StoredGroup.summary: MissionSummary?` → **`summaries: List<MissionSummary>`**(슬롯 순). `applyServerGroups` 가 `loaded.missions` 를 넣는다. `applySubmitted` 는 `summaries` 중 `missionId == missionID` 항목을 `submittedByMe = true`, `submittedCount` +1(이미 내가 제출이면 +0)로 갱신. 호환을 위해 `val summary: MissionSummary? get() = summaries.firstOrNull()` 를 두면 기존 호출부 수정이 적다(필요한 곳만 사용).
+   - `summaries`(GroupSummary 목록) 계산: 첫 요약으로 `missionType/topic/submittedCount` 를 채우고, 새 필드 `missionCount = summaries.size`, `mySubmittedCount = summaries.count { it.submittedByMe }`, `didSubmit = summaries.isNotEmpty() && mySubmittedCount == missionCount`. (미션 1개면 기존과 같은 값.)
+   - `replaceMissionsForTest`, `DataStore.preview`, `DemoSeed` 의 `StoredGroup(...)` 생성부를 새 필드에 맞게 수정(데모/프리뷰는 기존과 동일하게 동작).
+3. **홈 요약 데이터** (`GroupApi.kt`, `GroupRepository.kt`, `GroupSummary.kt`, `HomeScreen.kt`):
+   - `GroupSummaryDto` 에 `todayMissions: List<TodayMissionSummaryDto> = emptyList()` 추가. `LoadedGroup(detail, missions: List<MissionSummary>)`; `loadAll` 은 `summary.todayMissions` 가 비어 있고 `todayMission` 이 있으면 `[todayMission]` 으로 폴백(구서버 호환), 둘 다 없으면 빈 목록. 기존 `MissionSummary` 데이터 클래스는 그대로 재사용.
+   - `GroupSummary` 에 `missionCount: Int = 0`, `mySubmittedCount: Int = 0` 추가(기본값으로 기존 생성부 호환). `GroupCard`: 미션 ≥ 2 이면 주제 위 라벨을 "오늘의 미션 · 유형 · 외 {N-1}개" 로 하고, 하단 상태는 "{내 제출 수} / {미션 수} 제출" 형태를 완료 인원 문구 옆에 추가(임시), 배지는 `didSubmit`(전부 제출) ? "열어보기" : "내 미션 남음". **미션 ≤ 1 이면 현재 문구 그대로.** 카드 탭은 기존대로 05 로 이동.
+4. **05 화면** (`MissionScreen.kt`, `MissionFormat.kt`):
+   - `val missions = store.todayMissions(id)`. 선택 상태 `var selectedId by rememberSaveable(id) { mutableStateOf<Long?>(null) }`; 실제 표시 미션 = `missions.firstOrNull { it.id == selectedId } ?: missions.firstOrNull()` (선택한 id 가 사라지면 첫 미션으로). **미션이 1개면 칩 행을 그리지 않고 현재 UI 그대로.**
+   - 2개 이상: `HNavBar` 아래에 가로 칩 행(임시 UI — `Row` + 둥근 `Box`, 선택은 `ink`/`bg` 반전, 내가 제출한 미션은 체크 `HIcon.CHECK_SMALL`), 칩 라벨은 리스트 순서의 "1", "2"… (`number` 는 그룹 누적 번호라 라벨에 쓰지 않음). `MissionCard` 의 헤더에 "{index+1}번째" 를 표시(`#number` 유지). 칩 선택은 `selectedId` 만 바꾼다(재조회 없음).
+   - 콜백: `onPerform: (missionId: Long, type: MissionType?) -> Unit`, `onResults: (missionId: Long) -> Unit` 로 변경(선택된 미션 id 전달). `MainNavigation` 의 호출부 갱신.
+   - 참여 현황·콕 행·잠금 안내는 **선택된 미션**의 `members`/`didSubmit` 기준. `sendPoke(missionID, member, kind)` 는 `pokes.send(id, member.id, kind, missionID)`; `sending` 키를 `(memberId, kind)` 에서 `(missionId, memberId, kind)` 로 확장(미션별 독립). `classifyPokeFailure` 로 `NO_OPEN_MISSION`/`TARGET_ALREADY_SUBMITTED` → `refresh++` 는 그대로.
+   - 제출 후 복귀: `savedStateHandle` 에 `submittedMissionId: Long`(수행 화면이 설정) 추가. `MissionScreen` 은 `submittedMissionId` 를 받으면 그 미션을 선택하고, 미션이 2개 이상이면 토스트를 "{N}번째 미션을 올렸어요"/"{N}번째 미션을 지각으로 올렸어요", 1개면 기존 "오늘의 미션을 올렸어요"/"지각으로 올렸어요"(순수 함수 `submittedToastText(index, total, late)` 로 `MissionFormat.kt` 에 두고 테스트).
+   - 새로고침/카운트다운: 기존 `LaunchedEffect(id, nextPublishAt)`(서버 `nextPublishAt` 도달 시 3회 재조회)로 새 슬롯이 열리면 칩이 늘어난다 — 변경하지 않는다. 미션이 없을 때 빈 상태 문구·카운트다운도 그대로. 카드 안의 `MissionCountdown(closesAt, deadlineAt)` 는 미션별 값이라 그대로.
+5. **수행 라우트** (`MainNavigation.kt`, `MissionPerformCommon.kt`):
+   - `MainRoute.MissionPerform(groupId: Long, type: String? = null, missionId: Long? = null)` — 기본값 null 이면 첫 미션(직렬화/기존 백스택 호환). composable 이 `val mission = route.missionId?.let { store.todayMission(id, it) } ?: store.todayMission(id)`; 이후 `performEntryDecision`/제출은 그 `mission` 기준(이미 `mission.id` 사용). 제출 성공 시 `previousBackStackEntry.savedStateHandle["submittedMissionId"] = mission.id` 추가(기존 `submitted`, `submittedLate` 유지). `MISSION_CLOSED`/`AlreadySubmitted` 분기 동작 불변.
+   - `performEntryDecision` 시그니처는 변경하지 않는다(미션을 인자로 받음).
+6. **결과 연결** (`MainNavigation.kt`): `Mission` composable `onResults = { missionId -> nav.navigate(Results(id, missionId)) }`. **`Results` 가드**: `current = store.todayMission(groupID, missionID)`; `canOpen = if (current != null) current.didSubmit else store.calendarRecord(groupID, missionID)?.didSubmit == true`.
+7. **푸시** (`MainNavigation.kt` ≈105행, `PushModel.kt`): 스냅샷은 `group.missions` 중 `serverSubmittedByMe` 인 가장 뒤 미션(없으면 마지막 미션)으로 `PushGroupSnapshot(group.id, thatMission?.id, thatMission?.serverSubmittedByMe == true)` 를 만든다. `PushModel.kt` 의 모델·`pushTarget` 은 **변경하지 않는다**. (푸시 페이로드에 missionId 가 없어 정확한 미션 매핑은 불가 — 이 한계를 보고서에 기록.)
+8. **콕 API**: `PokeApi.kt` `PokeRequestDto(toUserId, type, missionId: Long? = null)`(`explicitNulls=false` 라 null 이면 키 생략), `PokeRepository.send(groupId, toUserId, kind, missionId: Long? = null)`.
+9. **달력**: 변경 없음. 같은 날 미션 여러 행이 한 날짜 칸에서 어떻게 합쳐지는지(`recordsByDate`, `J/feature/records/RecordCalendarLogic.kt`)만 읽어서 확인하고, 문제가 있으면 보고서에 적기만 한다(필요한 최소 수정이 아니면 손대지 않음).
 
 ## Files / Functions to Change
 
-저장소 production 파일은 **하나도 바꾸지 않는다.**
-
-| 위치 | 내용 |
+| 파일 | 변경 |
 |---|---|
-| `.agent/poc-b12/pom.xml` (신규) | Boot 4.1.1 parent + 후보 Spring AI BOM + 스타터 + test 스타터 |
-| `.agent/poc-b12/src/test/java/...` (신규) | 항목 ①~⑥ 검증 테스트(스텁 HTTP 서버 포함). 이름 예: `ContextWithoutAwsTests`, `BraceTemplatingTests`, `ToolChoiceWireTests`, `PromptCacheWireTests`, `LiveBedrockSmokeTests`(환경변수 있을 때만) |
-| `.agent/poc-b12/app-copy/` (신규, 선택) | 저장소 복사본 + 스타터 추가 (공존 시험용) |
-| `docs/BACKEND/MISSION_AI_SPRING_AI_BEDROCK.md` | §9 표 아래에 "PoC 결과 (2026-10-15 실행)" 절 추가: 항목별 판정(확인됨/막힘/미검증)과 핵심 근거, 확정된 Spring AI 버전·좌표·꺼짐 속성·호출 경로·도구 강제 방법·캐시 지원 여부, 미검증 항목의 재실행 방법. 다른 절은 바꾸지 않는다 |
-| `.agent/report.md` | 상세 결과(아래 형식) |
+| `J/core/net/MissionRepository.kt` | `CurrentMissionState.missions`, `current()` 전체 변환 |
+| `J/core/net/GroupApi.kt`, `GroupRepository.kt` | `todayMissions` DTO, `LoadedGroup.missions`, 폴백 |
+| `J/core/model/GroupSummary.kt` | `missionCount`, `mySubmittedCount` |
+| `J/core/data/DataStore.kt`, `DemoSeed.kt` | 목록 보존/갱신, `todayMissions`, `todayMission(group, mission)`, id 기반 `apply*`/`markPoked`, `summaries` 목록화 |
+| `J/feature/mission/MissionScreen.kt`, `MissionFormat.kt` | 선택 칩, 선택 미션 기준 UI, 콜백 시그니처, 토스트 문구 |
+| `J/feature/groups/HomeScreen.kt` | 다중 미션 카드 문구 |
+| `J/app/MainNavigation.kt` | `MissionPerform.missionId`, 수행/결과 연결, `Results` 가드, 푸시 스냅샷 |
+| `J/core/net/PokeApi.kt`, `PokeRepository.kt` | `missionId` |
+| 테스트 | 아래 Tests Required |
 
 ## Implementation Steps
 
-1. 후보 버전 조사: `spring-ai-parent` POM 으로 Boot/Framework/Jackson/AWS SDK 버전 확인(항목 ① a). 표로 정리.
-2. `.agent/poc-b12/pom.xml` 작성, `compile` + 빈 컨텍스트 로드 테스트(① b·c, ② a). 막히면 다른 후보 버전으로 반복, 어떤 버전에서 어떤 오류가 났는지 기록.
-3. 꺼짐 조건 탐색(② b), 자격증명 없는 상태에서의 기동·첫 호출 예외 타입(② d).
-4. 스텁 HTTP 서버 구축 + SDK `endpointOverride`/클라이언트 주입 경로 확보(Root Cause 방법 2). 이 단계가 막히면 대체 캡처 방법(자동 구성 `BedrockRuntimeClient` 빈 교체, `ChatModel` 스텁)을 쓰고 그 한계를 기록.
-5. 항목 ③ 테스트(경로 3종 × 중괄호 문자열), ④ 테스트(도구 강제·인자 수신·구조화 출력), ⑤ 테스트(캐시 포인트).
-6. 임시 복사본에서 공존 시험(② c): BOM·스타터 추가 후 `HaweApplicationTests`(필요하면 전체 `clean test`) 실행, 의존성 트리 전후 비교(`dependency:tree`) 요약.
-7. 항목 ⑥ 라이브 스모크 테스트 코드 작성(환경변수 없으면 skip 확인). 자격증명이 없으므로 skip 결과만 기록.
-8. 설계 문서 §9 에 PoC 결과 절 추가, `.agent/report.md` 작성.
+1. `MissionRepository`/`CurrentMissionState` 다중화 + 기존 테스트 수정 → 미션 1개 동작 동일 확인. 2. `DataStore` 일반화(`todayMissions`, id 기반 갱신, `summaries` 목록화) + `DataStoreTest` 정비·추가. 3. `GroupApi`/`GroupRepository`/`GroupSummary`/`HomeScreen`. 4. `PokeApi`/`PokeRepository`. 5. `MissionScreen` 선택 칩·콜백·토스트, `MissionFormat`. 6. `MainNavigation`(`MissionPerform.missionId`, `Mission` 콜백, `Results` 가드, 푸시 스냅샷). 7. `rg` 전수 점검 → 전체 단위 테스트·assemble(·lint).
 
 ## Constraints
 
-- **저장소의 `pom.xml`, `src/**`, `application.properties`, 스키마를 수정하지 않는다.** 모든 코드는 `.agent/poc-b12/` 안(또는 임시 복사본)에만 둔다. 예외: `docs/BACKEND/MISSION_AI_SPRING_AI_BEDROCK.md` 에 결과 절 추가.
-- 거짓 통과 금지: AWS 가 필요한 항목은 근거 없이 "확인됨"으로 쓰지 않는다. 와이어 캡처로 확인한 "요청 형태"와 AWS 로 확인한 "실제 동작"을 구분해서 쓴다.
-- AWS 자격증명·키·토큰을 파일, 로그, 보고서, 커밋 대상에 남기지 않는다. 스텁에는 더미 값만 쓴다.
-- 실제 사용자·그룹 데이터를 어디에도 쓰지 않는다. 샘플 입력은 가짜 데이터.
-- 외부 네트워크는 Maven Central 접속 외에 사용하지 않는다(라이브 스모크는 환경변수가 있을 때만 AWS 접속).
-- 커밋/푸시/브랜치/스태시 금지. `CLAUDE.md`/`AGENTS.md`/`ml/`/`android`/`ios` 수정 금지. 로컬 DB 스키마·데이터를 바꾸지 않는다(복사본 테스트가 기존 DB 에 접속하지만 Flyway 는 이미 적용 상태).
-- 이 PoC 의 결론으로 B12 구현을 이어서 진행하지 않는다. 결과 보고에서 멈춘다.
+- `android/` 만 수정(`docs/` 포함 다른 곳 금지). 백엔드·iOS 변경 금지. 새 라이브러리 금지. 커밋/푸시 금지.
+- **미션 1개 그룹의 화면·동작·문구 불변**(칩 행·"외 N개"·번째 문구는 미션 ≥ 2 일 때만).
+- 서버 값이 진실: 슬롯 번호·마감 시각을 앱이 계산하지 않는다. 그룹 설정 UI(하루 미션 수)·알림·푸시 페이로드 변경 금지.
+- A2/A3/A9 변경 보존. `MainNavigation.kt`·`MissionScreen.kt` 수정은 위 목적에 한정.
+- 코드 스타일은 주변(짧은 DTO, 한국어 문구, 한 줄 `@Test`)에 맞춘다. 임시 UI 는 코드 주석 `임시 UI` 로만 표기.
 
 ## Edge Cases
 
-- 가장 최신 버전이 Boot 4.1.1 과 안 맞을 수 있다 → 여러 후보를 시도하고 각각의 결과를 표로 남긴다. 맞는 버전이 없으면 "막힘"이며 우회안은 AWS SDK `bedrockruntime` 직접 호출(Converse API).
-- Spring AI 가 Jackson 2 와 3 를 모두 끌어와 직렬화 설정이 어긋날 수 있다 → 와이어 캡처 JSON 이 정상(한글·중괄호 보존, 이스케이프 정상)인지 눈으로 확인.
-- 한글/이모지/개행/따옴표가 포함된 프롬프트가 UTF-8 로 정확히 전달되는지(와이어 JSON 의 문자열이 원문과 같은지).
-- 모델/옵션 클래스 이름이 버전마다 다르다 → 소스 JAR 또는 `javap` 로 실제 존재 여부를 확인하고 추측으로 쓰지 않는다.
-- 스텁 응답 형식이 SDK 가 기대하는 Converse 응답과 어긋나면 파싱 오류가 난다 → AWS 문서의 Converse 응답 구조(`output.message.content[]`, `stopReason`, `usage`)를 따른다.
-- 첫 호출이 자격증명 해석 단계에서 오래 걸리거나(인스턴스 메타데이터 조회 타임아웃) 테스트가 매달릴 수 있다 → 테스트에 타임아웃을 걸고 환경변수 `AWS_EC2_METADATA_DISABLED=true` 를 설정한 상태에서 시험해 그 영향도 기록.
-- 임시 복사본이 로컬 DB 를 공유한다 → 쓰기 테스트가 기존 데이터를 건드릴 수 있으니 복사본에서는 **전체 테스트 대신 `HaweApplicationTests`(컨텍스트 로드) 위주**로 실행하고, 전체를 돌리면 보고서에 명시(기존 테스트는 자체 데이터를 만들고 지운다).
+- 미션 수가 2→3 으로 늘어남(새 슬롯 발행) / 3→2 로 줄어듦(슬롯 마감): 새로고침 후 선택 id 가 목록에 없으면 첫 미션으로. 같은 id 는 `submissions/feedLoaded/poked` 보존, 다른 id 는 폐기.
+- 일부만 제출: 칩 체크는 미션별, 홈은 "k/N 제출" + "내 미션 남음".
+- 같은 틀이 한 날에 두 번: UI·상태 모두 id 로 구분(주제 문자열로 구분 금지).
+- 수행 화면에서 그 미션이 닫힘 → 제출 시 `MISSION_CLOSED`(기존 `classifySubmitFailure`) → 05 복귀 + 새로고침.
+- 선택 미션 B 에서 콕 → 응답 `missionId` 로 B 의 `poked` 갱신(A 에는 영향 없음). 콕 도중 B 가 닫힘 → 409 `NO_OPEN_MISSION` → `refresh++`.
+- `ResultsScreen` 에서 두 번째 미션 열기: `Results` 가드가 현재 미션 목록을 먼저 보므로 달력 캐시 없이도 열림(내가 제출한 경우), 제출 안 했으면 막힘.
+- 구서버(`todayMissions` 없음) 폴백, `missions` 가 빈 목록(미개방), 앱이 모르는 `media`/`template` 미션(`type == null`) 칩·카드 처리(기존 `UNSUPPORTED_MISSION_TEXT` 경로 유지).
+- 프로세스 복원: `selectedId` 는 `rememberSaveable`, `MissionPerform.missionId` 는 직렬화 기본값 null 이라 옛 백스택과 호환.
 
 ## Regression Risks
 
-저장소를 수정하지 않으므로 회귀 위험은 없다. 단 `.agent/poc-b12/` 의 `target/`, 임시 복사본이 디스크를 차지하고(수백 MB), 복사본 테스트가 로컬 DB 에 접속한다. 포트(8080 등)를 점유하는 서버를 띄운 경우 종료한다.
+- `StoredGroup.missions`/`summary` 를 `listOf(single)`·`lastOrNull`·`dropLast` 로 다루던 코드를 빠뜨리면 두 번째 미션 상태가 사라지거나 덮어써진다 → `rg "missions\.(last|first)|listOf\(mission|dropLast|\.summary\b|lastOrNull" android/app/src/main` 로 전수 점검하고 결과를 보고서에 기록.
+- `MissionScreen` 콜백 시그니처 변경 → 호출부(`MainNavigation`, 프리뷰, 테스트) 컴파일.
+- `todayMission(groupID)` 의 의미가 `lastOrNull` → `firstOrNull` 로 바뀐다(미션 1개에서는 동일). 사용처: `MissionScreen`, `MainNavigation`(Results 가드·수행·결과), `DataStore.preview`.
+- `MainRoute.MissionPerform` 필드 추가(기본값 있음) → 직렬화 호환 확인, 푸시 딥링크는 `Mission` 라우트만 사용.
+- 홈 `GroupSummary` 필드 추가는 기본값으로 호환. `GroupFormatTest`/`HomeScreen` 미션 1개 문구 불변.
+- `SubmissionRepository`·`DataStore` 는 우준의 다른 Android 작업과 겹칠 수 있으나 A4/A7/A8 은 이미 커밋돼 충돌 가능성은 낮음.
 
 ## Tests Required
 
-(PoC 용 시험이며 저장소 테스트 스위트에는 추가하지 않는다.)
-
-- ① 컴파일 + 컨텍스트 로드 성공 로그.
-- ② 자격증명 없는 기동 성공/실패와 꺼짐 방법, 임시 복사본에서 `HaweApplicationTests` 결과.
-- ③ 경로 3종 × 중괄호 문자열 → 전달된 텍스트와 원문 일치 여부 표.
-- ④ 요청 JSON 의 `toolConfig`/`toolChoice`, 응답의 `toolUse` 인자 수신, 구조화 출력 요청 모양.
-- ⑤ 요청 JSON 의 `cachePoint`.
-- ⑥ 환경변수 없을 때 skip 되는지(실패가 아니라 skipped).
+JVM 단위 테스트(`T/…`) — 기존 테스트는 **미션 1개 회귀 보호용으로 그대로 통과**해야 하며, 시그니처 변경분만 최소 수정:
+- `MissionRepositoryTest`(MockWebServer): 여러 미션 매핑·순서(slotNo 순 유지), 빈 목록, 단일 미션 회귀.
+- `DataStoreTest`: 다중 미션 `applyCurrentMission`(같은 id 는 `submissions/poked/feedLoaded/serverSubmittedByMe` 보존, 새 id 는 새로 생성, 사라진 id 는 제거), `todayMissions` 순서, `todayMission(group, mission)`, `applyFeed`/`applySubmitted`/`markPoked` 가 **해당 id 만** 바꾸고 나머지는 보존, 모르는 id 무시, 미션 1개 회귀, 홈 `summaries`(`missionCount`, `mySubmittedCount`, `didSubmit` 전부 제출 기준) 및 `applySubmitted` 가 요약 갱신.
+- `GroupRepositoryTest`: `todayMissions` 매핑(2개), `todayMissions` 비고 `todayMission` 만 있는 폴백, 둘 다 없음.
+- `PokeRepositoryTest`: 요청 본문에 `missionId` 포함(지정 시)/생략(미지정 시).
+- `MissionFormatTest` 또는 신규: `submittedToastText`(1개/2개 이상/지각), 선택 미션 해석 순수 함수(선택 id 존재/없음 → 첫 미션)를 순수 함수로 분리해 테스트.
+- `GroupFormatTest`/신규: 홈 카드 문구 순수 함수가 있다면(미션 1개 불변, ≥2 "외 N개") 테스트 — 문구 생성을 `GroupFormat.kt` 의 순수 함수로 분리하는 편이 테스트하기 쉽다.
+- `PushModelTest`: 변경 없음(모델 불변) — 스냅샷 선택 로직을 별도 순수 함수로 뺀다면 그 테스트 추가.
+- UI 테스트 없음(컴파일 + 수동 확인).
 
 ## Validation Steps
 
-1. `git status` — 저장소에서 변경된 production 파일이 없는지 확인(변경이 있으면 `docs/BACKEND/MISSION_AI_SPRING_AI_BEDROCK.md` 한 파일뿐이어야 함. 이 PoC 이전부터 있던 B4/B11 미커밋 변경은 건드리지 않았는지만 확인).
-2. `rg -n "AKIA|aws_secret|accessKey" .agent/poc-b12 docs/BACKEND/MISSION_AI_SPRING_AI_BEDROCK.md` — 실제 키로 보이는 문자열 없음.
-3. 보고서(`.agent/report.md`)에 항목 ①~⑥ 표(판정·근거·실행 명령·재현 방법)와 최종 권고 한 줄: **"Spring AI 로 진행 가능 / 불가(→ AWS SDK 직접 호출 권장) / 조건부(조건 나열)"**.
-4. 미검증 항목은 `HAWE_POC_BEDROCK_MODEL`, `AWS_REGION`, 자격증명 설정 후 재실행하는 명령을 그대로 적는다.
-5. 설계 문서 §9 의 "막히면" 열과 비교해 어떤 대안을 택해야 하는지 명시.
+1. `android\gradlew.bat :app:testDebugUnitTest --offline` 전체 통과(출력 요약 기록). 가능하면 `:app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline`.
+2. 위 Regression Risks 의 `rg` 점검 결과를 보고서에 포함. `rg "COMING_SOON"` 에 신규 사용이 없는지 확인.
+3. 사용자 수동 확인(서버+기기, 미검증이면 "미검증" 명시): 서버에서 `dailyMissionCount=3`(관리 경로로 설정) 그룹으로 — 05 칩 전환, 각 미션 제출→"N번째 미션을 올렸어요", 각 미션 결과 열기, 홈 카드 "외 N개"/"k/N 제출", 미션별 콕(다른 미션 선택 후 콕), 슬롯 발행 시각 경과 후 칩 증가, 미션 1개 그룹 UI 불변.
 
 ## Potential Merge Conflicts
 
-저장소 코드 변경이 없어 충돌 없음. `docs/BACKEND/MISSION_AI_SPRING_AI_BEDROCK.md` 는 이 세션에서 만든 새 파일이라 다른 작업과 겹치지 않는다. 작업 트리에 B4·B11 미커밋 변경이 있으니 `git add`/`stash`/`checkout` 등 어떤 git 변경 명령도 쓰지 않는다.
+- `MainNavigation.kt`, `MissionScreen.kt`, `DataStore.kt`, `GroupRepository.kt`, `HomeScreen.kt`: A2·A3·A9 미커밋 변경과 같은 파일(특히 `MainNavigation.kt`·`DataStore.kt`). 변경 범위를 이 계획에 한정하고 기존 변경을 보존.
+- 우준의 후속 작업이 없다면 A6 이 Android 마지막 항목. iOS 이식(A5 항목 7)은 별도.

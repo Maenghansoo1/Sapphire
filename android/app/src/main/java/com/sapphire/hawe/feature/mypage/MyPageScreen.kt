@@ -19,7 +19,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.AppLinks
 import com.sapphire.hawe.core.AppSession
-import com.sapphire.hawe.core.COMING_SOON
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.ActivityStats
 import com.sapphire.hawe.core.model.MissionType
@@ -72,7 +71,7 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
                         style = HType.plex(13, lineHeightMultiple = 1.45f), color = HColors.textSecondary,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                Box(Modifier.height(44.dp).clickable { toast.show(COMING_SOON) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.height(44.dp).clickable(onClick = onProfileEdit), contentAlignment = Alignment.Center) {
                     Box(Modifier.height(36.dp).border(1.dp, HColors.border, CircleShape)
                         .padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                         Text("프로필 편집", style = HType.plex(13, FontWeight.SemiBold), color = HColors.ink,
@@ -92,7 +91,7 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
                 HListRow("개인정보 처리방침", height = 48.dp,
                     onClick = { runCatching { openInCustomTab(context, AppLinks.privacyPolicy) } })
                 DangerRow("로그아웃", true) { confirmLogout = true }
-                DangerRow("회원 탈퇴", false) { toast.show(COMING_SOON) }
+                DangerRow("회원 탈퇴", false, onWithdraw)
             }
         }
         Text("버전 $version", Modifier.fillMaxWidth().padding(top = 12.dp, bottom = ctaBottomPadding(24.dp)),

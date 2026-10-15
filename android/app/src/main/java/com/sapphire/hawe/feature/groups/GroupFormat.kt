@@ -20,6 +20,12 @@ fun dotDate(instant: Instant): String = dotDate(instant.atZone(HaweTime.SEOUL).t
 fun topicTimeText(time: LocalTime): String = "${if (time.hour < 12) "오전" else "오후"} ${((time.hour + 11) % 12) + 1}:${time.minute.toString().padStart(2, '0')}"
 fun memberBadge(member: GroupMember): String? = listOfNotNull(
     "나".takeIf { member.isMe }, "방장".takeIf { member.isOwner }).takeIf { it.isNotEmpty() }?.joinToString(" · ")
+enum class LeaveFlow { MEMBER, OWNER_ALONE, OWNER_WITH_MEMBERS }
+fun leaveFlowFor(group: GroupDetail): LeaveFlow = when {
+    !group.amIOwner -> LeaveFlow.MEMBER
+    group.members.size == 1 -> LeaveFlow.OWNER_ALONE
+    else -> LeaveFlow.OWNER_WITH_MEMBERS
+}
 fun leaveMessage(group: GroupDetail): String = buildString {
     if (group.amIOwner && group.members.size == 1)
         append("나가면 이 그룹이 삭제돼요. 초대 코드도 더는 쓸 수 없어요.")
@@ -29,6 +35,11 @@ fun groupCardSubtitle(summary: GroupSummary, now: Instant = Instant.now()): Stri
     append("${summary.relationship.displayName} · ${summary.members.size}명")
     summary.daysTogether(now)?.let { append(" · 함께한 지 ${it}일") }
 }
+fun homeMissionLabel(summary: GroupSummary): String = "오늘의 미션 · ${summary.missionType?.displayName ?: "미션"}" +
+    if (summary.missionCount >= 2) " · 외 ${summary.missionCount - 1}개" else ""
+
+fun homeSubmissionProgress(summary: GroupSummary): String? =
+    if (summary.missionCount >= 2) "${summary.mySubmittedCount} / ${summary.missionCount} 제출" else null
 
 fun datePickerMillis(date: LocalDate): Long = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
 fun dateFromPickerMillis(millis: Long): LocalDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()

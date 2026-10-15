@@ -47,7 +47,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session: AppSession,
-    onBack: () -> Unit, onProfile: () -> Unit, onLeft: () -> Unit) {
+    onBack: () -> Unit, onProfile: () -> Unit, onPickSuccessor: () -> Unit, onLeft: () -> Unit,
+    onInsight: () -> Unit) {
     LaunchedEffect(id) {
         try { store.applyServerGroup(groups.detail(id, session.account.userId)) }
         catch (e: Exception) {
@@ -64,6 +65,10 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
     }
     var showLeave by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
+    var showReissue by remember { mutableStateOf(false) }
+    var reissuing by remember { mutableStateOf(false) }
+    var showTime by remember { mutableStateOf(false) }
+    var changingTime by remember { mutableStateOf(false) }
     val toast = rememberHToastState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -99,6 +104,9 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
                         }
                     }
                     HButton("초대 링크 공유하기") { shareInvite(context, group) }
+                    if (group.amIOwner) Text("코드 다시 만들기", Modifier.clickable(enabled = !reissuing) {
+                        showReissue = true
+                    }, style = HType.plex(14, FontWeight.SemiBold), color = HColors.ink)
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -120,19 +128,33 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
                             }
                         }
                         if (member.isMe) Box(Modifier.height(34.dp).border(1.dp, HColors.border, CircleShape)
-                            .clickable { toast.show(COMING_SOON) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                            .clickable(onClick = onProfile).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                             Text("내 프로필 편집", style = HType.plex(13, FontWeight.SemiBold), color = HColors.ink)
                         }
                     }
                 }
                 Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(HColors.line))
+                    Box(Modifier.fillMaxWidth().height(52.dp).clickable(onClick = onInsight)) {
+                        Row(Modifier.fillMaxWidth().align(Alignment.Center),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            HIconView(HIcon.INSIGHT_TEMP, size = 20.dp, color = HColors.accent)
+                            Text("우리 그룹 이야기", style = HType.body15, color = HColors.ink)
+                            Spacer(Modifier.weight(1f))
+                            HIconView(HIcon.CHEVRON_RIGHT, size = 16.dp, color = HColors.textTertiary)
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).align(Alignment.BottomCenter)
+                            .background(HColors.line))
+                    }
                     HListRow("주제 도착 시간", value = topicTimeText(group.topicTime),
-                        showsChevron = false) { toast.show(COMING_SOON) }
+                        showsChevron = group.amIOwner) {
+                        if (group.amIOwner && !changingTime) showTime = true
+                        else if (!group.amIOwner) toast.show("그룹장만 바꿀 수 있어요")
+                    }
                     HListRow("알림", value = "준비 중") { toast.show(COMING_SOON) }
                     Box(Modifier.fillMaxWidth().height(52.dp).clickable {
-                        if (group.amIOwner && group.members.size > 1) toast.show(
-                            "그룹장은 다른 멤버에게 그룹장을 넘긴 뒤 나갈 수 있어요. 지금은 준비 중이에요")
+                        if (leaveFlowFor(group) == LeaveFlow.OWNER_WITH_MEMBERS) onPickSuccessor()
                         else showLeave = true
                     },
                         contentAlignment = Alignment.CenterStart) {
@@ -159,6 +181,42 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
                 }
             }
         })
+    if (showReissue) HAlert("초대 코드를 다시 만들까요?", "이전 코드는 바로 쓸 수 없게 돼요.", "다시 만들기",
+        onCancel = { showReissue = false }, onConfirm = {
+            if (!reissuing) {
+                reissuing = true; showReissue = false
+                scope.launch {
+                    try {
+                        val result = groups.reissueInviteCode(id)
+                        store.applyServerGroup(group.copy(inviteCode = result.inviteCode))
+                        try {
+                            store.applyServerGroup(groups.detail(id, session.account.userId))
+                        } catch (refresh: Exception) {
+                            if (refresh is CancellationException) throw refresh
+                            // The POST response already contains the new usable code.
+                        }
+                        toast.show("새 초대 코드를 만들었어요")
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        toast.show(e.toUserMessage())
+                    } finally { reissuing = false }
+                }
+            }
+        }, confirmKind = HButtonKind.PRIMARY)
+    if (showTime) TopicTimeSheet(group.topicTime, onDismiss = { showTime = false }, onConfirm = { time ->
+        if (!changingTime) {
+            changingTime = true; showTime = false
+            scope.launch {
+                try {
+                    store.setTopicTime(groups.updateTopicTime(id, time), id)
+                    toast.show("주제 도착 시간을 바꿨어요. 오늘 미션이 이미 열렸다면 내일부터 적용돼요")
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    toast.show(e.toUserMessage())
+                } finally { changingTime = false }
+            }
+        }
+    })
 }
 
 private fun shareInvite(context: Context, group: GroupDetail) {
@@ -181,6 +239,8 @@ private fun TopicTimeSheet(initial: LocalTime, onDismiss: () -> Unit, onConfirm:
                     style = HType.plex(16, FontWeight.SemiBold), color = HColors.ink)
             })
             Text("매일 이 시간에 그룹의 새 미션이 열려요.", Modifier.padding(top = 4.dp),
+                style = HType.caption13, color = HColors.textSecondary)
+            Text("오늘 미션이 이미 열렸다면 내일부터 적용돼요.",
                 style = HType.caption13, color = HColors.textSecondary)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
                 WheelPicker(listOf("오전", "오후"), amPm, { amPm = it }, Modifier.weight(1f))

@@ -11,6 +11,7 @@ data class GroupSummary(
     val members: List<AvatarContent>, val startDate: LocalDate?,
     val missionType: MissionType?, val topic: String?,
     val submittedCount: Int, val didSubmit: Boolean,
+    val missionCount: Int = 0, val mySubmittedCount: Int = 0,
 ) {
     fun daysTogether(on: Instant = Instant.now()): Int? = startDate?.let {
         ChronoUnit.DAYS.between(it, on.atZone(HaweTime.SEOUL).toLocalDate()).toInt() + 1

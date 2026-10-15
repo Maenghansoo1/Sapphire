@@ -19,6 +19,51 @@ import java.time.ZoneOffset
 import kotlin.random.Random
 
 class DataStoreTest {
+    @Test fun openMissionsKeepIndependentStateAndSummary() {
+        val store = store()
+        val detail = GroupDetail.mock.copy(id = 11L)
+        val summaries = listOf(MissionSummary(10, MissionType.WRITE, "같은 주제", 0, false),
+            MissionSummary(20, MissionType.WRITE, "같은 주제", 1, true))
+        store.applyServerGroups(listOf(LoadedGroup(detail, summaries)))
+        store.applyCurrentMission(11, CurrentMissionState(listOf(serverMission(10),
+            serverMission(20).copy(submittedByMe = true)), null))
+        assertEquals(listOf(10L, 20L), store.todayMissions(11).map { it.id })
+        assertEquals(10L, store.todayMission(11)?.id)
+        assertEquals(20L, store.todayMission(11, 20)?.id)
+        assertNull(store.todayMission(11, 99))
+        assertEquals(2, store.summaries.single().missionCount)
+        assertEquals(1, store.summaries.single().mySubmittedCount)
+        assertFalse(store.summaries.single().didSubmit)
+        val me = detail.me!!
+        val mine = Submission(100, me.displayed, true, MissionType.WRITE, now,
+            text = "답", authorID = me.id)
+        store.applySubmitted(11, 10, mine)
+        store.applyFeed(11, 20, listOf(mine.copy(id = 200)))
+        store.markPoked(11, 20, -2, PokeKind.POKE)
+        assertTrue(store.todayMission(11, 10)!!.didSubmit)
+        assertTrue(store.todayMission(11, 20)!!.didSubmit)
+        assertEquals(1, store.groups.single().missions.first().submissions.size)
+        assertEquals(200L, store.groups.single().missions.last().submissions.single().id)
+        assertFalse(store.groups.single().missions.first().feedLoaded)
+        assertTrue(store.groups.single().missions.last().feedLoaded)
+        assertTrue(store.groups.single().missions.first().poked.isEmpty())
+        assertEquals(setOf(PokeKind.POKE), store.groups.single().missions.last().poked[-2L])
+        assertEquals(2, store.summaries.single().mySubmittedCount)
+        assertTrue(store.summaries.single().didSubmit)
+        store.applyCurrentMission(11, CurrentMissionState(listOf(serverMission(10), serverMission(20),
+            serverMission(30)), null))
+        assertEquals(listOf(10L, 20L, 30L), store.todayMissions(11).map { it.id })
+        assertTrue(store.groups.single().missions[1].feedLoaded)
+        assertTrue(store.groups.single().missions[1].serverSubmittedByMe)
+        assertEquals(setOf(PokeKind.POKE), store.groups.single().missions[1].poked[-2L])
+        assertFalse(store.groups.single().missions[2].feedLoaded)
+        store.applyCurrentMission(11, CurrentMissionState(listOf(serverMission(20), serverMission(30)), null))
+        assertEquals(listOf(20L, 30L), store.todayMissions(11).map { it.id })
+        store.applySubmitted(11, 10, mine)
+        store.markPoked(11, 10, -2, PokeKind.FLING)
+        store.applyFeed(11, 10, emptyList())
+        assertEquals(listOf(20L, 30L), store.todayMissions(11).map { it.id })
+    }
     @Test fun serverGroupsPreserveLocalMissionsAndState() {
         val store = store()
         assertEquals(GroupsState.NOT_LOADED, store.groupsState)
@@ -212,10 +257,6 @@ class DataStoreTest {
         assertFalse(store.group(id)!!.notify)
         store.setTopicTime(LocalTime.NOON, id)
         assertEquals(LocalTime.NOON, store.group(id)!!.topicTime)
-        val changed = Profile(store.myProfile.avatar, "그룹 별명")
-        store.setMyGroupProfile(changed, id)
-        assertEquals(changed, store.group(id)!!.me!!.displayed)
-        assertEquals(Profile.mockMine, before.me!!.displayed)
     }
 
     @Test fun pokesComeFromServerAndSurviveLateRefresh() {

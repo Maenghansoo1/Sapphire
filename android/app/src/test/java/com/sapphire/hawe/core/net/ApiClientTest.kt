@@ -2,6 +2,9 @@ package com.sapphire.hawe.core.net
 
 import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -15,6 +18,50 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ApiClientTest {
+    @Test fun oldRequestInvalidTokenDoesNotClearRotatedSession() {
+        MockWebServer().use { server ->
+            val arrived = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    arrived.countDown()
+                    release.await(5, TimeUnit.SECONDS)
+                    return error("INVALID_TOKEN")
+                }
+            }
+            val tokens = InMemoryTokenStore().apply { save("old", "oldRefresh") }
+            var expired = 0
+            val api = ApiClient(server.url("/").toString(), tokens, onSessionExpired = { expired++ })
+            val failure = AtomicReference<Throwable?>()
+            val thread = Thread {
+                try { runBlocking { api.get<MeDto>("/old") } }
+                catch (e: Throwable) { failure.set(e) }
+            }
+            thread.start()
+            assertTrue(arrived.await(5, TimeUnit.SECONDS))
+            tokens.save("new", "newRefresh")
+            release.countDown()
+            thread.join(5000)
+            assertFalse(thread.isAlive)
+            assertEquals("INVALID_TOKEN", (failure.get() as ApiException).code)
+            assertEquals("new", tokens.accessToken)
+            assertEquals("newRefresh", tokens.refreshToken)
+            assertEquals(0, expired)
+        }
+    }
+
+    @Test fun putMultipartUsesPutAndFilePart() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"profileImageUrl":"/files/photo.jpg"}"""))
+            val api = ApiClient(server.url("/").toString(), InMemoryTokenStore())
+            assertEquals("/files/photo.jpg", api.uploadProfileImage(byteArrayOf(1, 2, 3)).profileImageUrl)
+            val request = server.takeRequest()
+            assertEquals("PUT", request.method)
+            assertEquals("/api/me/profile-image", request.path)
+            assertTrue(request.body.readUtf8().contains("name=\"file\"; filename=\"profile.jpg\""))
+        }
+    }
+
     @Test fun multipartRefreshResendsBodyAndBuildsAbsoluteUrl() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(error("TOKEN_EXPIRED"))

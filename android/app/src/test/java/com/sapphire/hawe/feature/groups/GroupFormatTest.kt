@@ -11,6 +11,15 @@ import java.util.Locale
 import java.util.UUID
 
 class GroupFormatTest {
+    @Test fun homeMissionCopyChangesOnlyForMultipleMissions() {
+        val single = GroupSummary(1, "그룹", Relationship.FRIEND, emptyList(), null,
+            MissionType.WRITE, "주제", 1, false, 1, 0)
+        assertEquals("오늘의 미션 · ${MissionType.WRITE.displayName}", homeMissionLabel(single))
+        assertNull(homeSubmissionProgress(single))
+        val multiple = single.copy(missionCount = 3, mySubmittedCount = 1)
+        assertEquals("오늘의 미션 · ${MissionType.WRITE.displayName} · 외 2개", homeMissionLabel(multiple))
+        assertEquals("1 / 3 제출", homeSubmissionProgress(multiple))
+    }
     @Test fun topicTimeUsesKoreanTwelveHourClock() {
         assertEquals("오전 9:00", topicTimeText(LocalTime.of(9, 0)))
         assertEquals("오전 12:00", topicTimeText(LocalTime.MIDNIGHT))
@@ -40,6 +49,9 @@ class GroupFormatTest {
         assertTrue(leaveMessage(group).contains("그룹이 삭제돼요"))
         assertFalse(leaveMessage(group.copy(members = listOf(mine.copy(isOwner = true), owner))).contains("가장 먼저 들어온"))
         assertFalse(leaveMessage(group.copy(members = listOf(mine, owner))).contains("방장은"))
+        assertEquals(LeaveFlow.OWNER_ALONE, leaveFlowFor(group))
+        assertEquals(LeaveFlow.OWNER_WITH_MEMBERS, leaveFlowFor(group.copy(members = listOf(mine.copy(isOwner = true), owner))))
+        assertEquals(LeaveFlow.MEMBER, leaveFlowFor(group.copy(members = listOf(mine, owner))))
     }
 
     @Test fun cardSubtitleIncludesLoverDayCount() {
