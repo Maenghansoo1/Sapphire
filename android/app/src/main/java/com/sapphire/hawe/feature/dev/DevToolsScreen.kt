@@ -78,6 +78,7 @@ fun DevToolsScreen(session: AppSession, store: DataStore, dev: DevRepository,
     var showDate by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var rerollConfirmation by remember { mutableStateOf<Triple<Long, Long, String?>?>(null) }
     var faultRevision by remember { mutableIntStateOf(0) }
     var results by remember { mutableStateOf<List<String>>(emptyList()) }
 
@@ -176,10 +177,17 @@ fun DevToolsScreen(session: AppSession, store: DataStore, dev: DevRepository,
                     Action("미션 생성", busy, groupId != null) { runAction("미션 생성") {
                         val result = dev.publish(groupId); refreshMission(); "${result.created.size}개 · ${result.message.orEmpty()}"
                     } }
-                    Text("틀 선택 (빈 슬롯에 적용)", style = HType.caption13, color = HColors.textSecondary)
+                    Text("틀 선택 (생성·리롤에 적용)", style = HType.caption13, color = HColors.textSecondary)
                     FlowChips(templates.mapIndexed { index, value -> index.toLong() to value },
                         templates.indexOf(template).takeIf { it >= 0 }?.toLong(), busy) {
                         template = templates[it.toInt()]
+                    }
+                    Action("선택 미션 리롤", busy, groupId != null && missionId != null) {
+                        rerollConfirmation = Triple(groupId!!, missionId!!, null)
+                    }
+                    Action("선택 미션을 ${template ?: "선택한 틀"}로 리롤", busy,
+                        groupId != null && missionId != null && template != null) {
+                        rerollConfirmation = Triple(groupId!!, missionId!!, template)
                     }
                     Action("선택 틀로 생성", busy, groupId != null && template != null) { runAction("선택 틀 생성") {
                         val result = dev.publish(groupId, template); refreshMission(); "${result.created.size}개"
@@ -320,6 +328,20 @@ fun DevToolsScreen(session: AppSession, store: DataStore, dev: DevRepository,
             runAction("그룹 삭제") { val id = groupId!!; dev.deleteGroup(id); store.leave(id)
                 groupId = store.groups.firstOrNull()?.id; "#$id 삭제" }
         })
+    rerollConfirmation?.let { (selectedGroupId, selectedMissionId, selectedTemplate) ->
+        HAlert("이 미션을 새로 뽑을까요?", "이미 낸 제출·반응·댓글·콕이 모두 삭제돼요.", "리롤",
+            onCancel = { rerollConfirmation = null }, onConfirm = {
+                rerollConfirmation = null
+                runAction("미션 리롤") {
+                    val result = dev.reroll(selectedMissionId, selectedTemplate)
+                    store.clearMissionForReroll(selectedGroupId, selectedMissionId)
+                    submissionRows = emptyList()
+                    selectedSubmission = null
+                    refreshMission()
+                    "${result.template} · ${result.content}"
+                }
+            })
+    }
     if (showDate) {
         val picker = rememberDatePickerState(initialSelectedDateMillis = clockDate.atStartOfDay(ZoneOffset.UTC)
             .toInstant().toEpochMilli())

@@ -1,142 +1,89 @@
-# 개발자 모드 ② Android — 숨김 진입(버전 10탭) + 개발자 도구 화면 + 원클릭 유저 전환 + 앱 시계
-
-> 이 파일은 **서버 작업(`.agent/plan.md` — `/api/dev/**` API)이 끝난 뒤** `.agent/plan.md` 로 복사해 실행한다(한 번에 한 계획). 서버 API 계약은 `.agent/plan.md` 의 "API 계약" 표가 정본이다. 서버가 아직 없으면 이 작업은 시작하지 않는다.
-> 범위: **`android/` 만**. 사용자 결정(확정): 서버 시계까지 변경(앱은 같은 오프셋을 표시용으로 반영), 유저 전환은 서버 시드 계정, **release 빌드에서도 열림**, **안전장치 금지**(빌드 타입/플래그로 숨기지 않는다 — 10번 탭이 유일한 진입 조건).
-> 전제: A2·A3·A9·A6 변경이 worktree 에 미커밋으로 섞여 있을 수 있다(`MainNavigation.kt`, `AppViewModel.kt`, `RootScreen.kt`, `MyPageScreen.kt`, `MissionScreen.kt` 등). **덮어쓰거나 되돌리지 말 것.**
-> 빌드/테스트: JDK 21 권장(없으면 JDK 17 — 셸의 `JAVA_HOME` 이 JDK 25 면 Gradle 이 실패하므로 `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot` 로 지정). `android\gradlew.bat :app:testDebugUnitTest --offline`.
-
 ## Goal
+개발자 모드에서 그룹 안의 **현재 미션을 리롤**(새 틀·새 문장으로 교체)하는 기능을 추가한다. 서버 `POST /api/dev/missions/{missionId}/reroll` + Android 개발자 UI(미션 화면 버튼, 개발자 도구 화면 버튼). 안전장치 없음·release 에서도 열림은 기존 개발자 모드 결정 그대로다.
 
-1. **마이페이지 → 앱 정보**에서 "버전 1.0.0" 글자를 10번 누르면 개발자 모드가 켜진다(유지됨, 앱 재실행 후에도).
-2. 개발자 모드에서:
-   - 마이페이지에서 **원클릭 유저 전환**(서버 시드 계정 목록, 탭 한 번).
-   - **개발자 도구 화면**: 상태 표시, 서버 시계 변경(앱 시계도 동기), 미션 생성(슬롯 강제 발행, 틀 선택), 마감 당기기, 대리 제출/콕/반응/댓글, 시드 데이터 일괄 생성/초기화, 인사이트 강제 재생성, 그룹 설정(하루 미션 수·발행 시각), 로컬 초기화·그룹 삭제, 네트워크 오류 주입.
-   - 05(미션) 화면에도 개발자용 **"미션 생성"** 버튼.
-
-## Findings (코드로 확인함)
-
-경로 접두 `J/` = `android/app/src/main/java/com/sapphire/hawe/`, 테스트 `T/` = `android/app/src/test/java/com/sapphire/hawe/`.
-
-- **앱 정보 화면** `J/feature/mypage/AppInfoScreen.kt`: `Text("버전 $version", style = HType.plex(14), color = HColors.textSecondary)` 가 "버전 1.0.0" 표시(`rememberAppVersionName()`). 여기에 탭 카운터를 건다.
-- **마이페이지** `J/feature/mypage/MyPageScreen.kt`: 시그니처 `MyPageScreen(session, store, calendar, onBack, onProfileEdit, onNotifications, onUserInfo, onAppInfo, onWithdraw)`, 목록 행은 `HListRow("알림 설정"|"유저 정보"|"앱 정보"|…)`, `DangerRow("로그아웃")`/`DangerRow("회원 탈퇴")`. 개발자 모드일 때 맨 위(통계 아래)에 "개발자 도구" 행과 유저 전환 칩 목록을 추가한다.
-- **세션** `J/core/AppSession.kt`: `state` (SIGNED_OUT/SIGNED_IN/RESTORING), `account`, `beginRestoring()`, `failRestoring()`, `signIn(account)`, `signOut()`(= `onCleared()` + SIGNED_OUT; `onCleared` 는 `AppViewModel` 에서 `{ auth.clearSession(); dataStore.reset() }`). `J/app/RootScreen.kt` 가 `state` 로 `AuthNavHost`/`MainNavHost`/빈 화면을 고르므로 **상태를 RESTORING 으로 한 번 내렸다 SIGNED_IN 으로 올리면 `MainNavHost` 가 새로 구성**된다(백스택 초기화) — 유저 전환에 이 방식을 쓴다(`signOut()` 은 토큰을 지우므로 쓰지 않는다).
-- **ViewModel** `J/app/AppViewModel.kt`: `tokens = KeystoreTokenStore(application)`, `api = ApiClient(BuildConfig.API_BASE_URL, tokens, onSessionExpired = …)`, `auth/groups/missions/pokes/submissions/calendar/insights` 레포지토리, `appSession`, `dataStore`. `init` 에서 RESTORING 이면 `auth.restore()` → `dataStore.setMyProfile` → `appSession.signIn`.
-- **ApiClient** `J/core/net/ApiClient.kt`: 생성자 `ApiClient(baseUrl, tokens, http: OkHttpClient = …, json, onSessionExpired)`. `get/post/patch/put/delete`(+ `auth: Boolean = true` 로 인증 없이 호출 가능), `postMultipart/putMultipart`. 2xx 는 모두 성공(202 도 디코드). `Json { ignoreUnknownKeys = true; explicitNulls = false }`. 업로드용 `uploadHttp` 는 `http.newBuilder()` 파생.
-- **TokenStore** `J/core/net/TokenStore.kt`: `save(access, refresh)`/`clear()`. `KeystoreTokenStore` 가 실제 구현.
-- **시간 사용처(앱)**: `Instant.now()`/`LocalDate.now` 를 직접 쓰는 곳 — `J/core/model/GroupSummary.kt`(`daysTogether`), `J/feature/groups/CreateGroupScreen.kt`(50·142행), `GroupFormat.kt`(34행 `groupCardSubtitle`), `HomeScreen.kt`(47), `J/feature/insight/GroupInsightScreen.kt`(42), `J/feature/mission/MissionScreen.kt`(93·251·253: 다음 미션 대기·카운트다운), `J/feature/records/RecordCalendarScreen.kt`(50), `J/feature/results/ResultsFormat.kt`(26 `koreanRelativeText`), `ResultsScreen.kt`(103). 그 외 `DataStore(clock = Clock.systemUTC())`(데모 초대 전용, 변경 불필요), `SketchTimer`/`AiGuessDialog`(경과 시간 측정, 변경 금지). 한국 시간 유틸 `J/core/HaweTime.kt`(`HaweTime.SEOUL`).
-- **재사용 UI**: `HNavBar`, `HButton`, `HListRow`, `HAlert`, `HToggle`, `HTextField`, `HToastHost/rememberHToastState`, `HAvatar`, `FlowRow`(`CreateGroupScreen.kt` 선례, `@OptIn(ExperimentalLayoutApi::class)`), `WheelPicker`(`J/designsystem/components/WheelPicker.kt`), 시간 선택 시트 `TopicTimeSheet`(`GroupInfoScreen.kt` private — 필요하면 `internal` 로 승격), 날짜 선택 Material3 `DatePicker`(`CreateGroupScreen.kt` 선례).
-- 라우트 `MainRoute`(`J/app/MainNavigation.kt` sealed interface, `@Serializable`), `MainNavHost(session, store, auth, push, groups, missions, pokes, submissions, calendar, insights)` — 새 파라미터로 `dev: DevRepository` 와 `devMode` 상태를 넘긴다.
-- 빌드 정보: `BuildConfig.VERSION_NAME`, `BuildConfig.VERSION_CODE`(없으면 `PackageManager`), `BuildConfig.BUILD_TYPE`, `BuildConfig.API_BASE_URL`(debug 기본 `http://10.0.2.2:8080`, 폰은 `adb reverse` + `-PhaweApiBaseUrl=http://localhost:8080`). `buildFeatures { buildConfig = true }` 이미 켜짐.
-- 서버 계약은 `.agent/plan.md` 의 표(`/api/dev/...`)가 정본: `status`, `clock`(PUT/DELETE), `missions/publish`, `missions/{id}/deadline-now`, `groups/{id}/deadline-now`, `missions/{id}/submissions`, `missions/{id}/submit`, `missions/{id}/submit-missing`, `groups/{id}/poke`, `submissions/{id}/react`, `submissions/{id}/comment`, `groups/{id}/insights/regenerate`, `groups/{id}/settings`(PATCH), `users`, `login-as`, `seed`, `groups/{id}`(DELETE), `reset`.
+## Findings
+- 기존 "미션 생성"은 `DevMissionService.publish` → `MissionPublisher.forcePublish(groupId, now, template)`. **빈 슬롯에만** 새 미션을 넣고(`existsByGroupIdAndDateAndSlot` 이면 건너뜀) 이미 오늘 슬롯이 다 찼으면 "오늘 발행할 빈 슬롯이 없어요"만 돌려준다. 즉 현재 미션을 바꿀 방법이 없다.
+- `missions` 에는 `UNIQUE (group_id, mission_date, slot_no)` (`V1__initial_schema.sql` `uk_missions_group_date_slot`)가 있어 **같은 날 같은 슬롯에 새 행을 추가할 수 없다.** 따라서 리롤은 **기존 행을 제자리에서 UPDATE** 해야 한다(id 유지). "현재 미션" 판정은 `MissionMapper.CURRENT`(슬롯별 최신)라 id 가 같으면 앱·피드·달력 로직이 그대로 동작한다.
+- 미션 생성 재료: `MissionPublisher.publish` 의 틀 선택(`MissionTemplateSelector.select`, 시드 = `seed(groupId,date,slotNo)` 로 **결정적**), 대상 선택(`needsTarget`/`targetUserId` params), `contexts.build`, `experiments.assign`, `generator.generate(template, seed, context.withRecentMissions(recent), withTarget)`. 시드가 결정적이라 같은 입력으로 다시 부르면 **똑같은 미션이 나온다** → 리롤은 시드와 틀 선택에 무작위성을 넣어야 한다.
+- `PlaceholderMissionGenerator` 는 `new Random(seed).nextInt(variants.size())` 로 문장을 고른다(시드만 바꾸면 달라짐). AI 켜져 있으면 `FallbackMissionGenerator` 가 AI 를 부르고 실패 시 placeholder.
+- 미션에 매달린 행: `submissions`(→ `reactions`, `comments`(→ `comment_mentions`), `submission_guesses`, `submission_ai_reviews`) 와 `pokes`(mission_id NOT NULL). 틀이 바뀌면 기존 제출 답은 의미가 없으므로 같이 지워야 한다. 그룹 삭제용 삭제 SQL 은 `GroupMapper` 에 그룹 단위로만 있다(`deleteCommentMentionsByGroupId` 등) — 미션 단위 버전을 `DevMapper` 에 새로 만든다.
+- 앱: `MissionScreen` 에 `[개발자] 미션 생성` 버튼(미션 없음 화면 / 미션 카드 아래, `dev != null` 일 때만), `DevToolsScreen` 에 미션 생성(`dev.publish(groupId)` / 틀 지정 `dev.publish(groupId, template)`) 과 마감 당기기 UI 가 있다. `DevRepository.publish` / `DevPublishResponse` / `DevPublishedMission` 존재.
+- 앱 `DataStore.applyCurrentMission` 은 id 기반으로 현재 미션 목록을 교체한다. 리롤은 id 가 그대로이고 내용만 바뀌므로 새로고침(`refresh++` / `refreshMission()`) 후 카드·제출 여부·참여 현황이 서버 값으로 갱신되어야 한다.
 
 ## Root Cause / Key Implementation Points
-
-### 1. 상태와 시계 (`J/core/dev/`)
-- `DevMode`(싱글톤 `object` 또는 `AppViewModel` 이 보유하는 클래스): SharedPreferences(`context.getSharedPreferences("hawe_dev", MODE_PRIVATE)`, 토큰 저장소와 별개)에 `enabled: Boolean`, `clockOffsetSeconds: Long` 저장. Compose 에서 관찰 가능한 `mutableStateOf` 로 노출(`enabled`, `offsetSeconds`). 초기화는 `AppViewModel`/`Application` 에서 `init(context)` 한 번.
-- `AppClock`: `now(): Instant = Instant.now().plusSeconds(offsetSeconds)`, `today(): LocalDate`(서울 기준). 오프셋 0 이면 `Instant.now()` 와 동일해야 한다. **Findings 의 시간 사용처 중 "표시/판정용" 8곳**(`GroupSummary.daysTogether`, `CreateGroupScreen`, `groupCardSubtitle`, `HomeScreen`, `GroupInsightScreen`, `MissionScreen` 93·251·253, `RecordCalendarScreen`, `ResultsFormat.koreanRelativeText`, `ResultsScreen` 103)을 `AppClock.now()` 로 교체(기본 인자값 `Instant.now()` → `AppClock.now()`). 타이머/경과시간 측정(`SketchTimer`, `AiGuessDialog`)은 건드리지 않는다.
-- 서버와 동기: 개발자 모드가 켜져 있을 때 앱 시작(그리고 Dev 도구 열 때·시계 변경 후)에 `GET /api/dev/status` → `AppClock.offsetSeconds = status.offsetSeconds`. 서버 시계 변경 API 의 응답으로도 즉시 갱신. 개발자 모드가 꺼지면 오프셋 0.
-
-### 2. 진입(10탭)
-- 순수 함수/클래스 `DevUnlock`(예: `fun registerTap(state, nowMs): TapResult`): 연속 10회 탭(탭 사이 간격이 3초를 넘으면 카운트 리셋)이면 `DevMode.enabled = true`. 5회부터 토스트 "개발자 모드까지 N번" 표시, 10회에 "개발자 모드가 켜졌어요", 이미 켜져 있으면 "이미 개발자 모드예요". `AppInfoScreen` 의 `Text("버전 $version")` 에 `clickable`(리플 없이) 로 연결하고 토스트(`HToastHost`)를 붙인다. 로직은 컴포저블 밖 순수 함수로 두어 단위 테스트 가능하게.
-
-### 3. 서버 레포지토리 (`J/core/net/DevApi.kt`, `DevRepository.kt`)
-- DTO + `DevRepository(api: ApiClient)`: 서버 계약 표의 각 엔드포인트를 1:1 메서드로(`status()`, `setClock(now|plusSeconds)`, `resetClock()`, `publish(groupId?, template?)`, `deadlineNow(missionId)`, `groupDeadlineNow(groupId)`, `submissionsOf(missionId)`, `submitAs(missionId, userId)`, `submitMissing(missionId)`, `poke(groupId, from, to, type, missionId?)`, `react(submissionId, userId, stickerType)`, `comment(submissionId, userId, content)`, `regenerateInsight(groupId, month)`, `updateSettings(groupId, dailyMissionCount?, slotPublishTimes)`, `users()`, `loginAs(userId): TokenResponseDto`, `seed(days, memberCount, dailyMissionCount, relationType)`, `deleteGroup(groupId)`, `reset()`). **인증이 필요 없는 호출은 `auth = false`** (login-as, users, status, clock 등 전부 `auth=false` 로 통일해도 무방 — 서버가 인증을 요구하지 않는다).
-- 응답 DTO 는 서버 계약 표 그대로(`@Serializable internal data class …`, 누락 필드 기본값). `AppViewModel` 에 `val dev = DevRepository(api)`.
-
-### 4. 원클릭 유저 전환
-- `AppViewModel.switchUser(userId: Long)`(`viewModelScope.launch`): `dev.loginAs(userId)` → `tokens.save(access, refresh)` → `appSession.beginRestoring()` → `dataStore.reset()` → `auth.restore()` → `dataStore.setMyProfile(account.profile)` → `appSession.signIn(account)`. 실패 시 이전 토큰 복구(`tokens.save(oldAccess, oldRefresh)`)하고 `appSession` 을 다시 SIGNED_IN 으로 되돌리며 토스트. 이전 토큰은 호출 전에 읽어 둔다(`tokens.accessToken/refreshToken`). 서버 `login-as` 는 이메일/비번 없이 userId 로 토큰을 발급한다.
-- `MyPageScreen` 개발자 모드 섹션: `LaunchedEffect` 로 `dev.users()` 로딩 → `FlowRow` 칩(닉네임, 현재 사용자(`session.account.userId`)는 강조/체크), 칩 탭 = `switchUser`(진행 중 비활성). 목록 로딩 실패 시 "다시 시도". 마이페이지 시그니처에 `dev: DevRepository`, `onDevTools`, `onSwitchUser: (Long) -> Unit`, 개발자 모드 상태를 전달(`MainNavigation` 에서 연결).
-
-### 5. 개발자 도구 화면 `J/feature/dev/DevToolsScreen.kt` (+ 섹션 분리 파일)
-라우트 `MainRoute.DevTools`. 위에서 아래로 섹션(임시 UI: `Column` 카드 + `HButton`/`HListRow`, 코드 주석 `임시 UI`):
-1. **상태 줄**: `서버 {API_BASE_URL} · 유저 {닉네임}(#{id}) · 서버시간 {serverNow} (오프셋 {n}초) · 빌드 {VERSION_NAME}({code}) {BUILD_TYPE}` — 한 블록(복사 가능 `SelectionContainer`), "새로고침" 버튼(`dev.status()`).
-2. **시간**: 날짜(Material3 `DatePicker`)+시각 선택 → `setClock(now=…)`; 빠른 버튼 `+1시간` `+1일` `+7일`(→ `plusSeconds`), `다음 발행 시각으로`(선택 그룹의 `nextPublishAt` 까지), `초기화`(→ `resetClock`). 성공 시 `AppClock.offsetSeconds` 갱신 + `groups.loadAll` → `store.applyServerGroups` 로 홈 데이터 새로고침 + 결과 토스트(경고 `warning` 표시).
-3. **대상 그룹/미션 선택**: 내 그룹(`store.groups`) 드롭다운(칩 행), 선택된 그룹의 현재 미션(`store.todayMissions`) 칩. 이 선택이 아래 섹션들에 쓰인다.
-4. **미션**: `미션 생성`(= `publish(groupId)`), 틀 선택 칩 13종(`MissionTemplates` 모델에 있는 이름/서버 enum 문자열) 후 `선택 틀로 생성`, `마감 당기기`(선택 미션 `deadline-now`), `그룹 전체 마감 당기기`. 완료 후 `missions.current` → `store.applyCurrentMission` 새로고침.
-5. **대리 행동**: 멤버 선택(`GroupDetail.members`), 선택 미션에 `대리 제출`, `미제출자 전원 제출`, 선택 멤버→다른 멤버 `콕`/`똥`, 선택 미션의 제출 목록(`submissionsOf`)에서 하나 선택 → 스티커 5종으로 `반응`, 간단 입력창으로 `댓글`. 결과/오류 코드는 토스트 + 화면 하단 "최근 결과" 텍스트 박스(최근 20줄).
-6. **시드**: `일수`(기본 30), `멤버 수`(기본 5), `하루 미션 수` 입력 → `시드 생성`(응답의 그룹 id 로 홈 새로고침), `[DEV] 그룹 전체 삭제`(`reset`, `HAlert` 확인).
-7. **인사이트**: 월 이전/다음 + `강제 재생성`(→ `regenerateInsight`) 후 `인사이트 열기` 버튼(`MainRoute.GroupInsight(groupId)`).
-8. **그룹 설정**: `하루 미션 수` 스테퍼(1..5), 슬롯별 발행 시각(슬롯 수만큼 시각 선택 — 기존 시간 시트 재사용) → `dev.updateSettings` 후 `groups.detail` 재조회/`applyServerGroup`.
-9. **초기화**: `로컬 캐시 초기화`(`dataStore.reset()` + `groups.loadAll` 재조회), `토큰 삭제 후 로그아웃`(`appSession.signOut()`), `선택 그룹 삭제`(`dev.deleteGroup`, `HAlert` 확인 후 `store.leave`).
-10. **네트워크 오류 주입**: 아래 6번의 토글 목록.
-11. **개발자 모드 끄기**: `DevMode.enabled=false`(오프셋 0, 주입 해제).
-- 모든 서버 호출은 `rememberCoroutineScope` + 진행 중 비활성(`busy` 플래그) + `try/catch`(`CancellationException` 재던짐, 오류는 `toUserMessage()` 대신 **원문 코드·메시지**를 결과 박스에 표시 — 개발 도구이므로 `ApiException.code/message` 그대로).
-
-### 6. 네트워크 오류 주입 (앱 전용)
-- `J/core/dev/DevFaults.kt`: 규칙 enum + 남은 횟수 — `INSIGHT_GENERATING`(GET `*/insights*` → 202 `{"groupId":…,"month":…,"status":"GENERATING","retryAfterSeconds":2}`; 요청 URL 의 groupId/month 를 채워 반환), `FEED_LOCKED`(GET `/api/missions/*/submissions*` → 423 `{"code":"FEED_LOCKED","message":"…"}`), `SERVER_ERROR`(임의 요청 → 500 `{"code":"INTERNAL_ERROR","message":"…"}`), `NETWORK_DOWN`(요청 시 `IOException` 던짐). 각 규칙은 on/off + "다음 N회" 카운터. OkHttp `Interceptor` 로 구현하고 **`AppViewModel` 의 `ApiClient` 생성 시 `http` 에 추가**(`DevMode.enabled` 가 true 일 때만 동작, 아니면 `chain.proceed`). `/api/dev/**` 호출은 주입 대상에서 제외.
-- 토글 UI 는 Dev 도구 10번 섹션(체크 + 횟수).
-
-### 7. 05 화면 "미션 생성" 버튼
-- `MissionScreen` 에 `devMode` 이면(미션이 없을 때의 빈 상태와 평소 미션 카드 아래 모두) `HButton("[개발자] 미션 생성")` → `dev.publish(groupId)` 후 `refresh++`(기존 `LaunchedEffect(id, refresh)` 재사용), 결과 토스트. `MissionScreen` 시그니처에 `dev: DevRepository? = null`(null 이면 버튼 없음) 추가, `MainNavigation` 이 `devMode` 일 때만 전달.
-
-### 8. 내비게이션/배선
-- `MainRoute.DevTools`(`@Serializable data object` 또는 기존 object 라우트 방식 따라), composable, `MyPageScreen` 의 "개발자 도구" 행 → 이동. `MainNavHost` 에 `dev: DevRepository`, `onSwitchUser: (Long) -> Unit` 파라미터 추가, `RootScreen` → `viewModel.dev`, `viewModel::switchUser`. `AppInfoScreen(onBack, onLicenses)` 는 개발자 모드 켜기 위해 토스트 호스트와 `DevMode` 접근을 내부에서 처리(시그니처 변경 최소).
+1. **서버 `MissionPublisher.reroll(Long missionId, LocalDateTime now, MissionTemplate requested)`** (`@Transactional(propagation = REQUIRES_NEW)`, `forcePublish` 옆): 현재 미션을 새로 생성해 **같은 행을 UPDATE**.
+   - 대상 행 조회(id, group_id, mission_date, slot_no, template, published_at, deadline_at). 없거나 `missions.isCurrent(missionId)` 가 false 면 `MISSION_NOT_FOUND`(404) — `BusinessException(MissionErrorCode.MISSION_NOT_FOUND)`.
+   - 틀: `requested != null` 이면 그것. 아니면 `properties.enabledTemplates()` 에서 **현재 틀을 제외**한 목록에서 무작위 1개(후보가 없으면, 즉 풀에 틀이 하나뿐이면 현재 틀 허용). 매체 분산 규칙(`MissionTemplateSelector.select`)은 리롤에 적용하지 않는다(테스트 목적의 임의 교체).
+   - 시드: `MissionTemplateSelector.seed(groupId, missionDate, slotNo) ^ ThreadLocalRandom.current().nextLong()` 로 매번 다른 문장.
+   - 대상: `withTarget = MissionTemplateSelector.needsTarget(template, seed)` → 기존 코드와 동일하게 `targetUserId` 를 `members.findUserIdsByGroupId` 에서 같은 방식으로 골라 params 에 넣는다.
+   - `recent`: 기존 `missions.findRecentByGroupId(groupId, RECENT_CONTENTS + dailyMissionCount - 1)` 그대로 — 지금 바꾸려는 미션 문장도 들어 있으므로 같은 문장이 다시 나오는 것을 피한다. 별도 처리 없음.
+   - 컨텍스트: `contexts.build(group, missionDate).withExperimentArm(experiments.assign(groupId, missionDate).orElse(null))` — 기존과 동일.
+   - 저장: 새 `MissionMapper.updateGenerated(id, content, category, template, params, generationSource, experimentArm)` (`UPDATE missions SET ... WHERE id = #{id}`). **`published_at` / `deadline_at` / `mission_date` / `slot_no` 는 건드리지 않는다**(시계 테스트 상태 유지).
+   - `publish` 안의 "생성 → params/대상 → insert 직전" 코드와 중복이 생기면 **private 헬퍼 하나**(틀·시드·group·date·slot 을 받아 `GeneratedMission` + params 를 돌려주는 정도)로 뽑아도 된다. 그러나 `publish` 동작·시그니처는 바꾸지 않는다(기존 `MissionPublisherTests` 가 그대로 통과해야 함). 헬퍼가 어색하면 복제해도 된다(dev 전용, 과한 리팩터링 금지).
+2. **제출물 정리**: `DevMapper` 에 미션 단위 삭제 추가 — 순서대로 `comment_mentions`, `comments`, `reactions`, `submission_guesses`, `submission_ai_reviews`, `submissions`, `pokes` (`GroupMapper.delete…ByGroupId` 의 JOIN 구문을 `WHERE s.mission_id = #{missionId}` / `WHERE mission_id = #{missionId}` 로 바꾼 형태). `DevMissionService.reroll` 에서 `@Transactional` 로 묶어 "삭제 → 갱신"이 한 트랜잭션. 업로드된 사진·그림 파일(`FileStorage`)은 **지우지 않는다**(개발 전용, 고아 파일 허용 — 보고서에 한 줄 명시).
+3. **서버 `DevMissionService.reroll(Long missionId, RerollRequest request)`** + 컨트롤러 `POST /api/dev/missions/{missionId}/reroll` (`@RequestBody(required = false) RerollRequest`). 잘못된 틀 이름은 `publish` 와 같이 `CommonErrorCode.VALIDATION_ERROR`. 반환은 기존 `PublishedMission`(missionId, groupId, slotNo, template, content) 재사용 — 갱신 후 `dev.findMission(id)` 로 다시 읽어 채움. 새 DTO: `DevDtos.RerollRequest(String template)`.
+4. **Android `DevRepository.reroll(missionId, template: String? = null): DevPublishedMission`** (`POST /api/dev/missions/$missionId/reroll`, `auth = false`, 본문 `DevRerollRequest(template)`; 본문이 null 이어도 `{}`/template null 이 직렬화되도록 기존 `DevPublishRequest` 와 같은 패턴). `DevApi.kt` 에 `@Serializable internal data class DevRerollRequest(val template: String? = null)`.
+5. **UI**
+   - `MissionScreen`: 미션 카드 아래 `[개발자] 미션 생성` 버튼 옆(아래 줄)에 `[개발자] 미션 리롤` 추가(`dev != null && mission != null` 일 때만). 누르면 **`HAlert` 확인**("이 미션을 새로 뽑을까요? 이미 낸 제출·반응·댓글·콕이 모두 삭제돼요.") → 확인 시 `dev.reroll(mission.id)` → `refresh++` → 토스트 "미션을 새로 뽑았어요 (<template>)". 실패 시 `미션 리롤 실패: …` 토스트, 진행 중 중복 탭 방지는 기존 `creating` 플래그를 재사용(이름은 `devBusy` 등으로 바꿔도 됨). `CancellationException` 은 재던지기(기존 `createMission` 패턴 그대로). 선택된 슬롯 칩(`selectedId`)은 id 가 유지되므로 그대로 둔다.
+   - `DevToolsScreen`: 기존 "미션 생성" 영역(`dev.publish(groupId, template)` 틀 칩이 있는 곳)에 `선택 미션 리롤`(무작위 틀) 과 `선택 미션을 <선택한 틀>로 리롤`(기존 틀 칩 선택값 사용) 버튼 추가. 대상은 기존 `missionId` 선택값. 확인은 기존 삭제 버튼처럼 `HAlert`. 결과는 기존 "최근 결과 20줄" 로그 함수(예: `run("미션 리롤") { … }`)에 `"${result.template} · ${result.content}"` 로 기록하고 `refreshMission()` 호출. 파일을 읽어 기존 패턴(busy 직렬화, 결과 로그)을 따르고 새 화면/상태 홀더를 만들지 않는다.
+6. 문서: `docs/BACKEND` 등 외부 문서는 건드리지 않는다. 컨트롤러 `DevController` 의 "운영 배포 시 제거" 주석 범위에 포함되므로 별도 주석 불필요.
 
 ## Files / Functions to Change
-
-| 파일 | 변경 |
-|---|---|
-| `J/core/dev/DevMode.kt`, `AppClock.kt`, `DevUnlock.kt`, `DevFaults.kt` (신규) | 상태·시계·탭 카운터·오류 주입 |
-| `J/core/net/DevApi.kt`, `DevRepository.kt` (신규) | 서버 dev API 클라이언트 |
-| `J/app/AppViewModel.kt` | `dev`, `switchUser`, 오류 주입 인터셉터 등록, 시작 시 서버 시계 동기, `DevMode.init` |
-| `J/app/RootScreen.kt`, `J/app/MainNavigation.kt` | `dev`/`switchUser` 전달, `MainRoute.DevTools`, 05 화면 `dev` 전달 |
-| `J/feature/mypage/AppInfoScreen.kt` | 버전 텍스트 10탭 |
-| `J/feature/mypage/MyPageScreen.kt` | 개발자 섹션(유저 전환 칩, 도구 진입 행) |
-| `J/feature/dev/DevToolsScreen.kt`, `DevSections.kt` (신규) | 개발자 도구 UI |
-| `J/feature/mission/MissionScreen.kt` | 개발자 "미션 생성" 버튼, `AppClock` 교체 |
-| 시간 사용처 8곳 (`GroupSummary.kt`, `CreateGroupScreen.kt`, `GroupFormat.kt`, `HomeScreen.kt`, `GroupInsightScreen.kt`, `RecordCalendarScreen.kt`, `ResultsFormat.kt`, `ResultsScreen.kt`) | `Instant.now()` → `AppClock.now()` |
-| 테스트 | 아래 Tests Required |
+서버 (`src/main/java/com/sapphire/hawe/`)
+- `mission/service/MissionPublisher.java` — `reroll(...)` 추가(+선택적 private 헬퍼).
+- `mission/dao/MissionMapper.java` — `updateGenerated(...)` `@Update` 추가. (`findById` 류가 없으면 `DevMapper.findMission` 처럼 필요한 컬럼만 읽는 조회를 `MissionMapper`/`DevMapper` 중 하나에 추가: id, group_id, mission_date, slot_no, template. `DevMapper.findMission` 은 mission_date 를 안 읽으므로 확인 후 필요 컬럼 추가 대신 **새 조회 메서드를 만들고 기존 쿼리는 수정하지 않는다.**)
+- `dev/dao/DevMapper.java` — 미션 단위 삭제 7개.
+- `dev/service/DevMissionService.java` — `reroll(Long, RerollRequest)`.
+- `dev/dto/DevDtos.java` — `RerollRequest`.
+- `dev/controller/DevController.java` — 엔드포인트.
+Android (`android/app/src/main/java/com/sapphire/hawe/`)
+- `core/net/DevApi.kt`, `core/net/DevRepository.kt` — 요청 DTO·`reroll`.
+- `feature/mission/MissionScreen.kt` — 리롤 버튼·확인 다이얼로그·핸들러.
+- `feature/dev/DevToolsScreen.kt` — 리롤 버튼 2개.
 
 ## Implementation Steps
-
-1. `DevMode`/`AppClock` + 시간 사용처 교체(오프셋 0 이면 동작 동일) + 테스트. 2. `DevUnlock` + `AppInfoScreen` 10탭. 3. `DevApi`/`DevRepository` + MockWebServer 계약 테스트. 4. `AppViewModel`(`dev`, `switchUser`, 시계 동기) + 마이페이지 유저 전환. 5. `DevToolsScreen` 섹션들(상태→시간→선택→미션→대리→시드→인사이트→설정→초기화). 6. `DevFaults` 인터셉터 + 토글 UI. 7. 05 화면 버튼. 8. 라우트·배선·전체 테스트·assemble(·lint).
+1. 서버: `MissionMapper`(갱신·조회) → `DevMapper`(삭제 7개) → `MissionPublisher.reroll` → `DevDtos.RerollRequest` → `DevMissionService.reroll` → `DevController` 엔드포인트. 서버 테스트 작성·통과.
+2. Android: `DevApi`/`DevRepository` → `MissionScreen` → `DevToolsScreen`. 단위 테스트 추가.
+3. 전체 서버 테스트 + Android 단위 테스트/`assembleDebug` 실행.
 
 ## Constraints
-
-- `android/` 만 수정(`docs/`·백엔드·iOS 금지, `.agent/report.md` 만 예외). 새 라이브러리 금지. 커밋/푸시 금지.
-- **안전장치 금지**: `BuildConfig.DEBUG`/`BuildType` 으로 개발자 기능을 숨기지 않는다. 10탭만이 진입 조건.
-- 개발자 모드가 꺼져 있을 때 앱의 모든 동작·화면은 **현재와 동일**(오프셋 0, 인터셉터 비활성, 개발자 UI 비노출).
-- A2·A3·A9·A6 의 기존 변경 보존. `MissionScreen`/`MainNavigation`/`MyPageScreen` 수정은 최소 범위.
-- 타이머/AI 추론 시간 측정(`SketchTimer`, `AiGuessDialog`)은 건드리지 않는다.
-- 코드 스타일은 주변(한국어 문구, 짧은 DTO, 한 줄 `@Test`)에 맞춘다. 임시 UI 는 주석 `임시 UI`.
+- 개발 전용 기능이다. 안전장치(빌드 타입 게이트·인증) 추가 금지(기존 결정). 기존 `/api/dev/**` 와 같은 `permitAll` 아래이므로 `SecurityConfig` 변경 없음.
+- `V1` 등 마이그레이션 변경 없음. 운영 코드 경로(`publishIfDue`, 스케줄러, 일반 미션 API)의 동작을 바꾸지 않는다.
+- 새 의존성·큰 추상화 금지. 범위 밖(달력 다중 미션 표시, 마감 재오픈 등) 건드리지 않는다.
+- JDK: Gradle 은 JDK 17(`C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot`) 로 실행(셸 `JAVA_HOME` 이 25 면 Gradle 이 깨진다). Android 는 PowerShell 에서 `android\gradlew.bat :app:testDebugUnitTest`. 서버는 `.\mvnw.cmd`.
+- 커밋·푸시 금지.
 
 ## Edge Cases
-
-- 10탭: 중간에 3초 이상 멈추면 리셋, 다른 화면으로 이동했다 오면 리셋, 이미 켜진 상태에서 탭, 화면 회전(`rememberSaveable` 불필요 — 리셋 허용).
-- 유저 전환: `login-as` 실패/네트워크 오류 → 이전 세션 복구, 전환 도중 `onSessionExpired` 중복 발생 방지(전환 중 플래그), 전환 직후 홈에서 `groups.loadAll` 이 새 유저 기준으로 실행(RESTORING→SIGNED_IN 으로 `MainNavHost` 재구성), 시드 계정이 아닌 유저로 로그인했을 때 현재 사용자 칩 표시.
-- 시계: 서버가 꺼져 있거나 `status` 실패 → 오프셋 유지, 앱 시작 지연 금지(비동기, 타임아웃 짧게). 오프셋이 큰 값일 때 `Duration.between(now, nextPublishAt)` 음수 처리(`coerceAtLeast(0)` 기존). 개발자 모드 해제 시 오프셋 0 으로 되돌려 서버와 불일치가 남아도 일반 동작에 영향 없게(서버 시계는 `reset` 안내 토스트).
-- 대리 행동: 선택 그룹/미션/멤버가 없을 때 버튼 비활성, 서버의 `ALREADY_SUBMITTED`/`MISSION_CLOSED` 등 오류 코드를 결과 박스에 그대로.
-- 시드 직후: 새 그룹이 홈에 보이도록 `loadAll`; 시드된 그룹은 현재 로그인 유저가 멤버가 아닐 수 있음(소유자 dev1) → 안내 토스트("dev1 로 전환하세요") 또는 현재 유저가 dev1~devN 중 하나일 때만 홈에 보임을 문구로 안내.
-- 오류 주입: `INSIGHT_GENERATING` 이 `InsightLoader` 재시도(최대 8회) 안에서 소진되도록 "N회" 지정, `NETWORK_DOWN` 이 `/api/dev/**` 호출까지 막지 않음(제외), 개발자 모드 해제 시 전체 해제.
-- 설정 변경: `dailyMissionCount` 를 줄일 때 슬롯 시각 목록 길이 동기화, 서버 검증 오류(`VALIDATION_ERROR`) 표시.
+- 현재 미션이 아닌 id(지난 날 미션·존재하지 않는 id) → 404 `MISSION_NOT_FOUND`, 아무것도 지우지 않는다(조회·검증을 삭제보다 먼저).
+- 잘못된 `template` 문자열 → 400 `VALIDATION_ERROR`, 삭제 전에 검증.
+- 풀(`enabledTemplates`)이 틀 1종뿐 → 현재 틀 재선택 허용(문장만 바뀜).
+- 틀 지정이 풀에 없는 틀(예: 2차 틀)이어도 지정 틀은 허용(`publish` 의 `template` 지정과 동일하게 풀 검증 안 함).
+- `TEXT_FILL_BLANK`/그리기 틀로 바뀔 때 `targetUserId` 포함, 다른 틀로 바뀔 때는 이전 params 가 남지 않아야 한다(params 는 통째로 교체).
+- 마감이 지난 미션을 리롤하면 내용만 바뀌고 계속 마감 상태(제출 불가) — 의도된 동작, 보고서에 한 줄.
+- 이미 제출한 사용자가 있는 미션 → 제출·반응·댓글·콕이 지워지고 다음 새로고침에 `didSubmit=false`. 앱이 열려 있던 `MissionPerform`/결과 화면에서 돌아올 때 오류 없이 새로고침되는지(결과 화면은 제출이 없으면 잠금 상태가 됨) 확인.
+- AI 켜진 환경에서 생성이 느리면 `reroll` 이 트랜잭션 안에서 대기(기존 `publish` 와 동일) — 앱 타임아웃(기존 값) 안에서 끝나는지만 확인, 별도 처리 없음.
+- 동시 탭: 앱은 busy 플래그로 직렬화.
 
 ## Regression Risks
-
-- `Instant.now()` → `AppClock.now()` 교체: 오프셋 0 일 때 결과 동일해야 함 → 기존 단위 테스트(특히 `GroupFormatTest`, `ResultsFormat` 관련) 통과 확인. 기본 인자값으로 쓰인 곳은 호출부 시그니처 호환 유지.
-- `MyPageScreen`/`MissionScreen`/`MainNavHost` 시그니처 변경 → 호출부·프리뷰·테스트 컴파일(`rg "MyPageScreen(\|MissionScreen(\|MainNavHost("`). 새 파라미터는 기본값을 줘서 기존 호출을 최대한 유지.
-- OkHttp 인터셉터 추가가 개발자 모드 꺼짐 상태에서 요청을 바꾸지 않아야 함(단위 테스트로 pass-through 고정).
-- `AppViewModel.switchUser` 가 `appSession` 상태 전이(RESTORING→SIGNED_IN)로 `RootScreen` 을 재구성 — 토큰 저장 순서와 `dataStore.reset()` 타이밍(이전 유저 데이터가 새 유저에게 보이지 않게).
-- SharedPreferences 키 충돌 없음(`hawe_dev` 파일 분리).
+- `MissionPublisher.publish` 를 헬퍼로 일부 뽑는 경우 시드·결정성이 바뀌면 `MissionPublisherTests`(틀 선택·시드 고정 가정)가 깨진다 — 헬퍼 추출 시 기존 호출 인자·순서를 그대로 유지.
+- `DevMapper` 삭제 SQL 의 JOIN 순서 오류 시 FK 위반 → 서버 통합 확인 필요(자식→부모 순서 엄수).
+- `MissionScreen` 은 A6(다중 미션)·개발자 모드 변경이 공존하는 파일 — 버튼만 추가하고 선택 칩/`refresh` 로직은 건드리지 않는다.
 
 ## Tests Required
-
-JVM 단위 테스트(`T/…`):
-- `AppClockTest`: 오프셋 0 → `Instant.now()` 와 근접, 오프셋 설정 시 이동, `today()` 서울 기준 날짜 경계.
-- `DevUnlockTest`: 9탭 미해제, 10탭 해제, 간격 3초 초과 리셋, 5~9탭 진행 문구, 이미 켜짐.
-- `DevRepositoryTest`(MockWebServer): 각 엔드포인트의 메서드·경로·쿼리·본문(`now` 서울 시각 문자열, `plusSeconds`, `userId`, `stickerType`, `month`)과 응답 파싱, `auth=false`(Authorization 헤더 없음), 오류 응답이 `ApiException` 코드로 전파.
-- `DevFaultsTest`: 규칙별 가짜 응답(202/423/500, `IOException`), "다음 N회" 소진, 개발자 모드 꺼짐 시 pass-through, `/api/dev/**` 제외.
-- 유저 전환 순수 로직(토큰 보관/복구 순서)을 함수로 분리했다면 그 테스트(성공 시 새 토큰 저장, 실패 시 이전 토큰 복구).
-- 시간 교체한 포맷 함수들의 기존 테스트 통과.
-- UI 테스트 없음(컴파일 + 수동 확인).
+- `MissionPublisherTests`(Mockito) 추가:
+  - `reroll` 이 `updateGenerated` 를 호출하고 `insert` 는 호출하지 않으며 published/deadline 을 바꾸지 않는다.
+  - 틀 미지정 시 새 틀이 현재 틀과 다르다(풀 2종 이상일 때, 여러 번 반복해 항상 다름), 지정 시 그 틀을 쓴다.
+  - 현재 미션이 아니면 `MISSION_NOT_FOUND`.
+  - `TEXT_FILL_BLANK` 로 리롤하면 params 에 `targetUserId` 가 들어간다.
+- `DevMissionService` 단위 테스트(기존 `DevActionServiceTests` 스타일): 잘못된 틀 → `VALIDATION_ERROR` 이고 삭제 메서드가 호출되지 않음; 정상 호출 시 삭제 후 갱신 순서(`InOrder`).
+- Android `DevRepositoryTest` 에 `reroll` 추가: 경로 `/api/dev/missions/7/reroll`, 본문 `{}` 또는 `{"template":"PHOTO_NOW"}`, 응답 디코딩.
+- 기존 서버 테스트 전체와 Android 단위 테스트 전체 통과.
 
 ## Validation Steps
-
-1. `android\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline` 통과 기록(JDK 17 사용 시 명시).
-2. `rg "Instant.now\(\)" android/app/src/main` 로 남은 곳이 타이머/AI 시간 측정/`DataStore` 데모 시계뿐인지 확인.
-3. `rg "BuildConfig.DEBUG|BuildType" android/app/src/main/java` 에 개발자 기능 게이트가 없는지 확인.
-4. 수동(기기+서버, 미검증이면 "미검증"): 앱 정보 버전 10탭 → 개발자 모드 켜짐 → 앱 재실행 후에도 유지 → 마이페이지 시드 유저 칩 한 번 탭으로 전환 → Dev 도구에서 `시드 생성` → dev1 전환 → 달력 도장(GOOD/LATE/PENALTY)·인사이트 확인 → 시계 `+1일` → 새 미션 발행·이전 미션 닫힘 → `미션 생성`/틀 선택/마감 당기기/대리 제출·콕·반응·댓글 → 인사이트 강제 재생성(202→200) → 그룹 설정(하루 미션 3개) → 05 화면 칩 → 오류 주입 → 개발자 모드 끄기.
+1. `.\mvnw.cmd clean test -q` (필요 시 MariaDB·`.env` 가 필요한 테스트 포함 여부를 보고서에 명시).
+2. PowerShell 에서 JDK 17 로 `android\gradlew.bat :app:testDebugUnitTest :app:assembleDebug`.
+3. 서버를 띄울 수 있으면(DB 필요) `POST /api/dev/seed` 로 그룹을 만들고 `POST /api/dev/missions/publish` 후 `POST /api/dev/missions/{id}/reroll` 을 두 번 호출해 `template`/`content` 가 바뀌고 id 가 유지되는지, 제출이 있던 미션에서 제출이 사라지는지 curl 로 확인한다(임시로 띄운 서버와 `adb reverse` 는 확인 후 정리하지 말고 **그대로 두거나, 정리했다면 보고서에 명시**: 사용자가 폰에서 `adb reverse tcp:8080 tcp:8080` 를 쓰고 있다).
+4. 기기 확인은 사용자가 한다(보고서에 수동 체크리스트: 개발자 모드 → 그룹 → 미션 화면 `[개발자] 미션 리롤` → 확인 → 카드 문구 변경, 제출 상태 초기화 / 개발자 도구에서 틀 지정 리롤).
 
 ## Potential Merge Conflicts
-
-- `AppViewModel.kt`, `RootScreen.kt`, `MainNavigation.kt`, `MyPageScreen.kt`, `MissionScreen.kt`, `AppInfoScreen.kt`, `GroupFormat.kt`, `HomeScreen.kt`: A2·A3·A9·A6 미커밋 변경과 같은 파일. 기존 변경 보존, 변경은 이 계획 범위에 한정.
-- 서버 계획(`.agent/plan.md`)이 먼저 병합돼 있어야 한다(`DevRepository` 계약).
+- `MissionScreen.kt`, `DevToolsScreen.kt`, `DevRepository.kt`, `DevApi.kt`, `DevMissionService.java`, `DevController.java`, `DevMapper.java`, `MissionPublisher.java`, `MissionMapper.java` 는 모두 A2/A3/A9/A6·개발자 모드 작업이 같은 worktree 에 있던 파일이다. 현재 작업 트리가 깨끗한지 시작 전에 `git status` 로 확인하고, 다른 미커밋 변경이 보이면 건드리지 말고 보고서에 적는다. 병렬 작업자는 없다(Codex 단독).

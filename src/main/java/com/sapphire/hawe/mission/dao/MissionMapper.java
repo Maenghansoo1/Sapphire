@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -45,6 +46,14 @@ public interface MissionMapper {
             + "EXISTS (SELECT 1 FROM submissions s WHERE s.mission_id = m.id "
             + "AND s.user_id = #{userId}) AS submitted_by_me FROM missions m WHERE m.id = #{missionId}</script>")
     MissionRow findById(@Param("missionId") Long missionId, @Param("userId") Long userId);
+
+    @Update("UPDATE missions SET content=#{content}, category=#{category}, template=#{template}, "
+            + "params=#{params}, generation_source=#{generationSource,jdbcType=VARCHAR}, "
+            + "experiment_arm=#{experimentArm,jdbcType=VARCHAR} WHERE id=#{id}")
+    int updateGenerated(@Param("id") Long id, @Param("content") String content,
+            @Param("category") String category, @Param("template") String template,
+            @Param("params") String params, @Param("generationSource") String generationSource,
+            @Param("experimentArm") String experimentArm);
 
     @Select("<script>SELECT COUNT(*) > 0 FROM missions m WHERE m.id = #{missionId} AND " + CURRENT + "</script>")
     boolean isCurrent(@Param("missionId") Long missionId);

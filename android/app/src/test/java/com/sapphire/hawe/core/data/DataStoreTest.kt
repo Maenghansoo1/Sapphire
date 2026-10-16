@@ -19,6 +19,27 @@ import java.time.ZoneOffset
 import kotlin.random.Random
 
 class DataStoreTest {
+    @Test fun rerollClearsCachedAnswerAndKeepsUpdatedMissionWithSameId() {
+        val store = store()
+        val detail = GroupDetail.mock.copy(id = 11L)
+        store.applyServerGroups(listOf(LoadedGroup(detail,
+            listOf(MissionSummary(10, MissionType.WRITE, "old", 1, true)))))
+        store.applyCurrentMission(11, CurrentMissionState(listOf(serverMission(10)), null))
+        val me = detail.me!!
+        store.applySubmitted(11, 10, Submission(100, me.displayed, true, MissionType.WRITE, now,
+            text = "answer", authorID = me.id))
+        store.markPoked(11, 10, -2, PokeKind.POKE)
+        store.clearMissionForReroll(11, 10)
+        store.applyCurrentMission(11, CurrentMissionState(listOf(serverMission(10).copy(topic = "new")), null))
+        val mission = store.groups.single().missions.single()
+        assertEquals(10L, mission.id)
+        assertEquals("new", mission.topic)
+        assertFalse(mission.serverSubmittedByMe)
+        assertTrue(mission.submissions.isEmpty())
+        assertTrue(mission.poked.isEmpty())
+        assertEquals(0, store.summaries.single().submittedCount)
+        assertFalse(store.summaries.single().didSubmit)
+    }
     @Test fun openMissionsKeepIndependentStateAndSummary() {
         val store = store()
         val detail = GroupDetail.mock.copy(id = 11L)

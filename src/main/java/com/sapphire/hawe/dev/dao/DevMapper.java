@@ -31,6 +31,32 @@ public interface DevMapper {
             + "ORDER BY s.submitted_at, s.id")
     List<DevSubmissionRow> findSubmissions(@Param("missionId") Long missionId);
 
+    @Delete("DELETE cm FROM comment_mentions cm JOIN comments c ON c.id=cm.comment_id "
+            + "JOIN submissions s ON s.id=c.submission_id WHERE s.mission_id=#{missionId}")
+    int deleteCommentMentionsByMissionId(@Param("missionId") Long missionId);
+
+    @Delete("DELETE c FROM comments c JOIN submissions s ON s.id=c.submission_id "
+            + "WHERE s.mission_id=#{missionId}")
+    int deleteCommentsByMissionId(@Param("missionId") Long missionId);
+
+    @Delete("DELETE r FROM reactions r JOIN submissions s ON s.id=r.submission_id "
+            + "WHERE s.mission_id=#{missionId}")
+    int deleteReactionsByMissionId(@Param("missionId") Long missionId);
+
+    @Delete("DELETE sg FROM submission_guesses sg JOIN submissions s ON s.id=sg.submission_id "
+            + "WHERE s.mission_id=#{missionId}")
+    int deleteSubmissionGuessesByMissionId(@Param("missionId") Long missionId);
+
+    @Delete("DELETE ar FROM submission_ai_reviews ar JOIN submissions s ON s.id=ar.submission_id "
+            + "WHERE s.mission_id=#{missionId}")
+    int deleteAiReviewsByMissionId(@Param("missionId") Long missionId);
+
+    @Delete("DELETE FROM submissions WHERE mission_id=#{missionId}")
+    int deleteSubmissionsByMissionId(@Param("missionId") Long missionId);
+
+    @Delete("DELETE FROM pokes WHERE mission_id=#{missionId}")
+    int deletePokesByMissionId(@Param("missionId") Long missionId);
+
     @Update("UPDATE `groups` SET created_at=#{createdAt} WHERE id=#{groupId}")
     int backdateGroup(@Param("groupId") Long groupId, @Param("createdAt") LocalDateTime createdAt);
 

@@ -6,6 +6,7 @@ import com.sapphire.hawe.dev.dto.DevDtos.PublishRequest;
 import com.sapphire.hawe.dev.dto.DevDtos.PublishResponse;
 import com.sapphire.hawe.dev.dto.DevDtos.PublishedMission;
 import com.sapphire.hawe.dev.dto.DevDtos.RegenerateResponse;
+import com.sapphire.hawe.dev.dto.DevDtos.RerollRequest;
 import com.sapphire.hawe.dev.dto.DevDtos.UpdatedResponse;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
@@ -18,6 +19,7 @@ import com.sapphire.hawe.group.service.GroupService;
 import com.sapphire.hawe.insight.dao.InsightMapper;
 import com.sapphire.hawe.insight.service.InsightGenerator;
 import com.sapphire.hawe.mission.dao.MissionRow;
+import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
 import com.sapphire.hawe.mission.service.MissionErrorCode;
 import com.sapphire.hawe.mission.service.MissionPublisher;
@@ -33,15 +35,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class DevMissionService {
     private final DevMapper dev;
+    private final MissionMapper missionMapper;
     private final GroupMapper groups;
     private final MissionPublisher publisher;
     private final GroupService groupService;
     private final InsightMapper insights;
     private final InsightGenerator generator;
 
-    public DevMissionService(DevMapper dev, GroupMapper groups, MissionPublisher publisher,
+    public DevMissionService(DevMapper dev, MissionMapper missionMapper, GroupMapper groups, MissionPublisher publisher,
             GroupService groupService, InsightMapper insights, InsightGenerator generator) {
-        this.dev = dev; this.groups = groups; this.publisher = publisher;
+        this.dev = dev; this.missionMapper = missionMapper; this.groups = groups; this.publisher = publisher;
         this.groupService = groupService; this.insights = insights; this.generator = generator;
     }
 
@@ -63,6 +66,29 @@ public class DevMissionService {
                     row.getTemplate(), row.getContent()));
         }
         return new PublishResponse(created, created.isEmpty() ? "오늘 발행할 빈 슬롯이 없어요" : null);
+    }
+
+    @Transactional
+    public PublishedMission reroll(Long missionId, RerollRequest request) {
+        MissionTemplate template = null;
+        if (request != null && request.template() != null) try {
+            template = MissionTemplate.valueOf(request.template());
+        } catch (IllegalArgumentException error) {
+            throw new BusinessException(CommonErrorCode.VALIDATION_ERROR);
+        }
+        if (missionMapper.findById(missionId, 0L) == null || !missionMapper.isCurrent(missionId))
+            throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
+        dev.deleteCommentMentionsByMissionId(missionId);
+        dev.deleteCommentsByMissionId(missionId);
+        dev.deleteReactionsByMissionId(missionId);
+        dev.deleteSubmissionGuessesByMissionId(missionId);
+        dev.deleteAiReviewsByMissionId(missionId);
+        dev.deleteSubmissionsByMissionId(missionId);
+        dev.deletePokesByMissionId(missionId);
+        publisher.reroll(missionId, SeoulTime.now(), template);
+        MissionRow row = dev.findMission(missionId);
+        return new PublishedMission(row.getId(), row.getGroupId(), row.getSlotNo(),
+                row.getTemplate(), row.getContent());
     }
 
     public DeadlineResponse deadlineNow(Long missionId) {

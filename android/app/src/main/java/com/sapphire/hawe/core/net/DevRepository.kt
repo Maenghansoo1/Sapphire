@@ -10,6 +10,8 @@ class DevRepository(private val api: ApiClient) {
     suspend fun resetClock(): DevClockStatus = api.deleteReturning("/api/dev/clock", auth = false)
     suspend fun publish(groupId: Long? = null, template: String? = null): DevPublishResponse =
         api.post("/api/dev/missions/publish", DevPublishRequest(groupId, template), auth = false)
+    suspend fun reroll(missionId: Long, template: String? = null): DevPublishedMission =
+        api.post("/api/dev/missions/$missionId/reroll", DevRerollRequest(template), auth = false)
     suspend fun deadlineNow(missionId: Long): JsonObject =
         api.post("/api/dev/missions/$missionId/deadline-now", emptyMap<String, String>(), auth = false)
     suspend fun groupDeadlineNow(groupId: Long): JsonObject =

@@ -122,15 +122,28 @@ class DataStore(
     fun applyCurrentMission(groupID: Long, state: CurrentMissionState) = update(groupID) { group ->
         val previousById = group.missions.associateBy { it.id }
         val current = state.missions.map { row ->
-            val previous = previousById[row.id]
+            val previous = previousById[row.id]?.takeIf { it.topic == row.topic &&
+                it.template == row.template && it.spec == row.spec }
             StoredMission(row.id, row.type, row.topic, row.number,
                 row.publishedAt, row.closesAt, previous?.submissions.orEmpty(),
                 mergePoked(row.pokedByMe, previous?.poked.orEmpty()), row.deadlineAt, row.template, row.spec,
                 row.members + previous?.serverMembers.orEmpty().filterValues { done -> done },
                 row.submittedByMe || previous?.serverSubmittedByMe == true, previous?.feedLoaded == true)
         }
-        group.copy(missions = current, nextPublishAt = state.nextPublishAt,
+        val byId = state.missions.associateBy { it.id }
+        val summaries = group.summaries.map { summary -> byId[summary.missionId]?.let { row ->
+            MissionSummary(row.id, row.type, row.topic, row.members.count { it.value }, row.submittedByMe)
+        } ?: summary }
+        group.copy(missions = current, summaries = summaries, nextPublishAt = state.nextPublishAt,
             missionState = MissionState.LOADED)
+    }
+
+    fun clearMissionForReroll(groupID: Long, missionID: Long) = update(groupID) { group ->
+        group.copy(missions = group.missions.map { mission -> if (mission.id != missionID) mission else
+            mission.copy(submissions = emptyList(), poked = emptyMap(), serverMembers = emptyMap(),
+                serverSubmittedByMe = false, feedLoaded = false) },
+            summaries = group.summaries.map { summary -> if (summary.missionId != missionID) summary else
+                summary.copy(submittedCount = 0, submittedByMe = false) })
     }
 
     fun markMissionFailed(groupID: Long) = update(groupID) {

@@ -1,6 +1,7 @@
 package com.sapphire.hawe.mission.service;
 
 import com.sapphire.hawe.global.config.MissionProperties;
+import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -8,6 +9,7 @@ import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.group.domain.GroupMissionSlot;
 import com.sapphire.hawe.mission.dao.MissionInsertRow;
 import com.sapphire.hawe.mission.dao.MissionMapper;
+import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.mission.dao.RecentMissionRow;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
 import com.sapphire.hawe.mission.domain.GenerationContext;
@@ -30,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class MissionPublisher {
@@ -69,6 +72,39 @@ public class MissionPublisher {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<Long> forcePublish(Long groupId, LocalDateTime now, MissionTemplate template) {
         return publish(groupId, now, true, template);
+    }
+
+    /** Joins the dev service transaction so its submission cleanup and this update commit together. */
+    @Transactional
+    public void reroll(Long missionId, LocalDateTime now, MissionTemplate requested) {
+        MissionRow current = missions.findById(missionId, 0L);
+        if (current == null || !missions.isCurrent(missionId))
+            throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
+        Group group = groups.findById(current.getGroupId());
+        if (group == null) throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
+        List<MissionTemplate> pool = properties.enabledTemplates().stream()
+                .filter(template -> !template.name().equals(current.getTemplate())).toList();
+        if (pool.isEmpty()) pool = properties.enabledTemplates();
+        MissionTemplate template = requested == null ? pool.get(ThreadLocalRandom.current().nextInt(pool.size())) : requested;
+        long seed = MissionTemplateSelector.seed(current.getGroupId(), current.getMissionDate(), current.getSlotNo())
+                ^ ThreadLocalRandom.current().nextLong();
+        boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
+        GenerationContext context = contexts.build(group, current.getMissionDate()).withExperimentArm(
+                experiments.assign(current.getGroupId(), current.getMissionDate()).orElse(null));
+        List<RecentMission> recent = missions.findRecentByGroupId(current.getGroupId(),
+                RECENT_CONTENTS + group.getDailyMissionCount() - 1).stream().map(RecentMissionRow::toDomain).toList();
+        GeneratedMission generated = generator.generate(template, seed, context.withRecentMissions(recent), withTarget);
+        Map<String, Object> params = new HashMap<>(generated.params());
+        if (withTarget) {
+            List<Long> userIds = members.findUserIdsByGroupId(current.getGroupId());
+            if (userIds.isEmpty()) throw new IllegalStateException("Group has no members");
+            params.put("targetUserId", userIds.get(new java.util.Random(seed ^ 0xBB67AE8584CAA73BL)
+                    .nextInt(userIds.size())));
+        }
+        if (missions.updateGenerated(missionId, generated.content(), generated.category(), template.name(),
+                objectMapper.writeValueAsString(params), generated.source().name(),
+                context.experimentArm() == null ? null : context.experimentArm().name()) == 0)
+            throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
     }
 
     private List<Long> publish(Long groupId, LocalDateTime now, boolean forced, MissionTemplate requestedTemplate) {

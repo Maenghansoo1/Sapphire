@@ -7,6 +7,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DevRepositoryTest {
+    @Test fun rerollUsesMissionRouteAndDecodesUpdatedMission() = runBlocking {
+        MockWebServer().use { server ->
+            val dev = DevRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
+            val response = """{"missionId":7,"groupId":4,"slotNo":1,"template":"PHOTO_NOW","content":"new"}"""
+            repeat(2) { server.enqueue(MockResponse().setBody(response)) }
+            assertEquals("PHOTO_NOW", dev.reroll(7).template)
+            assertEquals("new", dev.reroll(7, "PHOTO_NOW").content)
+            val random = server.takeRequest()
+            assertEquals("POST", random.method)
+            assertEquals("/api/dev/missions/7/reroll", random.path)
+            assertNull(random.getHeader("Authorization"))
+            assertEquals("{}", random.body.readUtf8())
+            val requested = server.takeRequest()
+            assertEquals("/api/dev/missions/7/reroll", requested.path)
+            assertEquals("{\"template\":\"PHOTO_NOW\"}", requested.body.readUtf8())
+        }
+    }
     @Test fun clockUsersLoginAndPublishUseUnauthenticatedContract() = runBlocking {
         MockWebServer().use { server ->
             val tokens = InMemoryTokenStore().apply { save("old", "refresh") }

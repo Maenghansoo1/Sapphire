@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
     val characterKey: String? = null)
 @Serializable internal data class DevUserRequest(val userId: Long)
 @Serializable internal data class DevPublishRequest(val groupId: Long? = null, val template: String? = null)
+@Serializable internal data class DevRerollRequest(val template: String? = null)
 @Serializable data class DevPublishedMission(val missionId: Long, val groupId: Long, val slotNo: Int,
     val template: String, val content: String)
 @Serializable data class DevPublishResponse(val created: List<DevPublishedMission> = emptyList(),

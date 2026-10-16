@@ -12,6 +12,7 @@ public final class DevDtos {
             long offsetSeconds, boolean offsetActive, String warning) { }
     public record ClockRequest(String now, Long plusSeconds, Boolean publish) { }
     public record PublishRequest(Long groupId, String template) { }
+    public record RerollRequest(String template) { }
     public record PublishedMission(Long missionId, Long groupId, int slotNo, String template, String content) { }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record PublishResponse(List<PublishedMission> created, String message) { }

@@ -111,6 +111,7 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
     LaunchedEffect(notice) { if (notice != null) { toast.show(notice); onNoticeHandled() } }
     val scope = rememberCoroutineScope()
     var creating by remember(id) { mutableStateOf(false) }
+    var rerollConfirmation by remember(id) { mutableStateOf<Long?>(null) }
     fun createMission() {
         if (dev == null || creating) return
         creating = true
@@ -122,6 +123,21 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 toast.show("미션 생성 실패: ${error.message}")
+            } finally { creating = false }
+        }
+    }
+    fun rerollMission(missionId: Long) {
+        if (dev == null || creating) return
+        creating = true
+        scope.launch {
+            try {
+                val result = dev.reroll(missionId)
+                store.clearMissionForReroll(id, missionId)
+                refresh++
+                toast.show("미션을 새로 뽑았어요 (${result.template})")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                toast.show("미션 리롤 실패: ${error.message}")
             } finally { creating = false }
         }
     }
@@ -192,6 +208,8 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                     onPerform = { onPerform(mission.id, null) }, onResults = { onResults(mission.id) })
                 if (dev != null) HButton("[개발자] 미션 생성", Modifier.padding(top = 12.dp),
                     enabled = !creating, onClick = ::createMission)
+                if (dev != null) HButton("[개발자] 미션 리롤", Modifier.padding(top = 8.dp),
+                    enabled = !creating, onClick = { rerollConfirmation = mission.id })
                 Row(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("참여 현황", style = HType.sectionTitle, color = HColors.ink)
@@ -215,6 +233,13 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
             }
         }
         HToastHost(toast)
+    }
+    rerollConfirmation?.let { missionId ->
+        HAlert("이 미션을 새로 뽑을까요?", "이미 낸 제출·반응·댓글·콕이 모두 삭제돼요.", "리롤",
+            onCancel = { rerollConfirmation = null }, onConfirm = {
+                rerollConfirmation = null
+                rerollMission(missionId)
+            })
     }
 }
 

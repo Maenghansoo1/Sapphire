@@ -47,6 +47,10 @@ public class DevController {
 
     @PostMapping("/missions/publish") public PublishResponse publish(
             @RequestBody(required = false) PublishRequest request) { return missions.publish(request); }
+    @PostMapping("/missions/{missionId}/reroll") public PublishedMission reroll(
+            @PathVariable Long missionId, @RequestBody(required = false) RerollRequest request) {
+        return missions.reroll(missionId, request);
+    }
     @PostMapping("/missions/{missionId}/deadline-now") public DeadlineResponse deadline(
             @PathVariable Long missionId) { return missions.deadlineNow(missionId); }
     @PostMapping("/groups/{groupId}/deadline-now") public UpdatedResponse deadlineGroup(
