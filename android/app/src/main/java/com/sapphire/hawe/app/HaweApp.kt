@@ -2,9 +2,21 @@ package com.sapphire.hawe.app
 
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.sapphire.hawe.feature.splash.SplashScreen
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
@@ -32,12 +44,27 @@ import com.sapphire.hawe.model.LoginProvider
 val LocalSession = staticCompositionLocalOf<AppSession> { error("AppSession 이 없어요") }
 val LocalStore = staticCompositionLocalOf<DataStore> { error("DataStore 가 없어요") }
 
-/** 로그인 상태에 따라 첫 화면을 골라요. 로그아웃 → A1 로그인, 로그인 → 그룹이 있으면 04 홈, 없으면 01 시작 */
+/**
+ * 로그인 상태에 따라 첫 화면을 골라요. 로그아웃 → A1 로그인, 로그인 → 그룹이 있으면 04 홈, 없으면 01 시작
+ * 앱을 켜면 먼저 00 스플래시를 잠깐 보여줘요.
+ */
 @Composable
 fun HaweApp(session: AppSession, store: DataStore) {
+    var showsSplash by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        if (showsSplash) {
+            delay(1200)
+            showsSplash = false
+        }
+    }
     CompositionLocalProvider(LocalSession provides session, LocalStore provides store) {
-        Crossfade(session.isSignedIn, label = "root") { signedIn ->
-            if (signedIn) MainFlow() else AuthFlow()
+        Box {
+            Crossfade(session.isSignedIn, label = "root") { signedIn ->
+                if (signedIn) MainFlow() else AuthFlow()
+            }
+            AnimatedVisibility(showsSplash, enter = EnterTransition.None, exit = fadeOut(tween(300))) {
+                SplashScreen()
+            }
         }
     }
 }
