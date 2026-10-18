@@ -10,6 +10,8 @@ enum MyPageRoute: Hashable {
     case appInfo
     case licenses
     case withdraw
+    /// 개발자 모드에서만 열려요.
+    case devTools
 }
 
 /// MainRoute.myPage 로 들어온 화면을 골라 보여줘요.
@@ -27,6 +29,7 @@ struct MyPageDestination: View {
         case .appInfo: AppInfoView(path: $path)
         case .licenses: LicensesView()
         case .withdraw: WithdrawView()
+        case .devTools: DevToolsView(path: $path)
         }
     }
 }
@@ -40,9 +43,19 @@ struct MyPageView: View {
     @Environment(AppSession.self) private var session
     @Environment(DataStore.self) private var store
     @Environment(Services.self) private var services
+    @Environment(DevMode.self) private var devMode
+    @Environment(DevAccountSwitcher.self) private var switcher
     @State private var openedLink: WebLink?
     @State private var confirmsLogout = false
     @State private var toast: String?
+    @State private var devUsers: [DevUserDTO]?
+    @State private var usersFailed = false
+    @State private var usersRetry = 0
+
+    private struct DevUsersKey: Equatable {
+        let enabled: Bool
+        let retry: Int
+    }
 
     private var account: MyAccount { session.account }
     /// 활동 요약 (`/api/me/stats`) — 아직 못 받았으면 nil 이고 숫자 대신 "-" 를 보여요.
@@ -57,6 +70,7 @@ struct MyPageView: View {
                     profile.padding(.top, 12)
                     stats.padding(.top, 22)
                     byType.padding(.top, 14)
+                    if devMode.enabled { devSection.padding(.top, 18) }
                     menu.padding(.top, 18)
                 }
             }
@@ -89,6 +103,48 @@ struct MyPageView: View {
         .animation(.easeOut(duration: 0.2), value: confirmsLogout)
         .hToast($toast)
         .task { await loadStats() }
+        .task(id: DevUsersKey(enabled: devMode.enabled, retry: usersRetry)) { await loadDevUsers() }
+    }
+
+    private func loadDevUsers() async {
+        guard devMode.enabled else { return }
+        do {
+            devUsers = try await services.dev.users()
+            usersFailed = false
+        } catch is CancellationError {
+        } catch {
+            usersFailed = true
+        }
+    }
+
+    /// 임시 UI: 개발자 모드에서만 — 개발자 도구와 계정 한 번 눌러 전환
+    private var devSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HListRow("개발자 도구", height: 48) { path.append(.myPage(.devTools)) }
+            Text("유저 전환")
+                .font(.plex(15, .semibold))
+                .foregroundStyle(.ink)
+                .padding(.top, 8)
+            if usersFailed {
+                HListRow("목록을 불러오지 못했어요 · 다시 시도", height: 48) { usersRetry += 1 }
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(devUsers ?? [], id: \.userId) { user in
+                    let selected = user.userId == account.userID
+                    Button { switcher.switchUser(to: user.userId) } label: {
+                        Text((selected ? "✓ " : "") + (user.nickname ?? "#\(user.userId)"))
+                            .font(.plex(13))
+                            .foregroundStyle(.ink)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(selected ? Color.accentSubtle : Color.surface, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(switcher.isBusy || selected)
+                }
+            }
+            .padding(.top, 8)
+        }
     }
 
     private func loadStats() async {
@@ -117,8 +173,7 @@ struct MyPageView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 프로필 수정 API 가 생기면 ProfileEditView(.profileEdit)로 보내요.
-            Button { toast = ComingSoon.message } label: {
+            Button { path.append(.myPage(.profileEdit)) } label: {
                 Text("프로필 편집")
                     .font(.plex(13, .semibold))
                     .foregroundStyle(.ink)
@@ -198,8 +253,7 @@ struct MyPageView: View {
             HListRow("이용약관", height: 48) { openedLink = WebLink(url: AppLinks.termsOfService) }
             HListRow("개인정보 처리방침", height: 48) { openedLink = WebLink(url: AppLinks.privacyPolicy) }
             dangerRow("로그아웃", showsDivider: true) { confirmsLogout = true }
-            // 탈퇴 API 가 생기면 WithdrawView(.withdraw)로 보내요.
-            dangerRow("회원 탈퇴", showsDivider: false) { toast = ComingSoon.message }
+            dangerRow("회원 탈퇴", showsDivider: false) { path.append(.myPage(.withdraw)) }
         }
     }
 
@@ -234,4 +288,5 @@ enum AppInfo {
     .environment(AppSession(state: .signedIn))
     .environment(DataStore.preview())
     .environment(Services.preview)
+    .environment(DevMode.shared)
 }

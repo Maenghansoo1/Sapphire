@@ -55,7 +55,7 @@ struct LoginView: View {
     private var intro: some View {
         VStack(alignment: .leading, spacing: 14) {
             HLogoLockup()
-            Text("다시 만나서 반가워요")
+            Text("만나서 반가워요")
                 .font(.plex(28, .bold))
                 .plexLineHeight(1.35, size: 28, weight: .bold)
                 .foregroundStyle(.ink)

@@ -64,7 +64,9 @@ struct HomeView: View {
     }
 
     private static var todayText: String {
-        Date.now.formatted(.dateTime.month(.defaultDigits).day().weekday(.wide).locale(Locale(identifier: "ko_KR")))
+        var style = Date.FormatStyle.dateTime.month(.defaultDigits).day().weekday(.wide).locale(Locale(identifier: "ko_KR"))
+        style.timeZone = TodayMission.seoul
+        return AppClock.now().formatted(style)
     }
 }
 
@@ -88,7 +90,7 @@ struct GroupCard: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 if let type = group.missionType {
-                    Text("오늘의 미션 · \(type.displayName)")
+                    Text("오늘의 미션 · \(type.displayName)" + (group.missionCount >= 2 ? " · 외 \(group.missionCount - 1)개" : ""))
                         .font(.plex(12, .semibold))
                         .foregroundStyle(.textSecondary)
                     Text(group.topic ?? "")
@@ -106,7 +108,8 @@ struct GroupCard: View {
 
             if group.missionType != nil {
                 HStack {
-                    Text("\(group.submittedCount) / \(group.members.count)명 완료")
+                    Text("\(group.submittedCount) / \(group.members.count)명 완료"
+                         + (group.missionCount >= 2 ? " · \(group.mySubmittedCount) / \(group.missionCount) 제출" : ""))
                         .font(.caption13)
                         .foregroundStyle(.textSecondary)
                     Spacer()

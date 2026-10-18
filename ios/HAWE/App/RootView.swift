@@ -12,16 +12,6 @@ struct RootView: View {
     }
 
     var body: some View {
-<<<<<<< HEAD
-        Group {
-            switch session.state {
-            case .signedOut:
-                AuthFlowView()
-            case .signedIn:
-                MainFlowView()
-            case .restoring:
-                Color.bg.ignoresSafeArea()
-=======
         ZStack {
             Group {
                 switch session.state {
@@ -29,6 +19,8 @@ struct RootView: View {
                     AuthFlowView()
                 case .signedIn:
                     MainFlowView()
+                case .restoring:
+                    Color.bg.ignoresSafeArea()
                 }
             }
             .animation(.default, value: session.state)
@@ -36,7 +28,6 @@ struct RootView: View {
             if showsSplash {
                 SplashView()
                     .transition(.opacity)
->>>>>>> feat/ios-step1
             }
         }
         .task {

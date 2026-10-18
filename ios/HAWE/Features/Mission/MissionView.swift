@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// 05 그룹 · 오늘의 미션 (Figma 1:542)
-/// 서버의 지금 미션(`/missions/today`) — 유형·주제, 다음 미션까지 카운트다운·마감, 유형별 CTA, 멤버별 완료 여부.
-/// 발행 전이면 빈 상태와 다음 발행까지 남은 시간을 보여요. 콕 찌르기는 서버 기능이 생기기 전까지 숨겨요.
+/// 서버의 지금 미션들(`/missions/today`) — 하루에 여러 개면 위에서 고르고(임시 칩), 유형·주제·카운트다운·마감,
+/// 틀별 CTA, 멤버별 완료 여부와 콕 찌르기·똥뿌리기. 발행 전이면 빈 상태와 다음 발행까지 남은 시간을 보여요.
 struct MissionView: View {
     let groupID: Int
     @Binding var path: [MainRoute]
@@ -16,12 +16,29 @@ struct MissionView: View {
     @Environment(DataStore.self) private var store
     @Environment(AppSession.self) private var session
     @Environment(Services.self) private var services
-    @State private var isPerforming = false
+    @Environment(DevMode.self) private var devMode
+    @State private var selectedID: Int?
+    @State private var performing: PerformTarget?
     @State private var toast: String?
     @State private var reload = 0
+    /// 보내는 중인 재촉 (미션, 멤버, 종류)
+    @State private var sending: Set<PokeKey> = []
+    @State private var creating = false
+    @State private var rerollConfirmation: Int?
+
+    private struct PerformTarget: Identifiable {
+        let id: Int
+    }
+
+    private struct PokeKey: Hashable {
+        let missionID: Int
+        let memberID: Int
+        let kind: PokeKind
+    }
 
     private var group: StoredGroup? { store.storedGroup(groupID) }
-    private var mission: TodayMission? { store.todayMission(groupID) }
+    private var missions: [TodayMission] { store.todayMissions(groupID) }
+    private var mission: TodayMission? { MissionFormat.selectedMission(missions, selectedID: selectedID) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,16 +49,32 @@ struct MissionView: View {
                 }
             }
 
+            if missions.count >= 2 { missionChips }
+
             content
         }
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
-        .fullScreenCover(isPresented: $isPerforming) {
-            if let mission, let type = mission.type {
+        .fullScreenCover(item: $performing) { target in
+            if let mission = store.todayMission(groupID, missionID: target.id), let type = mission.type {
                 MissionPerformView(type: type, topic: mission.topic, template: mission.template, spec: mission.spec) { content in
                     await submit(content, missionID: mission.id)
                 }
+            }
+        }
+        .overlay {
+            if let missionID = rerollConfirmation {
+                HAlert(
+                    title: "이 미션을 새로 뽑을까요?",
+                    message: "이미 낸 제출·반응·댓글·콕이 모두 삭제돼요.",
+                    confirmTitle: "리롤",
+                    onCancel: { rerollConfirmation = nil },
+                    onConfirm: {
+                        rerollConfirmation = nil
+                        reroll(missionID)
+                    }
+                )
             }
         }
         .hToast($toast)
@@ -53,12 +86,16 @@ struct MissionView: View {
         // 발행 시각이 되면 새 미션을 받아요 (서버가 조금 늦을 수 있어 30초 간격으로 세 번).
         .task(id: group?.nextPublishAt) {
             guard let next = group?.nextPublishAt else { return }
-            try? await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow)))
+            try? await Task.sleep(for: .seconds(max(0, next.timeIntervalSince(AppClock.now()))))
             for attempt in 0..<3 {
                 guard !Task.isCancelled else { return }
                 reload += 1
                 if attempt < 2 { try? await Task.sleep(for: .seconds(30)) }
             }
+        }
+        // 고른 미션이 닫혀 사라지면 첫 미션으로 돌아가요.
+        .onChange(of: missions.map(\.id)) { _, ids in
+            if let selectedID, !ids.contains(selectedID) { self.selectedID = ids.first }
         }
         .onAppear { showNotice() }
         .onChange(of: notice) { _, _ in showNotice() }
@@ -70,10 +107,11 @@ struct MissionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     missionCard(mission)
+                    if devMode.enabled { devButtons(mission) }
                     statusHeader(mission)
                     memberList(mission)
-                    if !mission.didSubmit, let type = mission.type {
-                        lockNotice(type).padding(.top, 20)
+                    if !mission.didSubmit, let type = mission.type, MissionTemplates.isSupported(mission.template) {
+                        lockNotice(type, template: mission.template).padding(.top, 20)
                     }
                 }
                 .padding(.bottom, 32)
@@ -88,6 +126,11 @@ struct MissionView: View {
                     .foregroundStyle(.ink)
                 if let next = group?.nextPublishAt {
                     MissionCountdown(closesAt: next)
+                }
+                if devMode.enabled {
+                    HButton("[개발자] 미션 생성", action: createMission)
+                        .disabled(creating)
+                        .padding(.top, 10)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -105,12 +148,41 @@ struct MissionView: View {
         .accessibilityLabel(label)
     }
 
+    /// 임시 UI: 슬롯별 선택 칩 (하루 여러 미션)
+    private var missionChips: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(missions.enumerated()), id: \.element.id) { index, item in
+                let selected = item.id == mission?.id
+                Button { selectedID = item.id } label: {
+                    HStack(spacing: 4) {
+                        Text("\(index + 1)")
+                            .font(.plex(14, .semibold))
+                        if item.didSubmit {
+                            HIconView(icon: .checkSmall, size: 14, color: selected ? .bg : .ink)
+                        }
+                    }
+                    .foregroundStyle(selected ? Color.bg : Color.ink)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(selected ? Color.ink : Color.surface, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(index + 1)번째 미션" + (item.didSubmit ? ", 올림" : ""))
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+    }
+
     // MARK: - Mission card
 
     /// 테두리 line · 모서리 24 · 안쪽 22 · 간격 18
     private func missionCard(_ mission: TodayMission) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
+        let index = missions.firstIndex { $0.id == mission.id } ?? 0
+        let supported = mission.type != nil && MissionTemplates.isSupported(mission.template)
+        return VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 8) {
                 HStack(spacing: 8) {
                     if let type = mission.type {
                         HIconView(icon: type.icon, size: 16)
@@ -122,31 +194,43 @@ struct MissionView: View {
                 .padding(.horizontal, 12)
                 .frame(height: 32)
                 .background(.surface, in: Capsule())
+                .fixedSize()
 
-                Spacer()
+                Spacer(minLength: 0)
 
-                Text("\(Self.dateText(mission.opensAt)) · #\(mission.number)")
+                Text((missions.count >= 2 ? "\(index + 1)번째 · " : "") + "\(MissionFormat.dateText(mission.opensAt)) · #\(mission.number)")
                     .font(.caption13)
                     .foregroundStyle(.textSecondary)
                     .lineLimit(1)
             }
 
-            Text(mission.topic)
-                .font(.plex(24, .bold))
-                .plexLineHeight(1.35, size: 24, weight: .bold)
-                .foregroundStyle(.ink)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(mission.topic)
+                    .font(.plex(24, .bold))
+                    .plexLineHeight(1.35, size: 24, weight: .bold)
+                    .foregroundStyle(.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let guide = MissionFormat.templateGuideText(mission.template, spec: mission.spec) {
+                    Text(guide)
+                        .font(.plex(14))
+                        .foregroundStyle(.textSecondary)
+                }
+            }
 
             MissionCountdown(closesAt: mission.closesAt, deadlineAt: mission.deadlineAt)
 
-            if let type = mission.type {
+            if let type = mission.type, supported {
                 if mission.didSubmit {
-                    HButton("친구들 작품 보기") { path.append(.results(groupID: groupID, missionID: mission.id)) }
+                    HButton(MissionFormat.resultsActionTitle(template: mission.template)) {
+                        path.append(.results(groupID: groupID, missionID: mission.id))
+                    }
                 } else {
-                    HButton(type.actionTitle) { isPerforming = true }
+                    HButton(MissionFormat.actionTitle(type, template: mission.template)) {
+                        performing = PerformTarget(id: mission.id)
+                    }
                 }
             } else {
-                Text("이 미션은 아직 앱에서 열 수 없어요")
+                Text(MissionFormat.unsupportedText)
                     .font(.caption13)
                     .foregroundStyle(.textSecondary)
             }
@@ -156,6 +240,17 @@ struct MissionView: View {
             RoundedRectangle(cornerRadius: HRadius.largeCard, style: .continuous)
                 .strokeBorder(.line, lineWidth: 1)
         )
+    }
+
+    /// 개발자 모드에서만 — 미션 만들기·새로 뽑기
+    private func devButtons(_ mission: TodayMission) -> some View {
+        VStack(spacing: 8) {
+            HButton("[개발자] 미션 생성", action: createMission)
+                .disabled(creating)
+            HButton("[개발자] 미션 리롤") { rerollConfirmation = mission.id }
+                .disabled(creating)
+        }
+        .padding(.top, 12)
     }
 
     // MARK: - Members
@@ -174,20 +269,20 @@ struct MissionView: View {
         .padding(.bottom, 4)
     }
 
-    /// 줄 높이 56 · 아바타 38 · 아래 구분선
+    /// 줄 높이 55 · 아바타 38 · 아래 구분선
     private func memberList(_ mission: TodayMission) -> some View {
         VStack(spacing: 0) {
             ForEach(mission.members) { member in
                 HStack(spacing: 12) {
                     HAvatar(content: member.profile.avatar, size: 38)
-                    Text(member.isMe ? "\(member.profile.nickname) (나)" : member.profile.nickname)
+                    Text(MissionFormat.memberDisplayName(member))
                         .font(.plex(15, .medium))
                         .foregroundStyle(.ink)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    status(for: member)
+                    status(for: member, missionID: mission.id)
                 }
-                .frame(height: 56)
+                .frame(height: 55)
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(.line).frame(height: 1)
                 }
@@ -196,7 +291,7 @@ struct MissionView: View {
     }
 
     @ViewBuilder
-    private func status(for member: MissionMember) -> some View {
+    private func status(for member: MissionMember, missionID: Int) -> some View {
         if member.isDone {
             HStack(spacing: 4) {
                 HIconView(icon: .check, size: 16)
@@ -204,18 +299,30 @@ struct MissionView: View {
                     .font(.plex(13, .semibold))
                     .foregroundStyle(.ink)
             }
-        } else {
+        } else if member.isMe {
             Text("아직 안 했어요")
                 .font(.caption13)
                 .foregroundStyle(.textSecondary)
+        } else {
+            HStack(spacing: 6) {
+                ForEach(PokeKind.allCases, id: \.self) { kind in
+                    PokeButton(
+                        kind: kind, nickname: member.profile.nickname,
+                        sent: member.poked.contains(kind),
+                        busy: sending.contains(PokeKey(missionID: missionID, memberID: member.id, kind: kind))
+                    ) {
+                        sendPoke(missionID: missionID, member: member, kind: kind)
+                    }
+                }
+            }
         }
     }
 
     /// surface · 모서리 18 · 안쪽 18 · 자물쇠 22 + 14
-    private func lockNotice(_ type: MissionType) -> some View {
+    private func lockNotice(_ type: MissionType, template: String) -> some View {
         HStack(spacing: 14) {
             HIconView(icon: .lock, size: 22, color: .textSecondary)
-            Text("내 미션을 올리면 친구들의 \(type.subjectForm) 열려요.")
+            Text(MissionFormat.lockNoticeText(type, template: template))
                 .font(.plex(14))
                 .foregroundStyle(.textBody)
         }
@@ -250,7 +357,9 @@ struct MissionView: View {
             if session.state == .signedIn {
                 store.applySubmitted(submission, missionID: missionID, groupID: groupID)
             }
-            toast = submission.isLate ? "지각으로 올렸어요" : "오늘의 미션을 올렸어요"
+            let index = max(0, missions.firstIndex { $0.id == missionID } ?? 0)
+            selectedID = missionID
+            toast = MissionFormat.submittedToastText(index: index, total: missions.count, late: submission.isLate)
             return .done
         } catch is CancellationError {
             return .stay("잠시 후 다시 시도해 주세요")
@@ -268,9 +377,71 @@ struct MissionView: View {
                 reload += 1
                 return .done
             case .returnHome:
-                isPerforming = false
+                performing = nil
                 onReturnHome()
                 return .done
+            }
+        }
+    }
+
+    private func sendPoke(missionID: Int, member: MissionMember, kind: PokeKind) {
+        let key = PokeKey(missionID: missionID, memberID: member.id, kind: kind)
+        guard !sending.contains(key) else { return }
+        sending.insert(key)
+        Task {
+            do {
+                let sent = try await services.pokes.send(groupID: groupID, toUserID: member.id, kind: kind, missionID: missionID)
+                sending.remove(key)
+                guard session.state == .signedIn else { return }
+                store.markPoked(member.id, kind: sent.kind, missionID: sent.missionID, groupID: groupID)
+                toast = MissionFormat.pokeSentText(kind, nickname: member.profile.nickname)
+            } catch {
+                sending.remove(key)
+                guard !(error is CancellationError), session.state == .signedIn else { return }
+                let failure = PokeFailure(error: error)
+                switch failure.followUp {
+                case .markSent:
+                    store.markPoked(member.id, kind: kind, missionID: missionID, groupID: groupID)
+                    reload += 1
+                case .refresh:
+                    reload += 1
+                case .leave:
+                    dismiss()
+                case .none:
+                    break
+                }
+                if let message = failure.message { toast = message }
+            }
+        }
+    }
+
+    private func createMission() {
+        guard devMode.enabled, !creating else { return }
+        creating = true
+        Task {
+            defer { creating = false }
+            do {
+                let result = try await services.dev.publish(groupID: groupID)
+                reload += 1
+                toast = result.message ?? "미션 \(result.created?.count ?? 0)개를 생성했어요"
+            } catch {
+                toast = "미션 생성 실패: \(error.devDescription)"
+            }
+        }
+    }
+
+    private func reroll(_ missionID: Int) {
+        guard devMode.enabled, !creating else { return }
+        creating = true
+        Task {
+            defer { creating = false }
+            do {
+                let result = try await services.dev.reroll(missionID: missionID)
+                store.clearMissionForReroll(missionID, groupID: groupID)
+                reload += 1
+                toast = "미션을 새로 뽑았어요 (\(result.template))"
+            } catch {
+                toast = "미션 리롤 실패: \(error.devDescription)"
             }
         }
     }
@@ -281,11 +452,36 @@ struct MissionView: View {
         self.notice = nil
         reload += 1
     }
+}
 
-    private static func dateText(_ date: Date) -> String {
-        var style = Date.FormatStyle.dateTime.month(.defaultDigits).day().locale(Locale(identifier: "ko_KR"))
-        style.timeZone = TodayMission.seoul
-        return date.formatted(style)
+/// 콕·똥 버튼. 보낸 종류는 체크와 강조색으로 바뀌고 다시 누를 수 없어요 (미션마다 종류별 1번).
+private struct PokeButton: View {
+    let kind: PokeKind
+    let nickname: String
+    let sent: Bool
+    let busy: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let color: Color = sent ? .accentPressed : .ink
+        Button(action: action) {
+            HStack(spacing: 4) {
+                HIconView(icon: sent ? .checkSmall : (kind == .poke ? .pokeTemp : .flingTemp), size: 16, color: color)
+                Text(MissionFormat.pokeButtonLabel(kind))
+                    .font(.plex(13, .semibold))
+                    .foregroundStyle(color)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(sent ? Color.accentSubtle : Color.bg, in: Capsule())
+            .overlay(Capsule().strokeBorder(sent ? Color.accentSubtle : Color.border, lineWidth: 1))
+            .opacity(busy ? 0.5 : 1)
+            .frame(minHeight: HLayout.minTouch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(sent || busy)
+        .accessibilityLabel(MissionFormat.pokeButtonDescription(kind, nickname: nickname, sent: sent))
     }
 }
 
@@ -295,45 +491,18 @@ struct MissionCountdown: View {
     var deadlineAt: Date? = nil
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let now = context.date
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            let now = AppClock.now()
             VStack(alignment: .leading, spacing: 4) {
-                Text(now < closesAt ? "다음 미션까지 \(Self.countdown(to: closesAt, now: now))" : "곧 열려요")
+                Text(now < closesAt ? "다음 미션까지 \(MissionFormat.countdown(to: closesAt, now: now))" : "곧 열려요")
                     .monospacedDigit()
-                if let deadlineAt, let text = Self.deadlineText(deadlineAt: deadlineAt, closesAt: closesAt, now: now) {
+                if let deadlineAt, let text = MissionFormat.deadlineText(deadlineAt: deadlineAt, closesAt: closesAt, now: now) {
                     Text(text)
                 }
             }
             .font(.caption13)
             .foregroundStyle(.textSecondary)
         }
-    }
-
-    /// 남은 시간 HH:mm:ss
-    static func countdown(to end: Date, now: Date) -> String {
-        let seconds = max(0, Int(end.timeIntervalSince(now)))
-        return String(format: "%02d:%02d:%02d", seconds / 3600, seconds % 3600 / 60, seconds % 60)
-    }
-
-    /// "마감 오후 11:00" · "마감 내일 오전 9:00" · 마감 뒤에는 지각 안내
-    static func deadlineText(deadlineAt: Date, closesAt: Date, now: Date) -> String? {
-        guard now < closesAt else { return nil }
-        guard now < deadlineAt else { return "마감이 지났어요 · 지금 올리면 지각이에요" }
-        let calendar = DataStore.calendar
-        let today = calendar.startOfDay(for: now)
-        let deadlineDay = calendar.startOfDay(for: deadlineAt)
-        let parts = calendar.dateComponents([.month, .day, .hour, .minute], from: deadlineAt)
-        let date: String
-        if deadlineDay == today {
-            date = ""
-        } else if deadlineDay == calendar.date(byAdding: .day, value: 1, to: today) {
-            date = "내일 "
-        } else {
-            date = "\(parts.month ?? 0)월 \(parts.day ?? 0)일 "
-        }
-        let hour24 = parts.hour ?? 0
-        let hour = hour24 % 12 == 0 ? 12 : hour24 % 12
-        return "마감 \(date)\(hour24 < 12 ? "오전" : "오후") \(hour):" + String(format: "%02d", parts.minute ?? 0)
     }
 }
 
@@ -346,6 +515,7 @@ struct MissionCountdown: View {
     .environment(store)
     .environment(AppSession(state: .signedIn))
     .environment(Services.preview)
+    .environment(DevMode.shared)
 }
 
 #Preview("올린 뒤") {
@@ -357,4 +527,5 @@ struct MissionCountdown: View {
     .environment(store)
     .environment(AppSession(state: .signedIn))
     .environment(Services.preview)
+    .environment(DevMode.shared)
 }

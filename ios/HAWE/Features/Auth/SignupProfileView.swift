@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// A3 회원가입 · 프로필 (Figma 1:256)
-/// 캐릭터 7종 중 선택(기본 몽실이), 닉네임 2–10자 입력 시 '시작하기' 활성화.
-/// '시작하기'를 누르면 가입 → 로그인 → 캐릭터 저장을 서버에 요청해요.
+/// 캐릭터 7종 또는 내 사진 중 선택(기본 몽실이), 닉네임 2–10자 입력 시 '시작하기' 활성화.
+/// '시작하기'를 누르면 가입 → 로그인 → 캐릭터(또는 사진) 저장을 서버에 요청해요.
 struct SignupProfileView: View {
     /// 가입 방법 — 이메일이면 A2 에서 넣은 이메일을 같이 받아요.
     var provider: LoginProvider = .email
@@ -40,8 +40,7 @@ struct SignupProfileView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     title
                     preview
-                    // 프로필 사진 업로드 API 가 생기기 전까지 캐릭터만 골라요.
-                    CharacterPicker(selection: $avatar, showsPhoto: false)
+                    CharacterPicker(selection: $avatar)
                     HTextField(
                         "닉네임",
                         placeholder: "닉네임을 입력해 주세요",
@@ -63,13 +62,13 @@ struct SignupProfileView: View {
     }
 
     private func start() {
-        guard canStart, case .character(let character) = avatar else { return }
+        guard canStart else { return }
         isLoading = true
         Task {
             defer { isLoading = false }
             do {
                 let account = try await services.auth.signUp(
-                    email: email ?? "", password: signup.password, nickname: nickname, character: character,
+                    email: email ?? "", password: signup.password, nickname: nickname, avatar: avatar,
                     agreeTerms: signup.agreeService, agreePrivacy: signup.agreePrivacy,
                     skipRegister: registered, onRegistered: { registered = true }
                 )
@@ -93,7 +92,7 @@ struct SignupProfileView: View {
             Text("어떻게 불러드릴까요?")
                 .font(.screenTitle)
                 .foregroundStyle(.ink)
-            Text("캐릭터를 고르고 이름을 정해주세요.")
+            Text("캐릭터나 사진을 고르고 이름을 정해주세요.")
                 .font(.body15)
                 .foregroundStyle(.textSecondary)
         }
@@ -104,7 +103,7 @@ struct SignupProfileView: View {
             HAvatar(content: avatar, size: 88, characterScale: 0.8)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("선택한 캐릭터")
+                Text("선택한 프로필")
                     .font(.caption13)
                     .foregroundStyle(.textSecondary)
                 Text(avatar.choiceName)

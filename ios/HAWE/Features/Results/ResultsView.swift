@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 결과 공개 — 10 사진(세로 피드) · 11 그림(2열 격자) · 12 글(카드) · 13 음성(목록 + 전체 이어 듣기)
-/// 작품을 누르면 14 작품 상세로 가요. 좋아요·댓글은 서버에 생기면(7단계) 다시 보여요.
+/// 결과 공개 — 10 사진(세로 피드) · 11 그림(2열 격자) · 12 글·새 틀(카드). 집계 틀은 위에 "그룹 결과" 카드.
+/// 작품을 누르면 14 작품 상세(스티커·댓글)로 가요.
 /// 들어올 때·앱으로 돌아올 때마다 서버 피드를 받아요. 내가 올리지 않았으면 서버가 막아요(423 FEED_LOCKED).
 struct ResultsView: View {
     let groupID: Int
@@ -19,6 +19,16 @@ struct ResultsView: View {
     @State private var feed: ResultFeed?
     @State private var failed = false
     @State private var reload = 0
+    @State private var aggregate: AggregateLoad = .loading
+    @State private var aggregateRetry = 0
+
+    private struct AggregateKey: Equatable {
+        let reload: Int
+        let retry: Int
+        let template: String?
+    }
+
+    private var template: String? { store.result(groupID: groupID, missionID: missionID)?.template }
 
     var body: some View {
         Group {
@@ -29,7 +39,7 @@ struct ResultsView: View {
                     LoadFailedView(title: "결과를 불러오지 못했어요") { reload += 1 }
                 }
             } else if let feed, feed.loadedResult != nil {
-                ResultsContent(feed: feed)
+                ResultsContent(feed: feed, aggregate: aggregate, myUserID: session.account.userID) { aggregateRetry += 1 }
             } else {
                 Color.bg
             }
@@ -40,6 +50,14 @@ struct ResultsView: View {
             if feed == nil { feed = ResultFeed(store: store, groupID: groupID, missionID: missionID) }
         }
         .task(id: reload) { await load() }
+        // 집계 틀의 그룹 결과. 제출이 늘면 값이 바뀌어서 피드와 같이 다시 불러요. 오류로 화면을 닫는 건 피드 쪽만 해요.
+        .task(id: AggregateKey(reload: reload, retry: aggregateRetry, template: template)) { await loadAggregate() }
+        // AI 심사(B10)는 제출 뒤에 따로 끝나요. 방금 올린 내 사진이 아직이면 5초 뒤 한 번만 더 불러와요.
+        .task {
+            try? await Task.sleep(for: .seconds(5))
+            let submissions = store.result(groupID: groupID, missionID: missionID)?.submissions ?? []
+            if ResultsFormat.awaitsAiReview(submissions, now: AppClock.now()) { reload += 1 }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { reload += 1 }
         }
@@ -51,6 +69,7 @@ struct ResultsView: View {
             let submissions = try await services.submissions.feed(missionID: missionID, myUserID: session.account.userID)
             if session.state == .signedIn { store.applyFeed(submissions, missionID: missionID, groupID: groupID) }
         } catch is CancellationError {
+            return
         } catch {
             switch error.apiCode {
             case "FEED_LOCKED": onLocked()
@@ -59,20 +78,43 @@ struct ResultsView: View {
                 // 이미 받아 둔 피드가 있으면 그대로 보여 줘요.
                 if feed?.loadedResult == nil { failed = true }
             }
+            return
+        }
+        // 달력에서 연 지난 미션은 밸런스 선택지·슬라이더 라벨·그림 대상을 모르니 미션 정보를 한 번 받아 와요
+        // (실패하면 라벨 없이, AI 추측은 판정 없이 보여요).
+        guard let template, MissionTemplates.isAggregate(template) || template.hasPrefix("DRAW_"),
+              store.needsMissionSpec(groupID: groupID, missionID: missionID) else { return }
+        if let mission = try? await services.missions.mission(missionID: missionID), session.state == .signedIn {
+            store.applyMissionSpec(missionID, template: mission.template, spec: mission.spec)
+        }
+    }
+
+    private func loadAggregate() async {
+        guard let template, MissionTemplates.isAggregate(template) else { return }
+        if case .loaded = aggregate {} else { aggregate = .loading }
+        do {
+            aggregate = try await services.submissions.result(missionID: missionID).map(AggregateLoad.loaded) ?? .hidden
+        } catch is CancellationError {
+        } catch {
+            if ["FEED_LOCKED", "RESULT_NOT_SUPPORTED", "NOT_GROUP_MEMBER", "MISSION_NOT_FOUND"].contains(error.apiCode ?? "") {
+                aggregate = .hidden
+            } else if case .loaded = aggregate {
+            } else {
+                aggregate = .failed
+            }
         }
     }
 }
 
-/// 지각 제출 표시
-enum LateLabel {
-    static let text = "지각"
-}
-
 private struct ResultsContent: View {
     let feed: ResultFeed
+    let aggregate: AggregateLoad
+    let myUserID: Int
+    let onRetryAggregate: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var openedID: Submission.ID?
+    @State private var aiGuess = AiGuessRunner()
 
     private var result: MissionResult { feed.result }
 
@@ -87,6 +129,11 @@ private struct ResultsContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     title
+                    if MissionTemplates.isAggregate(result.template) {
+                        AggregateCard(load: aggregate, spec: result.spec, members: feed.members, myUserID: myUserID,
+                                      onRetry: onRetryAggregate)
+                            .padding(.bottom, 20)
+                    }
                     content
                     if !result.pending.isEmpty {
                         PendingMembers(members: result.pending)
@@ -103,7 +150,7 @@ private struct ResultsContent: View {
         .navigationDestination(item: $openedID) { id in
             SubmissionDetailView(feed: feed, submissionID: id)
         }
-        .onDisappear { feed.player.stop() }
+        .aiGuessCard(aiGuess)
     }
 
     /// 주제 22 Bold + 완료 현황 13 (위 8 · 아래 18)
@@ -112,7 +159,7 @@ private struct ResultsContent: View {
             Text(result.topic)
                 .font(.plex(22, .bold))
                 .foregroundStyle(.ink)
-            Text("\(progressText) · \(hintText)")
+            Text("\(ResultsFormat.progressText(done: result.submissions.count, memberCount: result.memberCount)) · \(ResultsFormat.hintText(result.type))")
                 .font(.caption13)
                 .foregroundStyle(.textSecondary)
         }
@@ -120,22 +167,12 @@ private struct ResultsContent: View {
         .padding(.bottom, 18)
     }
 
-    private var progressText: String {
-        let done = result.submissions.count
-        return done == result.memberCount ? "\(done)명 모두 완료" : "\(done) / \(result.memberCount)명 완료"
-    }
-
-    private var hintText: String {
-        result.type == .voice ? "눌러서 듣고 자세히 보기" : "\(result.type.displayName)을 눌러서 자세히 보기"
-    }
-
     @ViewBuilder
     private var content: some View {
         switch result.type {
         case .photo: photoFeed
         case .draw: drawingGrid
-        case .write: textCards
-        case .voice: voiceList
+        case .write, .slider: answerCards
         }
     }
 
@@ -150,6 +187,8 @@ private struct ResultsContent: View {
                         Text(submission.author.nickname)
                             .font(.plex(15, .semibold))
                             .foregroundStyle(.ink)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Text(submission.createdAt.koreanTime)
                             .font(.caption13)
                             .foregroundStyle(.textSecondary)
@@ -163,6 +202,9 @@ private struct ResultsContent: View {
                         PhotoArtwork(submission: submission, height: 260)
                     }
                     .buttonStyle(.plain)
+                    if let review = submission.aiReview {
+                        AiReviewLine(review: review)
+                    }
                 }
             }
         }
@@ -174,16 +216,24 @@ private struct ResultsContent: View {
     private var drawingGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 14) {
             ForEach(result.submissions) { submission in
-                Button { openedID = submission.id } label: {
-                    VStack(spacing: 8) {
+                VStack(spacing: 6) {
+                    Button { openedID = submission.id } label: {
                         DrawingArtwork(submission: submission, height: 165, cornerRadius: 18, drawingSize: 130)
-                        HStack(spacing: 6) {
+                    }
+                    .buttonStyle(.plain)
+                    .overlay(alignment: .bottomTrailing) {
+                        if aiGuess.isAvailable {
+                            AiGuessChip { guess(submission) }
+                        }
+                    }
+                    Button { openedID = submission.id } label: {
+                        HStack(spacing: 8) {
                             HAvatar(content: submission.author.avatar, size: 26)
                             Text(submission.author.nickname)
                                 .font(.plex(14, .semibold))
                                 .foregroundStyle(.ink)
                                 .lineLimit(1)
-                            Spacer(minLength: 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             if submission.isLate {
                                 Text(LateLabel.text)
                                     .font(.caption12)
@@ -191,17 +241,26 @@ private struct ResultsContent: View {
                             }
                         }
                         .padding(.horizontal, 2)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 
-    // MARK: - 12 글
+    private func guess(_ submission: Submission) {
+        let url = submission.mediaURL
+        let result = result
+        aiGuess.guess(mine: submission.isMine, load: { await InkSource.ink(url: url) }) {
+            DrawSubjectMatcher.match(template: result.template, topic: result.topic, spec: result.spec, categories: $0)
+        }
+    }
 
-    /// surface · 모서리 20 · 안쪽 18 · 간격 12, 본문 16 · 줄 높이 1.65
-    private var textCards: some View {
+    // MARK: - 12 글 · 새 틀
+
+    /// surface · 모서리 20 · 안쪽 18 · 간격 12
+    private var answerCards: some View {
         VStack(spacing: 12) {
             ForEach(result.submissions) { submission in
                 Button { openedID = submission.id } label: {
@@ -212,6 +271,8 @@ private struct ResultsContent: View {
                             Text(submission.author.nickname)
                                 .font(.plex(14, .semibold))
                                 .foregroundStyle(.ink)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             Text(submission.createdAt.koreanTime)
                                 .font(.caption12)
                                 .foregroundStyle(.textSecondary)
@@ -221,12 +282,7 @@ private struct ResultsContent: View {
                                     .foregroundStyle(.textSecondary)
                             }
                         }
-                        Text(submission.text ?? "")
-                            .font(.plex(16))
-                            .plexLineHeight(1.65, size: 16)
-                            .foregroundStyle(.ink)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
+                        TemplateAnswer(submission: submission, spec: result.spec)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(18)
@@ -235,72 +291,6 @@ private struct ResultsContent: View {
                 .buttonStyle(.plain)
             }
         }
-    }
-
-    // MARK: - 13 음성
-
-    private var voiceList: some View {
-        VStack(spacing: 10) {
-            Button { feed.player.playAll(result.submissions) } label: {
-                HStack(spacing: 8) {
-                    HIconView(icon: .play, size: 16)
-                    Text("전체 이어 듣기")
-                        .font(.plex(15, .semibold))
-                        .foregroundStyle(.ink)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .overlay(
-                    RoundedRectangle(cornerRadius: HRadius.input, style: .continuous)
-                        .strokeBorder(.border, lineWidth: 1)
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            ForEach(result.submissions) { submission in
-                voiceRow(submission)
-            }
-        }
-    }
-
-    /// 테두리 line · 모서리 18 · 안쪽 14 · 재생 44 (멈춤 ink / 재생 중 accent)
-    private func voiceRow(_ submission: Submission) -> some View {
-        let isPlaying = feed.player.playingID == submission.id
-        return HStack(spacing: 12) {
-            Button { feed.player.toggle(submission) } label: {
-                HIconView(icon: isPlaying ? .pause : .play, size: 16, color: .onAccent)
-                    .frame(width: 44, height: 44)
-                    .background(isPlaying ? Color.accent : Color.ink, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isPlaying ? "일시정지" : "\(submission.author.nickname) 음성 재생")
-
-            Button { openedID = submission.id } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        HStack(spacing: 6) {
-                            HAvatar(content: submission.author.avatar, size: 24)
-                            Text(submission.author.nickname)
-                                .font(.plex(14, .semibold))
-                                .foregroundStyle(.ink)
-                        }
-                        Spacer(minLength: 4)
-                        Text((submission.duration ?? 0).shortDuration + (submission.isLate ? " · \(LateLabel.text)" : ""))
-                            .font(.caption12)
-                            .foregroundStyle(.textSecondary)
-                    }
-                    VoiceBars(levels: submission.waveform, progress: isPlaying ? feed.player.progress : 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.line, lineWidth: 1)
-        )
     }
 }
 

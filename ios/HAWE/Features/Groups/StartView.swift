@@ -60,10 +60,10 @@ struct StartView: View {
         }
     }
 
-    /// 2열 · 간격 12 · 카드 surface 모서리 20 · 안쪽 20 · 아이콘 26 → 글자 사이 28
+    /// 3칸 · 간격 12 · 카드 surface 모서리 20 · 안쪽 20 · 아이콘 26 → 글자 사이 28
     private var contentTypes: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
-            ForEach(MissionType.allCases) { type in
+        HStack(spacing: 12) {
+            ForEach([MissionType.draw, .photo, .write]) { type in
                 VStack(alignment: .leading, spacing: 28) {
                     HIconView(icon: type.icon, size: 26)
                     Text(type.displayName)

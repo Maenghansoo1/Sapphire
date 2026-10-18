@@ -34,7 +34,7 @@ struct RecordCalendarView: View {
     init(groupID: Int, path: Binding<[MainRoute]>) {
         self.groupID = groupID
         self._path = path
-        self._month = State(initialValue: Self.calendar.dateInterval(of: .month, for: .now)?.start ?? .now)
+        self._month = State(initialValue: Self.calendar.dateInterval(of: .month, for: AppClock.now())?.start ?? AppClock.now())
     }
 
     private var group: GroupDetail? { store.group(groupID) }
@@ -46,7 +46,7 @@ struct RecordCalendarView: View {
     }
 
     private var calendar: Calendar { Self.calendar }
-    private var today: Date { calendar.startOfDay(for: .now) }
+    private var today: Date { calendar.startOfDay(for: AppClock.now()) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -110,11 +110,11 @@ struct RecordCalendarView: View {
     // MARK: - Month
 
     private var firstMonth: Date {
-        calendar.dateInterval(of: .month, for: group?.createdAt ?? .now)?.start ?? month
+        calendar.dateInterval(of: .month, for: group?.createdAt ?? AppClock.now())?.start ?? month
     }
 
     private var lastMonth: Date {
-        calendar.dateInterval(of: .month, for: .now)?.start ?? month
+        calendar.dateInterval(of: .month, for: AppClock.now())?.start ?? month
     }
 
     /// 화살표 20 (44 칸) + "2026년 10월" 18 Bold
@@ -122,7 +122,7 @@ struct RecordCalendarView: View {
         HStack {
             monthButton(.chevronLeft, label: "이전 달", enabled: month > firstMonth) { moveMonth(-1) }
             Spacer()
-            Text(month.formatted(.dateTime.year().month(.defaultDigits).locale(Locale(identifier: "ko_KR"))))
+            Text(InsightFormat.monthTitle(month))
                 .font(.plex(18, .bold))
                 .foregroundStyle(.ink)
             Spacer()
@@ -202,7 +202,7 @@ struct RecordCalendarView: View {
                 if let stamp = record?.stamp {
                     stampImage(stamp, size: 20)
                 } else {
-                    // 도장이 없으면 유형 이름 (그림·사진·글·음성). 글자가 없어도 높이를 맞춰요.
+                    // 도장이 없으면 유형 이름 (그림·사진·글·슬라이더). 글자가 없어도 높이를 맞춰요.
                     Text(record?.type.displayName ?? " ")
                         .font(.plex(10, .semibold))
                         .foregroundStyle(isSelected ? Color.onAccent : Color.textSecondary)

@@ -38,7 +38,6 @@ android {
 }
 
 dependencies {
-<<<<<<< HEAD
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
@@ -68,24 +67,4 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.coroutines.test)
-=======
-    val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
-    implementation(composeBom)
-    implementation("androidx.activity:activity-compose:1.10.0")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-core")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    implementation("androidx.navigation:navigation-compose:2.8.7")
-    implementation("androidx.browser:browser:1.8.0")
-    implementation("io.coil-kt.coil3:coil-compose:3.1.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    // 07 사진 미션 카메라
-    val cameraX = "1.4.1"
-    implementation("androidx.camera:camera-camera2:$cameraX")
-    implementation("androidx.camera:camera-lifecycle:$cameraX")
-    implementation("androidx.camera:camera-view:$cameraX")
->>>>>>> feat/ios-step1
 }

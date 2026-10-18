@@ -31,8 +31,6 @@ extension ShapeStyle where Self == Color {
     static var textBody: Color { Color(hex: 0x3A3A3C) }
     /// 15 캘린더의 아직 오지 않은 날짜
     static var textDisabled: Color { Color(hex: 0xB0B0B5) }
-    /// 09 음성 파형의 아직 녹음 안 된 막대
-    static var waveformIdle: Color { Color(hex: 0xD9D9DE) }
 
     // 카카오 로그인 버튼 — 카카오 디자인 가이드 고정 색
     static var kakaoContainer: Color { Color(hex: 0xFEE500) }

@@ -15,7 +15,7 @@ struct CreateGroupView: View {
     @State private var name = ""
     /// Figma 02 기본 화면이 '친구' 선택 상태예요.
     @State private var relationship: Relationship = .friend
-    @State private var startDate = Calendar.current.startOfDay(for: .now)
+    @State private var startDate = DataStore.calendar.startOfDay(for: AppClock.now())
     @State private var showsDatePicker = false
     @State private var isSubmitting = false
     @State private var toast: String?
@@ -206,7 +206,7 @@ private struct StartDateSheet: View {
             }
             .padding(.horizontal, HLayout.screenPaddingCompact)
 
-            DatePicker("우리의 1일", selection: $date, in: ...Date.now, displayedComponents: .date)
+            DatePicker("우리의 1일", selection: $date, in: ...AppClock.now(), displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .labelsHidden()
                 .tint(.ink)

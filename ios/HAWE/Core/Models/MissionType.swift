@@ -1,6 +1,6 @@
-/// 오늘의 미션 콘텐츠 유형 (CLAUDE.md §1, DB `topics.type`)
+/// 오늘의 미션 콘텐츠 유형 (서버 `media`: DRAW · PHOTO · TEXT · SLIDER)
 enum MissionType: String, CaseIterable, Identifiable, Codable {
-    case draw, photo, write, voice
+    case draw, photo, write, slider
 
     var id: String { rawValue }
 
@@ -9,7 +9,7 @@ enum MissionType: String, CaseIterable, Identifiable, Codable {
         case .draw: "그림"
         case .photo: "사진"
         case .write: "글"
-        case .voice: "음성"
+        case .slider: "슬라이더"
         }
     }
 
@@ -18,7 +18,27 @@ enum MissionType: String, CaseIterable, Identifiable, Codable {
         case .draw: .pencil
         case .photo: .camera
         case .write: .text
-        case .voice: .mic
+        case .slider: .sliderTemp
         }
+    }
+
+    /// "그림이", "슬라이더가"처럼 받침에 맞춘 이름 + 이/가
+    var subjectForm: String { displayName + KoreanText.josa(displayName, "이", "가") }
+
+    /// "그림을", "슬라이더를"처럼 받침에 맞춘 이름 + 을/를
+    var objectForm: String { displayName + KoreanText.josa(displayName, "을", "를") }
+}
+
+/// 한국어 조사
+enum KoreanText {
+    /// 마지막 글자에 받침이 있는지 (한글이 아니면 없다고 봐요)
+    static func hasFinalConsonant(_ word: String) -> Bool {
+        guard let scalar = word.unicodeScalars.last, (0xAC00...0xD7A3).contains(scalar.value) else { return false }
+        return (scalar.value - 0xAC00) % 28 != 0
+    }
+
+    /// 받침에 맞는 조사: `josa("달", "이라고", "라고")` → "이라고"
+    static func josa(_ word: String, _ withConsonant: String, _ withoutConsonant: String) -> String {
+        hasFinalConsonant(word) ? withConsonant : withoutConsonant
     }
 }

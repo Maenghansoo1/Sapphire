@@ -2,19 +2,29 @@ import SwiftUI
 
 /// 17-5 회원 탈퇴 (Figma 1:1782)
 /// 주의 사항 3개, 동의 체크 시 '탈퇴하기'(danger) 활성화. 작품·댓글 삭제, 모든 그룹에서 나감, 복구 불가 (CLAUDE.md §5-5)
+/// 다른 멤버가 있는 그룹의 그룹장이면 먼저 그룹장을 넘겨야 해요 (서버도 OWNER_MUST_TRANSFER 로 막아요).
 struct WithdrawView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
     @Environment(DataStore.self) private var store
+    @Environment(Services.self) private var services
     @State private var agreed = false
+    @State private var isLoading = false
+    @State private var toast: String?
 
     private let notices = [
-        "그동안 남긴 그림, 사진, 글, 음성과 댓글이 모두 삭제되고 되돌릴 수 없어요.",
-        "참여 중인 모든 그룹에서 나가게 돼요. 방장인 그룹은 가장 오래된 멤버에게 방장이 넘어가요.",
+        "그동안 남긴 그림, 사진, 글과 댓글이 모두 삭제되고 되돌릴 수 없어요.",
+        "참여 중인 모든 그룹에서 나가게 돼요. 다른 멤버가 있는 그룹의 그룹장이라면 먼저 그룹장을 넘기고 탈퇴해 주세요. 혼자 있는 그룹은 함께 삭제돼요.",
         "같은 계정으로 다시 가입해도 이전 기록은 복구되지 않아요.",
     ]
 
+    /// 그룹장을 넘겨야 하는 그룹 이름
+    static func blockers(_ groups: [StoredGroup]) -> [String] {
+        groups.compactMap { $0.detail.amIOwner && $0.detail.members.count > 1 ? $0.detail.name : nil }
+    }
+
     var body: some View {
+        let blockers = Self.blockers(store.groups)
         VStack(spacing: 0) {
             HNavBar("회원 탈퇴", leading: .back { dismiss() })
 
@@ -51,6 +61,13 @@ struct WithdrawView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
                     .background(.surface, in: RoundedRectangle(cornerRadius: HRadius.button, style: .continuous))
+
+                    if !blockers.isEmpty {
+                        Text("먼저 다음 그룹의 그룹장을 넘겨 주세요: \(blockers.joined(separator: ", "))")
+                            .font(.plex(14))
+                            .foregroundStyle(.danger)
+                            .padding(.top, 12)
+                    }
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -64,11 +81,8 @@ struct WithdrawView: View {
 
             HStack(spacing: 8) {
                 HButton("계속 쓸게요", kind: .gray, height: 54) { dismiss() }
-                HButton("탈퇴하기", kind: .danger, height: 54) {
-                    store.reset()
-                    session.withdraw()
-                }
-                    .disabled(!agreed)
+                HButton("탈퇴하기", kind: .danger, height: 54, action: withdraw)
+                    .disabled(!agreed || !blockers.isEmpty || isLoading)
             }
             .padding(.top, 10)
         }
@@ -77,6 +91,22 @@ struct WithdrawView: View {
         .ignoresSafeArea(.container, edges: .bottom)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .hToast($toast)
+    }
+
+    private func withdraw() {
+        guard !isLoading else { return }
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                try await services.auth.withdraw()
+                session.withdraw()
+            } catch is CancellationError {
+            } catch {
+                toast = error.userMessage
+            }
+        }
     }
 }
 
@@ -86,4 +116,5 @@ struct WithdrawView: View {
     }
     .environment(AppSession(state: .signedIn))
     .environment(DataStore())
+    .environment(Services.preview)
 }

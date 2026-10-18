@@ -7,16 +7,26 @@ final class Services {
     @ObservationIgnored let auth: AuthRepository
     @ObservationIgnored let groups: GroupRepository
     @ObservationIgnored let missions: MissionRepository
+    @ObservationIgnored let pokes: PokeRepository
     @ObservationIgnored let submissions: SubmissionRepository
     @ObservationIgnored let calendar: CalendarRepository
+    @ObservationIgnored let insights: InsightRepository
+    @ObservationIgnored let dev: DevRepository
+    @ObservationIgnored let tokens: TokenStore
+    @ObservationIgnored let baseURL: URL
 
     init(baseURL: URL = AppConfig.apiBaseURL, tokens: TokenStore, onSessionExpired: @escaping @Sendable () -> Void = {}) {
         let api = APIClient(baseURL: baseURL, tokens: tokens, onSessionExpired: onSessionExpired)
+        self.tokens = tokens
+        self.baseURL = baseURL
         auth = AuthRepository(api: api, tokens: tokens)
         groups = GroupRepository(api: api)
         missions = MissionRepository(api: api)
+        pokes = PokeRepository(api: api)
         submissions = SubmissionRepository(api: api)
         calendar = CalendarRepository(api: api)
+        insights = InsightRepository(api: api)
+        dev = DevRepository(api: api)
     }
 
     /// #Preview 용 — 서버에 닿지 않아요.

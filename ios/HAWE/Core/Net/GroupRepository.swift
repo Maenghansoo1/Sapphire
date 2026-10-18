@@ -1,6 +1,6 @@
-import Foundation
+import UIKit
 
-/// 홈 카드에 쓰는 오늘 미션 요약 (그룹 목록 응답의 `todayMission`)
+/// 홈 카드에 쓰는 오늘 미션 요약 (그룹 목록 응답의 `todayMissions`)
 struct MissionSummary: Hashable {
     var missionID: Int
     var type: MissionType?
@@ -11,7 +11,10 @@ struct MissionSummary: Hashable {
 
 struct LoadedGroup {
     var detail: GroupDetail
-    var mission: MissionSummary?
+    /// 오늘 열린 미션들 (슬롯 순서)
+    var missions: [MissionSummary]
+
+    var mission: MissionSummary? { missions.first }
 }
 
 /// 그룹·초대 (`/api/groups`, `/api/invites`)
@@ -30,12 +33,15 @@ final class GroupRepository: Sendable {
                 tasks.addTask { [api] in
                     do {
                         let detail: GroupDetailDTO = try await api.get("/api/groups/\(summary.id)")
-                        let members = summary.members.map { $0.member(myUserID: myUserID, ownerID: detail.ownerId) }
-                        let mission = summary.todayMission.map {
+                        let members = summary.members.map { $0.member(api: api, myUserID: myUserID, ownerID: detail.ownerId) }
+                        let today = (summary.todayMissions ?? []).isEmpty
+                            ? [summary.todayMission].compactMap { $0 }
+                            : summary.todayMissions ?? []
+                        let missions = today.map {
                             MissionSummary(missionID: $0.missionId, type: MissionType(media: $0.media), topic: $0.content,
                                            submittedCount: $0.submittedCount, submittedByMe: $0.submittedByMe)
                         }
-                        return (index, LoadedGroup(detail: detail.model(members: members), mission: mission))
+                        return (index, LoadedGroup(detail: detail.model(members: members), missions: missions))
                     } catch let error as APIError where error.status == 403 || error.status == 404 {
                         return (index, nil)
                     }
@@ -55,7 +61,7 @@ final class GroupRepository: Sendable {
         async let detail: GroupDetailDTO = api.get("/api/groups/\(groupID)")
         async let members: PageDTO<GroupMemberDTO> = api.get("/api/groups/\(groupID)/members?page=0&size=100")
         let info = try await detail
-        return info.model(members: try await members.content.map { $0.member(myUserID: myUserID, ownerID: info.ownerId) })
+        return info.model(members: try await members.content.map { $0.member(api: api, myUserID: myUserID, ownerID: info.ownerId) })
     }
 
     func create(name: String, relationship: Relationship, startDate: Date?, myUserID: Int, myProfile: Profile) async throws -> GroupDetail {
@@ -74,7 +80,7 @@ final class GroupRepository: Sendable {
         return GroupInvitePreview(
             name: response.name,
             relationship: Relationship(server: response.relationType),
-            members: response.members.map { .character(ProfileCharacter.fromKey($0.characterKey)) },
+            members: response.members.map { api.avatar(characterKey: $0.characterKey, profileImageURL: $0.profileImageUrl) },
             memberCount: response.memberCount,
             maxMembers: response.maxMembers
         )
@@ -85,8 +91,60 @@ final class GroupRepository: Sendable {
         return response.groupId
     }
 
+    /// 그룹 나가기. 다른 멤버가 있는 그룹장은 그룹장을 넘길 멤버(`successorUserID`)를 같이 보내요.
     func leave(groupID: Int, successorUserID: Int? = nil) async throws {
         try await api.delete("/api/groups/\(groupID)/members/me" + (successorUserID.map { "?successorUserId=\($0)" } ?? ""))
+    }
+
+    /// 그룹 내 프로필을 지우고 기본 프로필로 돌아가요.
+    func clearGroupProfile(groupID: Int) async throws {
+        try await api.delete("/api/groups/\(groupID)/members/me/profile")
+    }
+
+    /// 그룹 내 프로필 저장 — 캐릭터면 닉네임과 캐릭터 번호, 새로 고른 사진이면 닉네임과 사진을 같이 올려요.
+    /// 이미 올린 사진(`.photo`)이면 바꿀 게 없어요.
+    func saveGroupProfile(groupID: Int, avatar: AvatarContent, nickname: String) async throws {
+        let path = "/api/groups/\(groupID)/members/me"
+        let trimmed = nickname.trimmingCharacters(in: .whitespaces)
+        switch avatar {
+        case .character(let character):
+            let page: PageDTO<CharacterDTO> = try await api.get("/api/characters?page=0&size=100", auth: false)
+            guard let match = page.content.first(where: { $0.svgKey == character.rawValue }) else {
+                throw APIError(status: 400, code: "VALIDATION_ERROR", message: "캐릭터를 찾을 수 없어요")
+            }
+            let _: GroupMemberProfileDTO = try await api.put(
+                "\(path)/profile", body: GroupProfileRequestDTO(nickname: trimmed, characterId: match.id)
+            )
+        case .image(let image):
+            let data = try await AvatarPhoto.uploadData(image)
+            let _: GroupMemberProfileDTO = try await api.putMultipart("\(path)/profile-image", parts: [
+                .text(name: "nickname", value: trimmed),
+                .file(name: "file", filename: "profile.jpg", mime: "image/jpeg", data: data),
+            ])
+        case .photo:
+            break
+        }
+    }
+
+    /// 초대 코드 다시 만들기 (그룹장만) — 이전 코드는 바로 쓸 수 없게 돼요.
+    func reissueInviteCode(groupID: Int) async throws -> InviteCodeDTO {
+        try await api.post("/api/groups/\(groupID)/invite-code", body: EmptyBodyDTO())
+    }
+
+    /// 주제 도착 시간(1번 슬롯 발행 시각) 바꾸기 (그룹장만). 다른 슬롯과 직접 정한 마감은 그대로 보내요.
+    func updateTopicTime(groupID: Int, time: DateComponents) async throws -> DateComponents {
+        let detail: GroupDetailDTO = try await api.get("/api/groups/\(groupID)")
+        let slotOne = detail.missionSlots.first { $0.slotNo == 1 }
+        let publish = String(format: "%02d:%02d", time.hour ?? 9, time.minute ?? 0)
+        let slots = [MissionSlotRequestDTO(slotNo: 1, publishTime: publish,
+                                           deadlineTime: slotOne?.custom == true ? slotOne?.deadlineTime : nil)]
+            + detail.missionSlots.filter { $0.slotNo != 1 && $0.custom }
+                .map { MissionSlotRequestDTO(slotNo: $0.slotNo, publishTime: $0.publishTime, deadlineTime: $0.deadlineTime) }
+        let updated: GroupDetailDTO = try await api.patch("/api/groups/\(groupID)/settings", body: GroupSettingsRequestDTO(missionSlots: slots))
+        guard let saved = updated.missionSlots.first(where: { $0.slotNo == 1 }).flatMap({ ServerDate.time($0.publishTime) }) else {
+            throw APIError(status: 200, code: "INVALID_RESPONSE", message: "서버 응답을 읽을 수 없습니다")
+        }
+        return saved
     }
 }
 
@@ -109,10 +167,10 @@ private extension GroupDetailDTO {
 }
 
 private extension GroupMemberProfileDTO {
-    func member(myUserID: Int, ownerID: Int) -> GroupMember {
+    func member(api: APIClient, myUserID: Int, ownerID: Int) -> GroupMember {
         GroupMember(
             id: userId,
-            defaultProfile: Profile(avatar: .character(ProfileCharacter.fromKey(characterKey)), nickname: nickname),
+            defaultProfile: Profile(avatar: api.avatar(characterKey: characterKey, profileImageURL: profileImageUrl), nickname: nickname),
             isMe: userId == myUserID,
             isOwner: userId == ownerID
         )
@@ -120,10 +178,12 @@ private extension GroupMemberProfileDTO {
 }
 
 private extension GroupMemberDTO {
-    func member(myUserID: Int, ownerID: Int) -> GroupMember {
-        GroupMember(
+    func member(api: APIClient, myUserID: Int, ownerID: Int) -> GroupMember {
+        let profile = Profile(avatar: api.avatar(characterKey: characterKey, profileImageURL: profileImageUrl), nickname: nickname)
+        return GroupMember(
             id: userId,
-            defaultProfile: Profile(avatar: .character(ProfileCharacter.fromKey(characterKey)), nickname: nickname),
+            defaultProfile: profile,
+            groupProfile: hasGroupProfile == true ? profile : nil,
             isMe: userId == myUserID,
             isOwner: userId == ownerID || role == "owner"
         )
