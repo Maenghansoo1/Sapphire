@@ -1,0 +1,16 @@
+@echo off
+rem Vision service on port 8001. First-time setup is described in README.md.
+set HF_HUB_OFFLINE=1
+cd /d "%~dp0"
+if not exist ".venv\Scripts\python.exe" goto novenv
+".venv\Scripts\python.exe" -m uvicorn app:app --port 8001
+echo.
+echo Server stopped. See the messages above.
+pause
+exit /b
+:novenv
+echo .venv not found. Run first:
+echo   py -3.12 -m venv .venv
+echo   .venv\Scripts\python.exe -m pip install -r requirements.txt
+pause
+exit /b 1
