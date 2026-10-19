@@ -100,11 +100,24 @@ class MissionFormatTest {
         // 기존 틀은 주제 문장만으로 충분해서 안내가 없어요
         assertNull(templateGuideText(MissionTemplates.TEXT_ACROSTIC, MissionSpec(word = "퇴근길")))
         assertNull(templateGuideText(MissionTemplates.PHOTO_NOW, MissionSpec()))
+        // A를 B로는 뜻이 잘 안 전해져서 안내를 둬요(받침에 맞는 조사, 사람이 대상이면 B 만)
+        assertEquals("‘구름’을 ‘풍선’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "구름", drawTo = "풍선")))
+        assertEquals("‘고양이’를 ‘화분’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "고양이", drawTo = "화분")))
+        assertEquals("‘풍선’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "구름", drawTo = "풍선", hasTarget = true)))
+        assertEquals("‘집’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "[대상]", drawTo = "집")))
+        assertEquals("주제를 다른 모습으로 바꿔서 그려요", templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec()))
+        assertNull(templateGuideText(MissionTemplates.DRAW_SKETCH, MissionSpec(subject = "고양이")))
 
         assertEquals("하나 고르기", missionActionTitle(MissionType.WRITE, MissionTemplates.TEXT_BALANCE))
         assertEquals("글 쓰기", missionActionTitle(MissionType.WRITE, MissionTemplates.TEXT_REVIEW))
         assertEquals("슬라이더 정하기", missionActionTitle(MissionType.SLIDER, MissionTemplates.SLIDER_POSITION))
         assertEquals("사진 찍기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_NOW))
+        assertEquals("갤러리 둘러보기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_GALLERY))
+        assertEquals("사진 찍기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_COLOR))
         assertEquals("결과 보기", resultsActionTitle(MissionTemplates.TEXT_BALANCE))
         assertEquals("결과 보기", resultsActionTitle(MissionTemplates.SLIDER_CONSENSUS))
         assertEquals("친구들 작품 보기", resultsActionTitle(MissionTemplates.TEXT_ONE_WORD))

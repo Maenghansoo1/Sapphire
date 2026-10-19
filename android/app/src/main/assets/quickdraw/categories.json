@@ -45,7 +45,7 @@
   { "id": 43, "quickdraw": "bicycle", "ko": "자전거", "aliases_ko": [] },
   { "id": 44, "quickdraw": "airplane", "ko": "비행기", "aliases_ko": [] },
   { "id": 45, "quickdraw": "train", "ko": "기차", "aliases_ko": [] },
-  { "id": 46, "quickdraw": "hot air balloon", "ko": "열기구", "aliases_ko": ["풍선"] },
+  { "id": 46, "quickdraw": "hot air balloon", "ko": "열기구", "aliases_ko": [] },
   { "id": 47, "quickdraw": "house", "ko": "집", "aliases_ko": [] },
   { "id": 48, "quickdraw": "face", "ko": "얼굴", "aliases_ko": ["표정"] },
   { "id": 49, "quickdraw": "snowman", "ko": "눈사람", "aliases_ko": [] }

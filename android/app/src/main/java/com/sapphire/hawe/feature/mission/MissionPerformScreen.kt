@@ -28,7 +28,7 @@ fun MissionPerformScreen(type: MissionType, topic: String, template: String, spe
                 MissionTemplates.TEXT_BALANCE -> BalanceMissionScreen(topic, spec, onClose, onSubmit)
                 else -> WriteMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Text(it)) }
             }
-            MissionType.PHOTO -> PhotoMissionScreen(topic, onClose) { onSubmit(SubmissionContent.Image(it, "jpg")) }
+            MissionType.PHOTO -> PhotoMissionScreen(topic, template, onClose) { onSubmit(SubmissionContent.Image(it, "jpg")) }
             MissionType.DRAW -> DrawMissionScreen(topic, template, spec, onClose) { onSubmit(SubmissionContent.Image(it, "png")) }
             MissionType.SLIDER -> SliderMissionScreen(topic, template, spec, onClose, onSubmit)
         }

@@ -71,7 +71,7 @@ fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, s
                 Spacer(Modifier.height(12.dp))
                 AiShowButton(enabled = true, Modifier.fillMaxWidth()) {
                     aiGuess.guess(mine = submission.isMine, load = { loadInkImage(context, imageModel(submission)) },
-                        subjectOf = { DrawSubjectMatcher.match(result.template, result.topic, result.spec, it) })
+                        subjectOf = { DrawSubjectMatcher.subjects(result.template, result.topic, result.spec, it) })
                 }
             }
             Spacer(Modifier.height(24.dp))

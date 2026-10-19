@@ -38,15 +38,20 @@ sealed interface AiVerdict {
     data class Missed(val guesses: List<AiGuess>, val subject: DrawCategory) : AiVerdict
 }
 
-fun aiVerdict(guesses: List<AiGuess>?, subject: DrawCategory?, threshold: Float = AI_GUESS_THRESHOLD): AiVerdict {
+fun aiVerdict(guesses: List<AiGuess>?, subject: DrawCategory?, threshold: Float = AI_GUESS_THRESHOLD): AiVerdict =
+    aiVerdict(guesses, listOfNotNull(subject), threshold)
+
+/** [subjects] 중 하나라도 맞히면 맞힌 걸로 쳐요(A를 B로는 A·B 둘 다). 첫 번째가 대표 주제예요. */
+fun aiVerdict(guesses: List<AiGuess>?, subjects: List<DrawCategory>, threshold: Float = AI_GUESS_THRESHOLD): AiVerdict {
     if (guesses.isNullOrEmpty()) return AiVerdict.TooEmpty
     if (guesses.first().probability < threshold) return AiVerdict.Unsure(guesses)
-    if (subject == null) return AiVerdict.Guessed(guesses)
-    val rank = guesses.indexOfFirst { it.category.id == subject.id }
+    if (subjects.isEmpty()) return AiVerdict.Guessed(guesses)
+    val rank = guesses.indexOfFirst { guess -> subjects.any { it.id == guess.category.id } }
     return when {
         rank == 0 -> AiVerdict.Correct(guesses)
-        rank > 0 && guesses[rank].probability >= AI_CLOSE_MIN_PROBABILITY -> AiVerdict.Close(guesses, subject, rank + 1)
-        else -> AiVerdict.Missed(guesses, subject)
+        rank > 0 && guesses[rank].probability >= AI_CLOSE_MIN_PROBABILITY ->
+            AiVerdict.Close(guesses, guesses[rank].category, rank + 1)
+        else -> AiVerdict.Missed(guesses, subjects.first())
     }
 }
 
