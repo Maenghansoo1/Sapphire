@@ -34,5 +34,10 @@ class WriteMissionStateTest {
         assertEquals("‘양’로 시작해 주세요", WriteMissionState("고마워\n다른 줄\n이제", spec).acrosticError())
         assertFalse(WriteMissionState("고마워\n\n이제", spec).canSubmit)
         assertFalse(WriteMissionState("고마워\n양손\n이제\n네번째", spec).canSubmit)
+        // 줄 사이·앞에 빈 줄이 있어도 3줄이면 올릴 수 있고, 빈 줄을 뺀 3줄로 보내요
+        val spaced = WriteMissionState("\n고마워\n\n양손 모아\n   \n이제 시작\n", spec)
+        assertTrue(spaced.canSubmit)
+        assertEquals("고마워\n양손 모아\n이제 시작", spaced.submitText)
+        assertEquals("그냥 글", WriteMissionState("  그냥 글 ").submitText)
     }
 }
