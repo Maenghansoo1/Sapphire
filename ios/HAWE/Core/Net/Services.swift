@@ -11,6 +11,7 @@ final class Services {
     @ObservationIgnored let submissions: SubmissionRepository
     @ObservationIgnored let calendar: CalendarRepository
     @ObservationIgnored let insights: InsightRepository
+    @ObservationIgnored let notifications: NotificationRepository
     @ObservationIgnored let dev: DevRepository
     @ObservationIgnored let tokens: TokenStore
     @ObservationIgnored let baseURL: URL
@@ -26,6 +27,7 @@ final class Services {
         submissions = SubmissionRepository(api: api)
         calendar = CalendarRepository(api: api)
         insights = InsightRepository(api: api)
+        notifications = NotificationRepository(api: api)
         dev = DevRepository(api: api)
     }
 

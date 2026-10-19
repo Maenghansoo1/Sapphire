@@ -3,7 +3,7 @@ import SwiftUI
 /// Figma `icon/*` 컴포넌트 (Assets.xcassets/Icons, template 렌더링이라 색을 입힐 수 있어요)
 /// heartFill 은 Figma icon/heart 를 채운 모양이에요 (좋아요 누른 상태, Figma 에 없음).
 enum HIcon: String, CaseIterable {
-    case calendar, camera, check, checkSmall = "check-small"
+    case bell, calendar, camera, check, checkSmall = "check-small"
     case chevronLeft = "chevron-left", chevronRight = "chevron-right"
     case close, comment, copy, flash, flip, heart, heartFill = "heart-fill", image, lock, more
     case pencil, person, plus, redo, text, undo

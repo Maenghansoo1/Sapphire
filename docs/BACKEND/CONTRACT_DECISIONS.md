@@ -662,6 +662,8 @@ DELETE /api/me/devices/{token}    로그아웃 시 해제, 204 (없는 토큰도
 PATCH /api/notifications/{id}/read     204
 PATCH /api/notifications/read-all      204
 GET /api/notifications/unread-count    { "unreadCount": 3 }
+- `type`: `topic` · `poke` · `comment` · `mention` · `reaction`. `reaction`은 `submissionId`·`missionId`를 넣고, `body`에 스티커를 담아도 된다(예: "서준님이 내 작품에 ❤️ 반응을 남겼어요"). 앱은 모르는 `type`을 목록에서 뺀다.
+- 앱(2026-10-19): 홈 상단 종 아이콘 → 알림 목록. `body`가 없으면 앱이 종류별 기본 문장을 쓴다. 누르면 읽음 처리 후 `topic`·`poke`는 05, `comment`·`mention`·`reaction`은 내가 낸 미션이면 결과 화면으로 간다.
 ```
 - 설계의 `payload` 객체 대신 필요한 id를 평평하게 내린다. `fromUser`는 그 그룹의 표시 프로필, `topic`이면 `null`. 설계의 `mission_open`은 `topic`으로 이름을 바꾼다.
 

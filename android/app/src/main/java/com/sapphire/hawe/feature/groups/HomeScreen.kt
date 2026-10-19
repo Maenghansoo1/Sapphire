@@ -29,7 +29,7 @@ import java.time.Instant
 
 @Composable
 fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (Long) -> Unit,
-    onMyPage: () -> Unit) {
+    onMyPage: () -> Unit, onNotifications: () -> Unit = {}) {
     val groups = store.summaries
     val bottom = ctaBottomPadding()
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
@@ -39,6 +39,8 @@ fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (Long) -> Unit,
                 Text("내 그룹", style = HType.screenTitle, color = HColors.ink)
                 Spacer(Modifier.weight(1f))
                 HeaderIcon(HIcon.PLUS, 24, "그룹 추가", onAdd)
+                Spacer(Modifier.width(16.dp))
+                HeaderIcon(HIcon.BELL, 22, "알림", onNotifications)
                 Spacer(Modifier.width(16.dp))
                 HeaderIcon(HIcon.PERSON, 22, "마이페이지", onMyPage)
             }

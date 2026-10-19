@@ -14,6 +14,7 @@ enum MainRoute: Hashable {
     case mission(groupID: Int)
     case results(groupID: Int, missionID: Int)
     case calendar(groupID: Int)
+    case notifications
     case myPage(MyPageRoute)
 }
 
@@ -77,6 +78,8 @@ struct MainFlowView: View {
                         })
                     case .calendar(let groupID):
                         RecordCalendarView(groupID: groupID, path: $path)
+                    case .notifications:
+                        NotificationsView(path: $path)
                     case .myPage(let route):
                         MyPageDestination(route: route, path: $path)
                     }

@@ -74,6 +74,11 @@ actor APIClient {
         return try decode(await execute("PATCH", path, auth: auth, upload: false) { (data, "application/json; charset=utf-8") })
     }
 
+    /// 응답 본문이 없는(204) PATCH (알림 읽음 처리)
+    func patchNoContent(_ path: String, auth: Bool = true) async throws {
+        _ = try await execute("PATCH", path, auth: auth, upload: false) { (Data("{}".utf8), "application/json; charset=utf-8") }
+    }
+
     func delete(_ path: String, auth: Bool = true) async throws {
         _ = try await execute("DELETE", path, auth: auth, upload: false) { (nil, nil) }
     }

@@ -51,7 +51,7 @@ fun RootScreen(viewModel: AppViewModel) {
                 AppSession.State.SIGNED_OUT -> AuthNavHost(viewModel.appSession, viewModel.dataStore, viewModel.auth)
                 AppSession.State.SIGNED_IN -> MainNavHost(viewModel.appSession, viewModel.dataStore, viewModel.auth, viewModel.push,
                     viewModel.groups, viewModel.missions, viewModel.pokes, viewModel.submissions, viewModel.calendar,
-                    viewModel.insights, viewModel.dev, viewModel::switchUser, viewModel.switchBusy,
+                    viewModel.insights, viewModel.notifications, viewModel.dev, viewModel::switchUser, viewModel.switchBusy,
                     viewModel.switchMessage, viewModel::clearSwitchMessage)
                 AppSession.State.RESTORING -> Box(Modifier.fillMaxSize().background(HColors.bg))
             }

@@ -36,6 +36,7 @@ import com.sapphire.hawe.core.net.AuthRepository
 import com.sapphire.hawe.core.net.GroupRepository
 import com.sapphire.hawe.core.net.InsightRepository
 import com.sapphire.hawe.core.net.MissionRepository
+import com.sapphire.hawe.core.net.NotificationRepository
 import com.sapphire.hawe.core.net.PokeRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
 import com.sapphire.hawe.core.net.SubmitOutcome
@@ -55,6 +56,8 @@ import com.sapphire.hawe.feature.records.RecordCalendarScreen
 import com.sapphire.hawe.feature.results.ResultsScreen
 import com.sapphire.hawe.feature.results.SubmissionDetailScreen
 import com.sapphire.hawe.feature.mypage.*
+import com.sapphire.hawe.feature.notifications.NotificationTarget
+import com.sapphire.hawe.feature.notifications.NotificationsScreen
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.designsystem.tokens.HColors
 import kotlinx.coroutines.CancellationException
@@ -77,6 +80,7 @@ sealed interface MainRoute {
     @Serializable data class Results(val groupId: Long, val missionId: Long) : MainRoute
     @Serializable data class SubmissionDetail(val groupId: Long, val missionId: Long,
         val submissionId: Long) : MainRoute
+    @Serializable data object Notifications : MainRoute
     @Serializable data object MyPage : MainRoute
     @Serializable data object ProfileEdit : MainRoute
     @Serializable data object NotificationSettings : MainRoute
@@ -91,7 +95,7 @@ sealed interface MainRoute {
 @Composable
 fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, push: PushCenter, groups: GroupRepository,
     missions: MissionRepository, pokes: PokeRepository, submissions: SubmissionRepository, calendar: CalendarRepository,
-    insights: InsightRepository, dev: DevRepository? = null,
+    insights: InsightRepository, notifications: NotificationRepository, dev: DevRepository? = null,
     onSwitchUser: (Long) -> Unit = {}, switchBusy: Boolean = false,
     switchMessage: String? = null, onSwitchMessageShown: () -> Unit = {}) {
     val nav = rememberNavController()
@@ -153,6 +157,7 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
                 store.groups.isEmpty() -> StartScreen(onCreateGroup = create, onJoinGroup = join,
                     onMyPage = myPage)
                 else -> HomeScreen(store, onAdd = { nav.navigate(MainRoute.Start) },
+                    onNotifications = { nav.navigate(MainRoute.Notifications) { launchSingleTop = true } },
                     onMyPage = myPage, onGroup = { groupId ->
                         nav.navigate(MainRoute.Mission(groupId)) { launchSingleTop = true }
                     })
@@ -345,6 +350,19 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
             }
             SubmissionDetailScreen(groupID, missionID, submissionID, store, submissions,
                 onBack = { nav.popBackStack() })
+        }
+        composable<MainRoute.Notifications> {
+            NotificationsScreen(notifications, store, onBack = { nav.popBackStack() }, onOpen = { target ->
+                when (target) {
+                    is NotificationTarget.Mission ->
+                        nav.navigate(MainRoute.Mission(target.groupId)) { launchSingleTop = true }
+                    is NotificationTarget.Results -> {
+                        nav.navigate(MainRoute.Mission(target.groupId)) { launchSingleTop = true }
+                        nav.navigate(MainRoute.Results(target.groupId, target.missionId)) { launchSingleTop = true }
+                    }
+                    NotificationTarget.Missing -> Unit
+                }
+            })
         }
         composable<MainRoute.MyPage> {
             MyPageScreen(session, store, calendar, onBack = { nav.popBackStack() },
