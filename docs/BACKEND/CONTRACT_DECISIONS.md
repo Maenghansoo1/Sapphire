@@ -585,14 +585,17 @@ POST /api/submissions/{id}/comments   multipart/form-data
 
 ---
 
-## 8. Notifications (미구현) — 상태: 결정 완료, 일부 미결 (반영 전)
+## 8. Notifications — 상태: 앱 안 알림 API 반영됨; 푸시·설정·그룹별 알림 미구현
+
+이번 구현은 `topic`·`poke`·`comment`·`mention`의 앱 안 알림 목록과 읽음 처리, 안 읽은 개수만 다룬다.
+`friend_done`은 이번 범위에서 제외했으며 도입하려면 별도 결정이 필요하다. 아래 푸시·기기 토큰·설정은 후속 작업 범위다.
 
 ### 8-1. 결정
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
-| MVP 범위 | **서버 푸시 발송(FCM·APNs) + 기기 토큰 등록, 알림 설정 저장, 그룹별 알림, 앱 안 알림 목록** 모두 포함 | 사용자 결정 |
-| 알림 종류 | `topic`(주제 도착), `poke`(콕), `friend_done`(친구 완료), `comment`(내 작품에 댓글), `mention`(댓글 멘션) — 5종 (`fling` 똥뿌리기는 2026-10-19 삭제) | 사용자 결정. 앞의 4종은 앱 푸시 처리(`PushKind`)에 이미 있는 값 그대로 |
+| 전체 목표 | 서버 푸시 발송(FCM·APNs) + 기기 토큰 등록, 알림 설정 저장, 그룹별 알림, 앱 안 알림 목록. 이번 단계는 앱 안 알림만 구현 | 사용자 결정 |
+| 알림 종류 | 현재 `topic`(주제 도착), `poke`(콕), `comment`(내 작품에 댓글), `mention`(댓글 멘션) — 4종. `friend_done`(친구 완료)은 제외, `fling`은 삭제됨 | 이번 구현 범위 |
 | 알림 설정 항목 | 앱 17-1 항목 그대로: 전체, 주제 도착, 콕 찌르기, 친구 완료(기본 OFF), 댓글(**멘션 포함**) | 사용자 결정 (기존 항목에 묶기). 앱 화면·채널을 늘리지 않음 |
 | 설정·그룹 알림 적용 대상 | 설정과 그룹별 알림은 **푸시 발송만** 거른다. 앱 안 알림 목록에는 모두 쌓인다 | 목록은 받은편지함 역할, 푸시는 방해 여부 — 역할 분리 (제안, 이견 있으면 변경) |
 | 그룹별 알림 | 멤버마다 저장. 끄면 그 그룹에서 오는 모든 종류의 푸시를 보내지 않는다 | 앱 주석의 서버 필터 규칙(`notification_prefs` + `group_members.notify`)과 같음 |
@@ -605,7 +608,7 @@ POST /api/submissions/{id}/comments   multipart/form-data
 |---|---|---|---|
 | `topic` | 그룹 멤버 전원 | 미션 발행 | 주제 도착 |
 | `poke` | 받는 사람 | 전송 즉시 | 콕 찌르기 |
-| `friend_done` | 제출자를 뺀 멤버 | 제출 즉시 | 친구 완료 (기본 OFF) |
+| `friend_done` (미구현·재결정 필요) | 제출자를 뺀 멤버 | 제출 즉시 | 친구 완료 (기본 OFF) |
 | `comment` | 작품 작성자 | 댓글 작성 | 댓글 |
 | `mention` | 멘션된 멤버 | 댓글 작성 | 댓글 |
 
@@ -658,6 +661,7 @@ DELETE /api/me/devices/{token}    로그아웃 시 해제, 204 (없는 토큰도
 ```text
 PATCH /api/notifications/{id}/read     204
 PATCH /api/notifications/read-all      204
+GET /api/notifications/unread-count    { "unreadCount": 3 }
 ```
 - 설계의 `payload` 객체 대신 필요한 id를 평평하게 내린다. `fromUser`는 그 그룹의 표시 프로필, `topic`이면 `null`. 설계의 `mission_open`은 `topic`으로 이름을 바꾼다.
 

@@ -7,8 +7,10 @@ import com.sapphire.hawe.global.security.TokenErrorCode;
 import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.group.service.GroupErrorCode;
 import com.sapphire.hawe.group.service.GroupService;
+import com.sapphire.hawe.notification.dao.NotificationMapper;
 import com.sapphire.hawe.withdraw.dao.WithdrawMapper;
 import java.util.LinkedHashSet;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,8 +25,11 @@ public class WithdrawService {
     private final WithdrawMapper withdraw;
     private final GroupService groups;
     private final FileStorage storage;
-    public WithdrawService(UserMapper users, WithdrawMapper withdraw, GroupService groups, FileStorage storage) {
+    private final NotificationMapper notifications;
+    public WithdrawService(UserMapper users, WithdrawMapper withdraw, GroupService groups, FileStorage storage,
+            NotificationMapper notifications) {
         this.users = users; this.withdraw = withdraw; this.groups = groups; this.storage = storage;
+        this.notifications = notifications;
     }
 
     @Transactional
@@ -35,6 +40,7 @@ public class WithdrawService {
             throw new BusinessException(WithdrawErrorCode.OWNER_MUST_TRANSFER);
 
         LinkedHashSet<String> keys = new LinkedHashSet<>();
+        List<Long> submissionIds = withdraw.findSubmissionIdsByUserId(userId);
         keys.addAll(withdraw.findSubmissionMediaKeys(userId));
         keys.addAll(withdraw.findCommentImageKeysOnMySubmissions(userId));
         keys.addAll(withdraw.findMyCommentImageKeys(userId));
@@ -60,6 +66,7 @@ public class WithdrawService {
         withdraw.deleteMyReactions(userId);
         withdraw.deleteMyGuesses(userId);
         withdraw.deleteAiReviewsOnMySubmissions(userId);
+        if (!submissionIds.isEmpty()) notifications.deleteBySubmissionIds(submissionIds);
         withdraw.deleteMySubmissions(userId);
         withdraw.deleteMyPokes(userId);
         withdraw.deleteMyNotifications(userId);

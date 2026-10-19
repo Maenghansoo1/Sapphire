@@ -19,6 +19,7 @@ import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.MissionSlotRequest;
 import com.sapphire.hawe.group.domain.GroupCreatedEvent;
 import com.sapphire.hawe.mission.service.MissionService;
+import com.sapphire.hawe.notification.dao.NotificationMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +56,7 @@ class GroupServiceTests {
     @Mock FileStorage storage;
     @Mock FileCleanup fileCleanup;
     @Mock AttemptLimiter inviteLimiter;
+    @Mock NotificationMapper notifications;
 
     private GroupService service;
 
@@ -62,7 +64,7 @@ class GroupServiceTests {
     void setUp() {
         service = new GroupService(groupMapper, groupMemberMapper, slotMapper,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, MissionTemplateSelector.MVP_POOL), "https://hawe.app/invite",
-                missionService, events, storage, inviteLimiter, fileCleanup);
+                missionService, events, storage, inviteLimiter, fileCleanup, notifications);
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.group.service.GroupErrorCode;
 import com.sapphire.hawe.group.service.GroupService;
+import com.sapphire.hawe.notification.dao.NotificationMapper;
 import com.sapphire.hawe.withdraw.dao.WithdrawMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,8 @@ class WithdrawServiceTests {
     WithdrawMapper mapper = mock(WithdrawMapper.class);
     GroupService groups = mock(GroupService.class);
     FileStorage storage = mock(FileStorage.class);
-    WithdrawService service = new WithdrawService(users, mapper, groups, storage);
+    NotificationMapper notifications = mock(NotificationMapper.class);
+    WithdrawService service = new WithdrawService(users, mapper, groups, storage, notifications);
 
     @Test void ownerCheckStopsBeforeDeletion() {
         when(users.findById(1L)).thenReturn(new User());
@@ -37,6 +39,7 @@ class WithdrawServiceTests {
 
     @Test void leaveRaceBecomesOwnerError() {
         when(users.findById(1L)).thenReturn(new User());
+        when(mapper.findSubmissionIdsByUserId(1L)).thenReturn(List.of());
         when(mapper.findSubmissionMediaKeys(1L)).thenReturn(List.of());
         when(mapper.findCommentImageKeysOnMySubmissions(1L)).thenReturn(List.of());
         when(mapper.findMyCommentImageKeys(1L)).thenReturn(List.of());
@@ -50,6 +53,7 @@ class WithdrawServiceTests {
     @Test void deletesDependenciesInOrderAndFilesAfterCommit() {
         User user = new User(); user.setProfileImageUrl("profiles/me.jpg");
         when(users.findById(1L)).thenReturn(user);
+        when(mapper.findSubmissionIdsByUserId(1L)).thenReturn(List.of(10L, 11L));
         when(mapper.findSubmissionMediaKeys(1L)).thenReturn(List.of("submissions/me.jpg"));
         when(mapper.findCommentImageKeysOnMySubmissions(1L)).thenReturn(List.of("comments/me.jpg"));
         when(mapper.findMyCommentImageKeys(1L)).thenReturn(List.of("comments/me.jpg"));
@@ -60,7 +64,7 @@ class WithdrawServiceTests {
         try {
             service.withdraw(1L);
             verifyNoInteractions(storage);
-            InOrder order = inOrder(groups, mapper);
+            InOrder order = inOrder(groups, mapper, notifications);
             order.verify(groups).leaveGroup(1L, 7L, null);
             order.verify(groups).leaveGroup(1L, 8L, null);
             order.verify(mapper).deleteInsightsInvolvingUser(1L);
@@ -74,6 +78,7 @@ class WithdrawServiceTests {
             order.verify(mapper).deleteMyReactions(1L);
             order.verify(mapper).deleteMyGuesses(1L);
             order.verify(mapper).deleteAiReviewsOnMySubmissions(1L);
+            order.verify(notifications).deleteBySubmissionIds(List.of(10L, 11L));
             order.verify(mapper).deleteMySubmissions(1L);
             order.verify(mapper).deleteMyPokes(1L);
             order.verify(mapper).deleteMyNotifications(1L);

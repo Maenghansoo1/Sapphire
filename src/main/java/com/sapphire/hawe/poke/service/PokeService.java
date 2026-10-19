@@ -7,9 +7,11 @@ import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.service.GroupErrorCode;
 import com.sapphire.hawe.poke.dao.PokeMapper;
 import com.sapphire.hawe.poke.domain.Poke;
+import com.sapphire.hawe.poke.domain.PokeSentEvent;
 import com.sapphire.hawe.poke.dto.PokeRequest;
 import com.sapphire.hawe.poke.dto.PokeResponse;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,11 +22,14 @@ public class PokeService {
     private final PokeMapper pokeMapper;
     private final GroupMapper groupMapper;
     private final GroupMemberMapper groupMemberMapper;
+    private final ApplicationEventPublisher events;
 
-    public PokeService(PokeMapper pokeMapper, GroupMapper groupMapper, GroupMemberMapper groupMemberMapper) {
+    public PokeService(PokeMapper pokeMapper, GroupMapper groupMapper, GroupMemberMapper groupMemberMapper,
+            ApplicationEventPublisher events) {
         this.pokeMapper = pokeMapper;
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
+        this.events = events;
     }
 
     @Transactional
@@ -67,6 +72,7 @@ public class PokeService {
         } catch (DuplicateKeyException exception) {
             throw new BusinessException(PokeErrorCode.ALREADY_POKED);
         }
+        events.publishEvent(new PokeSentEvent(groupId, missionId, userId, targetId));
 
         return new PokeResponse(poke.getId(), poke.getToUserId(), poke.getType(), poke.getMissionId(),
                 SeoulTime.toOffset(poke.getSentAt()));

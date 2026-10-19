@@ -105,6 +105,7 @@ class CommentControllerTests {
             mvc.perform(delete("/api/comments/" + textId).header("Authorization", ownerAuth))
                     .andExpect(status().isNoContent());
         } finally {
+            jdbc.update("DELETE FROM notifications WHERE group_id = ?", group);
             jdbc.update("DELETE FROM comment_mentions WHERE comment_id IN (SELECT co.id FROM comments co "
                     + "JOIN submissions s ON s.id = co.submission_id JOIN missions m ON m.id = s.mission_id WHERE m.group_id = ?)", group);
             jdbc.update("DELETE FROM comments WHERE submission_id IN (SELECT s.id FROM submissions s "

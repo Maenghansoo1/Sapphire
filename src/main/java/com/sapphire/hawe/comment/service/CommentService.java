@@ -4,6 +4,7 @@ import com.sapphire.hawe.comment.dao.CommentInsertRow;
 import com.sapphire.hawe.comment.dao.CommentMapper;
 import com.sapphire.hawe.comment.dao.CommentMentionRow;
 import com.sapphire.hawe.comment.dao.CommentRow;
+import com.sapphire.hawe.comment.domain.CommentCreatedEvent;
 import com.sapphire.hawe.comment.dto.CommentResponse;
 import com.sapphire.hawe.global.dto.PageResponse;
 import com.sapphire.hawe.global.exception.BusinessException;
@@ -24,6 +25,7 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -37,9 +39,11 @@ public class CommentService {
     private final SubmissionService submissions;
     private final GroupMemberMapper members;
     private final FileStorage storage;
+    private final ApplicationEventPublisher events;
     public CommentService(CommentMapper comments, SubmissionService submissions,
-            GroupMemberMapper members, FileStorage storage) {
+            GroupMemberMapper members, FileStorage storage, ApplicationEventPublisher events) {
         this.comments = comments; this.submissions = submissions; this.members = members; this.storage = storage;
+        this.events = events;
     }
 
     @Transactional
@@ -79,6 +83,8 @@ public class CommentService {
         CommentInsertRow inserted = new CommentInsertRow(submissionId, userId, text, key, SeoulTime.now().withNano(0));
         comments.insert(inserted);
         for (Long id : mentions) comments.insertMention(inserted.getId(), id);
+        events.publishEvent(new CommentCreatedEvent(inserted.getId(), submission.getGroupId(), submission.getMissionId(), submissionId,
+                userId, submission.getUserId(), List.copyOf(mentions)));
         return response(comments.findDetailById(inserted.getId()), List.copyOf(mentions), userId);
     }
 

@@ -16,6 +16,7 @@ import com.sapphire.hawe.mission.domain.GenerationSource;
 import com.sapphire.hawe.mission.domain.GroupSignals;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
+import com.sapphire.hawe.mission.domain.MissionsPublishedEvent;
 import com.sapphire.hawe.mission.domain.RecentMission;
 import com.sapphire.hawe.mission.domain.SpecialDay;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +26,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
@@ -102,6 +104,7 @@ class MissionPublisherTests {
         assertEquals(now, inserted.getValue().getPublishedAt());
         assertEquals(MissionTemplate.TEXT_ONE_WORD.name(), inserted.getValue().getTemplate());
         assertEquals(now.toLocalDate().atTime(23, 0), inserted.getValue().getDeadlineAt());
+        verify(events).publishEvent(new MissionsPublishedEvent(11L, List.of(101L), List.of(7L)));
     }
     @Mock MissionMapper missions;
     @Mock GroupMapper groups;
@@ -110,6 +113,7 @@ class MissionPublisherTests {
     @Mock MissionGenerator generator;
     @Mock GroupContextBuilder contexts;
     @Mock ExperimentAssigner experiments;  // 기본은 군 없음 (Optional.empty)
+    @Mock ApplicationEventPublisher events;
     MissionPublisher publisher;
     static final GenerationContext GROUP_CONTEXT = new GenerationContext(LocalDate.of(2026, 10, 12), "FRIEND", List.of(),
             List.of(new SpecialDay(SpecialDay.Kind.GROUP_MILESTONE, "우리 그룹 100일", 0)), GroupSignals.none(1, 100));
@@ -118,7 +122,7 @@ class MissionPublisherTests {
     void setUp() {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, MissionTemplateSelector.MVP_POOL), generator,
-                contexts, experiments, new ObjectMapper());
+                contexts, experiments, new ObjectMapper(), events);
         lenient().when(members.findUserIdsByGroupId(11L)).thenReturn(List.of(7L));
         lenient().when(contexts.build(any(), any())).thenReturn(GROUP_CONTEXT);
     }
@@ -223,7 +227,7 @@ class MissionPublisherTests {
     void publishesOnlyFromTheConfiguredPool() {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, List.of(MissionTemplate.SLIDER_TASTE)),
-                generator, contexts, experiments, new ObjectMapper());
+                generator, contexts, experiments, new ObjectMapper(), events);
         LocalDateTime now = LocalDateTime.of(2026, 10, 13, 10, 0);
         when(groups.findById(11L)).thenReturn(group(now.minusDays(2)));
         when(generator.generate(eq(MissionTemplate.SLIDER_TASTE), anyLong(), any(), eq(false)))
@@ -282,7 +286,7 @@ class MissionPublisherTests {
     private List<MissionInsertRow> publishThreeSlots(LocalDateTime now, List<MissionTemplate> pool) {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, pool),
-                new PlaceholderMissionGenerator(), contexts, experiments, new ObjectMapper());
+                new PlaceholderMissionGenerator(), contexts, experiments, new ObjectMapper(), events);
         Group group = group(now.minusDays(2));
         group.setDailyMissionCount(3);
         when(groups.findById(11L)).thenReturn(group);

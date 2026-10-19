@@ -265,22 +265,31 @@
 | Method | Path | 설명 |
 |---|---|---|
 | GET | `/notifications` | 내 알림 목록 |
+| GET | `/notifications/unread-count` | 안 읽은 알림 개수 |
 | PATCH | `/notifications/{id}/read` | 읽음 처리 |
 | PATCH | `/notifications/read-all` | 전체 읽음 처리 |
 
 ### GET /notifications
 ```json
 { "content": [
-  { "id": 1, "type": "poke", "fromUser": { "id": 3, "nickname": "잎사귀" }, "payload": { "groupId": 1 },
-    "isRead": false, "createdAt": "..." },
-  { "id": 2, "type": "mission_open", "fromUser": null, "payload": { "groupId": 1, "missionId": 10 },
-    "isRead": false, "createdAt": "..." }
+  { "id": 1, "type": "poke", "groupId": 1, "groupName": "컴공 동기",
+    "fromUser": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
+    "missionId": 10, "submissionId": null, "body": "서연님이 콕 찔렀어요",
+    "isRead": false, "createdAt": "2026-09-28T15:41:48+09:00" }
 ], "page": 0, "size": 20, "totalPages": 1, "totalElements": 6 }
 ```
-`fromUser`는 시스템 알림(예: `mission_open`)일 경우 `null`.
+모든 그룹의 알림을 최신순으로 합친다. `page`는 0 이상, `size`는 1~100으로 조정한다.
+종류는 `topic`, `poke`, `comment`, `mention`이다. `topic`의 `fromUser`는 `null`이다.
+`friend_done`·푸시·기기 토큰·알림 설정·그룹별 알림은 아직 구현하지 않았다.
+
+### GET /notifications/unread-count
+```json
+{ "unreadCount": 3 }
+```
 
 ### PATCH /notifications/{id}/read
 Response 204.
+남의 알림이나 없는 id는 `NOTIFICATION_NOT_FOUND` (404). 이미 읽은 알림도 204.
 
 ### PATCH /notifications/read-all
 Response 204.

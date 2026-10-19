@@ -3,6 +3,7 @@ package com.sapphire.hawe.comment.service;
 import com.sapphire.hawe.comment.dao.CommentInsertRow;
 import com.sapphire.hawe.comment.dao.CommentMapper;
 import com.sapphire.hawe.comment.dao.CommentRow;
+import com.sapphire.hawe.comment.domain.CommentCreatedEvent;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
@@ -13,6 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -25,11 +27,12 @@ class CommentServiceTests {
     SubmissionService submissions = mock(SubmissionService.class);
     GroupMemberMapper members = mock(GroupMemberMapper.class);
     FileStorage storage = mock(FileStorage.class);
-    CommentService service = new CommentService(comments, submissions, members, storage);
+    ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    CommentService service = new CommentService(comments, submissions, members, storage, events);
 
     @BeforeEach void setUp() {
         SubmissionRow submission = new SubmissionRow();
-        submission.setId(10L); submission.setGroupId(11L);
+        submission.setId(10L); submission.setGroupId(11L); submission.setMissionId(9L); submission.setUserId(4L);
         when(submissions.requireAccessible(3L, 10L)).thenReturn(submission);
     }
 
@@ -62,6 +65,7 @@ class CommentServiceTests {
         var inserted = org.mockito.ArgumentCaptor.forClass(CommentInsertRow.class);
         verify(comments).insert(inserted.capture());
         assertEquals("", inserted.getValue().getContent());
+        verify(events).publishEvent(new CommentCreatedEvent(1L, 11L, 9L, 10L, 3L, 4L, List.of(4L)));
     }
 
     @Test void invalidMentionDoesNotStoreFile() {

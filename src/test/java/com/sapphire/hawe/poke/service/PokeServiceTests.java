@@ -8,6 +8,7 @@ import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.group.service.GroupErrorCode;
 import com.sapphire.hawe.poke.dao.PokeMapper;
 import com.sapphire.hawe.poke.domain.Poke;
+import com.sapphire.hawe.poke.domain.PokeSentEvent;
 import com.sapphire.hawe.poke.dto.PokeRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -33,12 +35,13 @@ class PokeServiceTests {
     @Mock PokeMapper pokeMapper;
     @Mock GroupMapper groupMapper;
     @Mock GroupMemberMapper groupMemberMapper;
+    @Mock ApplicationEventPublisher events;
 
     private PokeService service;
 
     @BeforeEach
     void setUp() {
-        service = new PokeService(pokeMapper, groupMapper, groupMemberMapper);
+        service = new PokeService(pokeMapper, groupMapper, groupMemberMapper, events);
     }
 
     @Test
@@ -65,6 +68,7 @@ class PokeServiceTests {
         assertEquals(7L, saved.getValue().getFromUserId());
         assertEquals(11L, saved.getValue().getGroupId());
         assertEquals(10L, saved.getValue().getMissionId());
+        verify(events).publishEvent(new PokeSentEvent(11L, 10L, 7L, 8L));
     }
 
     @Test

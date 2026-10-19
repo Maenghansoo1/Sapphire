@@ -20,6 +20,7 @@ import com.sapphire.hawe.group.dto.GroupSettingsUpdateRequest;
 import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.mission.dto.TodayMissionSummary;
 import com.sapphire.hawe.mission.service.MissionService;
+import com.sapphire.hawe.notification.dao.NotificationMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,13 +50,14 @@ class GroupContractServiceTests {
     @Mock FileStorage storage;
     @Mock FileCleanup fileCleanup;
     @Mock AttemptLimiter inviteLimiter;
+    @Mock NotificationMapper notifications;
     GroupService service;
 
     @BeforeEach
     void setUp() {
         service = new GroupService(groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, MissionTemplateSelector.MVP_POOL), "https://hawe.app/invite",
-                missionService, events, storage, inviteLimiter, fileCleanup);
+                missionService, events, storage, inviteLimiter, fileCleanup, notifications);
     }
 
     @Test
@@ -259,9 +261,10 @@ class GroupContractServiceTests {
         when(members.existsByGroupIdAndUserId(11L, 8L)).thenReturn(true);
         service.leaveGroup(7L, 11L, 8L);
         assertEquals(8L, group.getOwnerId());
-        InOrder order = inOrder(groups, members);
+        InOrder order = inOrder(groups, members, notifications);
         order.verify(groups).update(group);
         order.verify(members).updateRole(11L, 8L, GroupMember.ROLE_OWNER);
+        order.verify(notifications).deleteByGroupIdAndToUserId(11L, 7L);
         order.verify(members).deleteByGroupIdAndUserId(11L, 7L);
         verify(fileCleanup).deleteAfterCommit(List.of("group-profiles/owner.jpg"));
     }
@@ -274,6 +277,7 @@ class GroupContractServiceTests {
         member.setProfileImageUrlOverride("group-profiles/member.jpg");
         when(members.findByGroupIdAndUserId(11L, 8L)).thenReturn(member);
         service.leaveGroup(8L, 11L, null);
+        verify(notifications).deleteByGroupIdAndToUserId(11L, 8L);
         verify(members).deleteByGroupIdAndUserId(11L, 8L);
         verify(fileCleanup).deleteAfterCommit(List.of("group-profiles/member.jpg"));
         verify(groups, never()).findSubmissionMediaKeysByGroupId(any());
@@ -298,7 +302,8 @@ class GroupContractServiceTests {
         when(groups.findCommentImageKeysByGroupId(11L)).thenReturn(List.of("comments/photo.jpg"));
         when(groups.findGroupProfileImageKeysByGroupId(11L)).thenReturn(List.of("group-profiles/photo.jpg"));
         service.leaveGroup(7L, 11L, null);
-        InOrder order = inOrder(groups, members, slots, fileCleanup);
+        InOrder order = inOrder(groups, members, slots, fileCleanup, notifications);
+        order.verify(notifications).deleteByGroupId(11L);
         order.verify(groups).findSubmissionMediaKeysByGroupId(11L);
         order.verify(groups).findCommentImageKeysByGroupId(11L);
         order.verify(groups).findGroupProfileImageKeysByGroupId(11L);

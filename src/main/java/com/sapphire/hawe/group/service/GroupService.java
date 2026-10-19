@@ -32,6 +32,7 @@ import com.sapphire.hawe.group.dto.JoinRequest;
 import com.sapphire.hawe.group.dto.JoinResponse;
 import com.sapphire.hawe.mission.dto.TodayMissionSummary;
 import com.sapphire.hawe.mission.service.MissionService;
+import com.sapphire.hawe.notification.dao.NotificationMapper;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -67,12 +68,13 @@ public class GroupService {
     private final FileStorage storage;
     private final AttemptLimiter inviteLimiter;
     private final FileCleanup fileCleanup;
+    private final NotificationMapper notifications;
 
     public GroupService(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper,
             GroupMissionSlotMapper slotMapper, MissionProperties missionProperties,
             @Value("${hawe.invite.base-url:https://hawe.app/invite}") String inviteBaseUrl,
             MissionService missionService, ApplicationEventPublisher events, FileStorage storage,
-            AttemptLimiter inviteLimiter, FileCleanup fileCleanup) {
+            AttemptLimiter inviteLimiter, FileCleanup fileCleanup, NotificationMapper notifications) {
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.slotMapper = slotMapper;
@@ -82,6 +84,7 @@ public class GroupService {
         this.storage = storage;
         this.inviteLimiter = inviteLimiter;
         this.fileCleanup = fileCleanup;
+        this.notifications = notifications;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
@@ -270,6 +273,7 @@ public class GroupService {
             throw new BusinessException(GroupErrorCode.NOT_GROUP_MEMBER);
         }
         if (!GroupMember.ROLE_OWNER.equals(membership.getRole())) {
+            notifications.deleteByGroupIdAndToUserId(groupId, userId);
             groupMemberMapper.deleteByGroupIdAndUserId(groupId, userId);
             fileCleanup.deleteAfterCommit(java.util.Collections.singletonList(membership.getProfileImageUrlOverride()));
             return;
@@ -286,6 +290,7 @@ public class GroupService {
         group.setOwnerId(successorUserId);
         groupMapper.update(group);
         groupMemberMapper.updateRole(groupId, successorUserId, GroupMember.ROLE_OWNER);
+        notifications.deleteByGroupIdAndToUserId(groupId, userId);
         groupMemberMapper.deleteByGroupIdAndUserId(groupId, userId);
         fileCleanup.deleteAfterCommit(java.util.Collections.singletonList(membership.getProfileImageUrlOverride()));
     }
@@ -324,6 +329,7 @@ public class GroupService {
     }
 
     private void deleteGroupCascade(Long groupId) {
+        notifications.deleteByGroupId(groupId);
         List<String> keys = new ArrayList<>();
         keys.addAll(groupMapper.findSubmissionMediaKeysByGroupId(groupId));
         keys.addAll(groupMapper.findCommentImageKeysByGroupId(groupId));

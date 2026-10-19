@@ -17,6 +17,8 @@ import com.sapphire.hawe.mission.domain.MissionTemplate;
 import com.sapphire.hawe.mission.domain.RecentMission;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
 import com.sapphire.hawe.mission.domain.MissionTiming;
+import com.sapphire.hawe.mission.domain.MissionsPublishedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -49,10 +51,12 @@ public class MissionPublisher {
     private final GroupContextBuilder contexts;
     private final ExperimentAssigner experiments;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher events;
 
     public MissionPublisher(MissionMapper missions, GroupMapper groups, GroupMemberMapper members,
             GroupMissionSlotMapper slots, MissionProperties properties, MissionGenerator generator,
-            GroupContextBuilder contexts, ExperimentAssigner experiments, ObjectMapper objectMapper) {
+            GroupContextBuilder contexts, ExperimentAssigner experiments, ObjectMapper objectMapper,
+            ApplicationEventPublisher events) {
         this.missions = missions;
         this.groups = groups;
         this.members = members;
@@ -62,6 +66,7 @@ public class MissionPublisher {
         this.contexts = contexts;
         this.experiments = experiments;
         this.objectMapper = objectMapper;
+        this.events = events;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -166,6 +171,9 @@ public class MissionPublisher {
             try { missions.insert(mission); if (mission.getId() != null) created.add(mission.getId()); }
             catch (DuplicateKeyException ignored) { /* Another publisher already committed this slot. */ }
         }
+        if (!created.isEmpty())
+            events.publishEvent(new MissionsPublishedEvent(groupId, List.copyOf(created),
+                    List.copyOf(members.findUserIdsByGroupId(groupId))));
         return created;
     }
 }

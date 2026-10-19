@@ -141,6 +141,9 @@ erDiagram
     bigint id PK
     bigint from_user_id FK
     bigint to_user_id FK
+    bigint group_id
+    bigint mission_id
+    bigint submission_id
     string type
     string payload
     boolean is_read
@@ -171,7 +174,7 @@ erDiagram
 - 미션 문장 출처·실험 군 — `MISSIONS.generation_source`(`AI`/`AI_FALLBACK`/`PLACEHOLDER`)와 `MISSIONS.experiment_arm`(`AI`/`RANDOM`, 실험 밖이면 NULL). 앱 응답에는 내보내지 않고 비교 리포트에만 쓴다 (B9, `EXPERIMENT_TOPIC.md`)
 - `MISSIONS.published_at` / `deadline_at` — 발행 시점의 실제 발행·마감 시각을 고정 저장. 이후 그룹 설정이 바뀌어도 이미 열린 미션의 시각과 지각 판정(`SUBMISSIONS.is_late`)은 바뀌지 않는다
 - 유일성 제약 — `GROUP_MISSION_SLOTS (group_id, slot_no)`: 슬롯 재정의는 슬롯당 1행, `MISSIONS (group_id, mission_date, slot_no)`: 그룹·날짜·슬롯당 미션 1개(중복 발행 방지), `SUBMISSIONS (mission_id, user_id)`: 미션당 1인 1회 제출(`ALREADY_SUBMITTED`)
-- `NOTIFICATIONS`는 `from_user_id`(발신자, 시스템 알림은 NULL) / `to_user_id`(수신자)로 분리
+- `NOTIFICATIONS`는 `from_user_id`(발신자, 시스템 알림은 NULL) / `to_user_id`(수신자)로 분리한다. V3에서 알림의 `group_id`, `mission_id`, `submission_id`(NULL 가능, FK 없음)와 목록·미읽음 인덱스를 추가했다. `payload`는 새 앱 안 알림에서 사용하지 않는다.
 - 도장(참잘했어요/벌점)은 별도 테이블 없이 `SUBMISSIONS` 존재 여부로 계산 (해당 그룹·날짜에 제출 기록이 있으면 참잘했어요, 없으면 벌점). 하루 미션이 여러 개면 **미션별 도장**이다 (B7 결정, `MISSIONS_API.md` §11-8)
 
 ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경 상세"를 참고.
@@ -347,8 +350,10 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - `GET /api/me/calendar/{date}` — 특정 날짜의 그룹별 미션/제출 상세
 
 ### 알림
-- `GET /api/notifications` — 알림 목록 (발신자 정보는 `fromUserId`가 있는 경우에만 포함, 시스템 알림은 없음)
+- `GET /api/notifications` — 모든 그룹의 내 알림 목록 (`topic`의 `fromUser`는 NULL)
+- `GET /api/notifications/unread-count` — 안 읽은 알림 개수
 - `PATCH /api/notifications/{id}/read` — 읽음 처리
+- `PATCH /api/notifications/read-all` — 전체 읽음 처리
 
 ### 캐릭터
 - `GET /api/characters` — 선택 가능한 캐릭터 목록
@@ -362,9 +367,9 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ## 4. 비동기·스케줄 처리
 - **EventBridge Scheduler** → 매일 그룹별·슬롯별 발행 시각(지정이 없으면 설정 파일의 기본 발행 시각)에 `MissionService.publishDailyMission(groupId, date, slotNo)` 호출
-  - 같은 그룹·날짜·슬롯의 미션이 이미 있으면 중단 → 서버가 틀 선택 → LLM으로 `{content, category, params}` 생성 → 서버 검증(`MissionTemplateValidator`) → 대상 지정 틀이면 멤버 1명 무작위 선택 → 저장(`published_at`, `deadline_at` 고정) → `mission_open` 알림
+  - 같은 그룹·날짜·슬롯의 미션이 이미 있으면 중단 → 서버가 틀 선택 → LLM으로 `{content, category, params}` 생성 → 서버 검증(`MissionTemplateValidator`) → 대상 지정 틀이면 멤버 1명 무작위 선택 → 저장(`published_at`, `deadline_at` 고정) → `topic` 알림
   - LLM 실패/검증 실패가 반복되면 예비 미션으로 대체 (상세: `docs/BACKEND/MISSIONS_API.md` §6)
-- 제출/댓글/멘션/콕찌르기 발생 시 `NotificationService`가 `NOTIFICATIONS` 테이블에 기록 + **SNS**로 푸시 발송 (비동기, 이벤트 기반)
+- 미션 발행/댓글/멘션/콕찌르기 커밋 뒤 `NotificationService`가 앱 안 알림을 `NOTIFICATIONS` 테이블에 기록한다. 푸시 발송은 아직 구현하지 않았다.
 
 ## 5. Qdrant(VectorDB) 활용 (선택 기능)
 - 제출 캡션을 임베딩하여 저장

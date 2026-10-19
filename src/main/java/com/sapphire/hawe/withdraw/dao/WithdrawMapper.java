@@ -18,6 +18,9 @@ public interface WithdrawMapper {
     @Select("SELECT media_url FROM submissions WHERE user_id = #{userId} AND media_url IS NOT NULL")
     List<String> findSubmissionMediaKeys(@Param("userId") Long userId);
 
+    @Select("SELECT id FROM submissions WHERE user_id = #{userId}")
+    List<Long> findSubmissionIdsByUserId(@Param("userId") Long userId);
+
     @Select("SELECT c.image_url FROM comments c JOIN submissions s ON s.id = c.submission_id "
             + "WHERE s.user_id = #{userId} AND c.image_url IS NOT NULL")
     List<String> findCommentImageKeysOnMySubmissions(@Param("userId") Long userId);
