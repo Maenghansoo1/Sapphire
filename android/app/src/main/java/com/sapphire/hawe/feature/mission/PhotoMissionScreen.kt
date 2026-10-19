@@ -37,6 +37,7 @@ import com.sapphire.hawe.designsystem.components.HButton
 import com.sapphire.hawe.designsystem.components.HButtonKind
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.HColors
+import com.sapphire.hawe.designsystem.tokens.HLayout
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +108,19 @@ fun PhotoMissionScreen(topic: String, template: String, onClose: () -> Unit, onS
                             !permission -> "설정에서 카메라 권한을 켜 주세요"
                             else -> "카메라를 준비하고 있어요"
                         }, style = HType.plex(14), color = HColors.textSecondary)
+                    }
+                }
+                // 확대 배율. 누르면 1배로 돌아가요.
+                if (photo == null && controller.ready && controller.maxZoom > 1f) {
+                    val label = CameraZoom.label(controller.zoom)
+                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).sizeIn(minWidth = HLayout.minTouch, minHeight = HLayout.minTouch)
+                        .clickable { controller.zoomTo(1f) }
+                        .semantics { contentDescription = "확대 ${label.dropLast(1)}배, 누르면 1배로" },
+                        contentAlignment = Alignment.Center) {
+                        Text(label, Modifier.background(HColors.ink.copy(alpha = 0.55f), CircleShape)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = HType.plex(13, androidx.compose.ui.text.font.FontWeight.SemiBold), color = HColors.onAccent,
+                            maxLines = 1)
                     }
                 }
             }

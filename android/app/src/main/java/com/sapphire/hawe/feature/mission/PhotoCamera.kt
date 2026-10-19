@@ -1,7 +1,10 @@
 package com.sapphire.hawe.feature.mission
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.view.ScaleGestureDetector
 import androidx.camera.core.AspectRatio
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
@@ -23,6 +26,11 @@ class PhotoCameraController(val previewView: PreviewView) {
     var flash by mutableStateOf(false)
     var capturing by mutableStateOf(false)
     var canFlip by mutableStateOf(false)
+    /** 지금 확대 배율과 이 카메라가 허용하는 범위. 찍은 사진에도 같은 배율이 들어가요. */
+    var zoom by mutableFloatStateOf(1f)
+    var minZoom by mutableFloatStateOf(1f)
+    var maxZoom by mutableFloatStateOf(1f)
+    internal var camera: Camera? = null
     internal var capture: ImageCapture? = null
     internal var provider: ProcessCameraProvider? = null
 
@@ -32,6 +40,15 @@ class PhotoCameraController(val previewView: PreviewView) {
     }
 
     fun flip() { if (ready && canFlip) front = !front }
+
+    fun zoomTo(value: Float) {
+        val active = camera ?: return
+        zoom = CameraZoom.clamp(value, minZoom, maxZoom)
+        runCatching { active.cameraControl.setZoomRatio(zoom) }
+    }
+
+    /** 두 손가락으로 벌리거나 오므린 비율만큼 */
+    fun zoomBy(scale: Float) = zoomTo(zoom * scale)
 
     fun takePicture(context: Context, onPhoto: (File) -> Unit) {
         val active = capture ?: return
@@ -52,14 +69,26 @@ class PhotoCameraController(val previewView: PreviewView) {
     }
 }
 
+@SuppressLint("ClickableViewAccessibility")
 @Composable
 fun rememberPhotoCameraController(enabled: Boolean): PhotoCameraController {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    val controller = remember { PhotoCameraController(PreviewView(context).apply {
-        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-        scaleType = PreviewView.ScaleType.FILL_CENTER
-    }) }
+    val controller = remember {
+        PhotoCameraController(PreviewView(context).apply {
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }).also { controller ->
+            // 두 손가락 핀치로 확대·축소
+            val pinch = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    controller.zoomBy(detector.scaleFactor)
+                    return true
+                }
+            })
+            controller.previewView.setOnTouchListener { _, event -> pinch.onTouchEvent(event); true }
+        }
+    }
     val front = controller.front
     DisposableEffect(context, owner, enabled, front) {
         if (!enabled) {
@@ -84,7 +113,13 @@ fun rememberPhotoCameraController(enabled: Boolean): PhotoCameraController {
                             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
                         capture.flashMode = if (controller.flash && !front) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
                         preview.surfaceProvider = controller.previewView.surfaceProvider
-                        provider.bindToLifecycle(owner, selector, preview, capture)
+                        val camera = provider.bindToLifecycle(owner, selector, preview, capture)
+                        val zoomState = camera.cameraInfo.zoomState.value
+                        controller.camera = camera
+                        controller.minZoom = zoomState?.minZoomRatio ?: 1f
+                        controller.maxZoom = zoomState?.maxZoomRatio ?: 1f
+                        // 카메라를 새로 열면(앞·뒤 전환 포함) 1배부터
+                        controller.zoomTo(1f)
                         controller.provider = provider
                         controller.capture = capture
                         controller.canFlip = provider.hasCamera(other)
@@ -96,6 +131,8 @@ fun rememberPhotoCameraController(enabled: Boolean): PhotoCameraController {
                 disposed = true
                 controller.ready = false
                 controller.capture = null
+                controller.camera = null
+                controller.zoom = 1f
                 controller.provider?.unbindAll()
                 controller.provider = null
             }

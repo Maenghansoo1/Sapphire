@@ -66,6 +66,12 @@ struct PhotoMissionView: View {
                     .scaledToFill()
             } else if camera.isAvailable {
                 CameraPreview(session: camera.session)
+                    // 두 손가락 핀치로 확대·축소
+                    .gesture(
+                        MagnifyGesture()
+                            .onChanged { camera.pinch($0.magnification) }
+                            .onEnded { _ in camera.endPinch() }
+                    )
             } else {
                 VStack(spacing: 10) {
                     HIconView(icon: .camera, size: 34, color: .textTertiary)
@@ -73,6 +79,26 @@ struct PhotoMissionView: View {
                         .font(.plex(14))
                         .foregroundStyle(.textSecondary)
                 }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            // 확대 배율. 누르면 1배로 돌아가요.
+            if photo == nil && camera.isAvailable && camera.maxZoom > 1 {
+                let label = CameraZoom.label(camera.zoom)
+                Button { camera.setZoom(1) } label: {
+                    Text(label)
+                        .font(.plex(13, .semibold))
+                        .foregroundStyle(.onAccent)
+                        .monospacedDigit()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.ink.opacity(0.55), in: Capsule())
+                        .frame(minWidth: HLayout.minTouch, minHeight: HLayout.minTouch)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 12)
+                .accessibilityLabel("확대 \(label.dropLast())배, 누르면 1배로")
             }
         }
         .aspectRatio(3 / 4, contentMode: .fit)
@@ -151,7 +177,7 @@ struct PhotoMissionView: View {
 
 // MARK: - Camera
 
-/// 카메라 세션 — 권한, 전·후면 전환, 플래시, 촬영
+/// 카메라 세션 — 권한, 전·후면 전환, 플래시, 확대, 촬영
 @MainActor
 @Observable
 final class CameraModel: NSObject {
@@ -159,11 +185,17 @@ final class CameraModel: NSObject {
     private(set) var isAvailable = false
     private(set) var isDenied = false
     var isFlashOn = false
+    /// 지금 확대 배율과 이 카메라의 최대 배율. 찍은 사진에도 같은 배율이 들어가요.
+    private(set) var zoom: CGFloat = 1
+    private(set) var maxZoom: CGFloat = 1
 
     private let output = AVCapturePhotoOutput()
     @ObservationIgnored private var position: AVCaptureDevice.Position = .back
     private let queue = DispatchQueue(label: "hawe.camera")
     @ObservationIgnored private var continuation: CheckedContinuation<UIImage?, Never>?
+    @ObservationIgnored private var device: AVCaptureDevice?
+    /// 핀치를 시작할 때의 배율
+    @ObservationIgnored private var pinchStart: CGFloat?
 
     func start() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -187,6 +219,26 @@ final class CameraModel: NSObject {
     func flip() {
         let next: AVCaptureDevice.Position = position == .back ? .front : .back
         if configure(position: next) { position = next }
+    }
+
+    func setZoom(_ value: CGFloat) {
+        guard let device else { return }
+        let next = CameraZoom.clamp(value, deviceMin: device.minAvailableVideoZoomFactor, deviceMax: device.maxAvailableVideoZoomFactor)
+        guard (try? device.lockForConfiguration()) != nil else { return }
+        device.videoZoomFactor = next
+        device.unlockForConfiguration()
+        zoom = next
+    }
+
+    /// 핀치 중: 시작 배율 × 벌린 비율
+    func pinch(_ magnification: CGFloat) {
+        let start = pinchStart ?? zoom
+        pinchStart = start
+        setZoom(start * magnification)
+    }
+
+    func endPinch() {
+        pinchStart = nil
     }
 
     func capture() async -> UIImage? {
@@ -214,6 +266,12 @@ final class CameraModel: NSObject {
         if !session.outputs.contains(output), session.canAddOutput(output) {
             session.addOutput(output)
         }
+        // 카메라를 새로 열면(앞·뒤 전환 포함) 1배부터
+        self.device = device
+        maxZoom = CameraZoom.clamp(device.maxAvailableVideoZoomFactor, deviceMin: device.minAvailableVideoZoomFactor,
+                                   deviceMax: device.maxAvailableVideoZoomFactor)
+        pinchStart = nil
+        setZoom(1)
         return true
     }
 }
