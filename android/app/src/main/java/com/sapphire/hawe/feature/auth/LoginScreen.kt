@@ -68,7 +68,7 @@ fun LoginScreen(session: AppSession, store: DataStore, auth: AuthRepository, onS
             bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(32.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             HLogoLockup()
-            Text("다시 만나서 반가워요", style = HType.plex(28, FontWeight.Bold, 1.35f), color = HColors.ink)
+            Text("만나서 반가워요", style = HType.plex(28, FontWeight.Bold, 1.35f), color = HColors.ink)
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             HTextField(email, { email = it }, "이메일", keyboardType = KeyboardType.Email,
