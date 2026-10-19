@@ -1,7 +1,7 @@
 import PencilKit
 import SwiftUI
 
-/// "AI에게 보여주기"·"AI의 추측" 한 번을 돌리고 결과 카드 상태를 들고 있어요. 결과는 화면에만 보이고 저장하지 않아요.
+/// 제출 전 AI 미리보기 카드 상태를 들고 있어요.
 @MainActor
 @Observable
 final class AiGuessRunner {
@@ -140,7 +140,7 @@ private struct AiGuessCard: View {
                     }
                 }
             }
-            Text("AI 추측은 재미용이에요. 그림은 휴대폰 안에서만 보고 저장하지 않아요.")
+            Text("AI 추측은 재미용이에요. 그림은 휴대폰 안에서 분석하고, 올리면 별이의 추측을 그룹에 보여줘요.")
                 .font(.caption12)
                 .foregroundStyle(.textTertiary)
         case nil:
@@ -214,30 +214,6 @@ struct AiShowButton: View {
     }
 }
 
-/// 결과 화면 그림 위에 얹는 작은 "AI" 버튼 (터치 영역 44)
-struct AiGuessChip: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 3) {
-                HIconView(icon: .aiGuessTemp, size: 14, color: .accentPressed)
-                Text("AI")
-                    .font(.plex(11, .bold))
-                    .foregroundStyle(.accentPressed)
-            }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
-            .background(Color.bg.opacity(0.92), in: Capsule())
-            .overlay(Capsule().strokeBorder(.line, lineWidth: 1))
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("AI의 추측 보기")
-    }
-}
-
 // MARK: - 잉크 픽셀
 
 enum InkSource {
@@ -252,15 +228,6 @@ enum InkSource {
             image = black.image(from: bounds, scale: 1)
         }
         return image.flatMap { rgba($0, width: Int(bounds.width.rounded()), height: Int(bounds.height.rounded())) }
-    }
-
-    /// 결과 화면의 그림 PNG(흰 배경 + 색 잉크) → 픽셀. 화면에 띄운 이미지라 보통 캐시에서 바로 와요. 실패하면 nil.
-    static func ink(url: URL?) async -> InkImage? {
-        guard let url else { return nil }
-        guard let (data, response) = try? await URLSession.shared.data(from: url),
-              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
-              let image = UIImage(data: data), let cg = image.cgImage else { return nil }
-        return rgba(image, width: cg.width, height: cg.height)
     }
 
     /// 미리 곱하지 않은 RGBA 8비트 픽셀로 그려요 (행 우선).

@@ -18,7 +18,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
-import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.net.ApiException
 import com.sapphire.hawe.core.net.MissionRepository
@@ -33,17 +32,8 @@ import com.sapphire.hawe.designsystem.components.HNavBar
 import com.sapphire.hawe.designsystem.components.HNavLeading
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HType
-import com.sapphire.hawe.feature.draw.AiGuessChip
-import com.sapphire.hawe.feature.draw.AiGuessDialog
-import com.sapphire.hawe.feature.draw.AiGuessRunner
-import com.sapphire.hawe.feature.draw.DrawSubjectMatcher
-import com.sapphire.hawe.feature.draw.loadInkImage
-import com.sapphire.hawe.feature.draw.rememberAiGuessAvailable
-import com.sapphire.hawe.feature.draw.rememberAiGuessRunner
-import androidx.compose.ui.platform.LocalContext
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 
 const val LATE_LABEL = "지각"
 
@@ -97,20 +87,12 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
             }
         }
     }
-    // AI 심사(B10)는 제출 뒤에 따로 끝나요. 방금 올린 내 사진이 아직이면 5초 뒤 한 번만 더 불러와요(계속 묻지 않음).
-    LaunchedEffect(missionID) {
-        delay(5_000)
-        val submissions = store.result(groupID, missionID)?.submissions.orEmpty()
-        if (awaitsAiReview(submissions, AppClock.now())) refresh++
-    }
     DisposableEffect(owner, missionID) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     val result = store.result(groupID, missionID)
-    val aiAvailable = rememberAiGuessAvailable()
-    val aiGuess = rememberAiGuessRunner()
     if (failed) {
         Column(Modifier.fillMaxSize().background(HColors.bg), verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally) {
@@ -135,7 +117,7 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
                 onRetry = { aggregateRetry++ }, modifier = Modifier.padding(bottom = 20.dp))
             when (result.type) {
                 MissionType.PHOTO -> PhotoFeed(result, onDetail)
-                MissionType.DRAW -> DrawingGrid(result, onDetail, aiAvailable, aiGuess)
+                MissionType.DRAW -> DrawingGrid(result, onDetail)
                 MissionType.WRITE -> AnswerCards(result, onDetail)
             }
             if (result.pending.isNotEmpty()) {
@@ -144,7 +126,6 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
             }
         }
     }
-    AiGuessDialog(aiGuess)
 }
 
 @Composable
@@ -160,15 +141,13 @@ private fun PhotoFeed(result: MissionResult, onDetail: (Long) -> Unit) {
                     if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
                 }
                 PhotoArtwork(submission, 260.dp, Modifier.clickable { onDetail(submission.id) })
-                submission.aiReview?.let { AiReviewLine(it) }
             }
         }
     }
 }
 
 @Composable
-private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit, aiAvailable: Boolean, aiGuess: AiGuessRunner) {
-    val context = LocalContext.current
+private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         result.submissions.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -177,10 +156,6 @@ private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit, aiAvail
                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box {
                             DrawingArtwork(submission, 165.dp, 130.dp, cornerRadius = 18.dp)
-                            if (aiAvailable) AiGuessChip(Modifier.align(Alignment.BottomEnd)) {
-                                aiGuess.guess(mine = submission.isMine, load = { loadInkImage(context, imageModel(submission)) },
-                                    subjectOf = { DrawSubjectMatcher.subjects(result.template, result.topic, result.spec, it) })
-                            }
                         }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -1,6 +1,7 @@
 package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.model.Sticker
+import com.sapphire.hawe.core.model.AiDetail
 import com.sapphire.hawe.feature.results.mentionedIdsIn
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -36,6 +37,21 @@ class SubmissionSocialRepositoryTest {
             assertTrue(list[0].isMine)
             assertEquals(listOf(1L), list[0].mentionedUserIds)
             assertEquals(server.url("/files/comments/a.jpg").toString(), list[0].imageURL.toString())
+        }
+    }
+
+    @Test fun mascotCommentAndReactionMapWithoutAddingUserId() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"content":[{"id":9,"author":{"userId":7,"nickname":"별이"},"content":"고양이인가요?","createdAt":"2026-09-28T21:10:00+09:00","ai":true,"aiDetail":{"kind":"DRAW_GUESS","guesses":[{"label":"고양이","probability":0.62}]}}],"page":0,"size":100,"totalPages":1,"totalElements":1}"""))
+            server.enqueue(MockResponse().setBody("""{"reactions":[{"stickerType":"wow","count":1,"userIds":[],"aiReacted":true}]}"""))
+            val repo = repo(server)
+            val mascot = repo.comments(7L).single()
+            assertTrue(mascot.isAi)
+            assertEquals(AiDetail.DrawGuess(listOf(com.sapphire.hawe.core.model.AiGuessEntry("고양이", 0.62f))), mascot.aiDetail)
+            val reaction = repo.toggleReaction(7L, Sticker.WOW).single()
+            assertEquals(1, reaction.count)
+            assertTrue(reaction.aiReacted)
+            assertTrue(reaction.userIds.isEmpty())
         }
     }
 

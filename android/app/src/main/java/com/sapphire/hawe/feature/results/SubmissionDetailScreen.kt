@@ -23,22 +23,12 @@ import com.sapphire.hawe.designsystem.components.HNavBar
 import com.sapphire.hawe.designsystem.components.HNavLeading
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HType
-import com.sapphire.hawe.feature.draw.AiGuessDialog
-import com.sapphire.hawe.feature.draw.AiShowButton
-import com.sapphire.hawe.feature.draw.DrawSubjectMatcher
-import com.sapphire.hawe.feature.draw.loadInkImage
-import com.sapphire.hawe.feature.draw.rememberAiGuessAvailable
-import com.sapphire.hawe.feature.draw.rememberAiGuessRunner
-import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, store: DataStore,
     repository: SubmissionRepository, onBack: () -> Unit) {
     val result = store.result(groupID, missionID)
     val submission = result?.submissions?.find { it.id == submissionID }
-    val context = LocalContext.current
-    val aiAvailable = rememberAiGuessAvailable()
-    val aiGuess = rememberAiGuessRunner()
     if (result == null || submission == null) {
         Box(Modifier.fillMaxSize().background(HColors.bg))
         return
@@ -64,22 +54,11 @@ fun SubmissionDetailScreen(groupID: Long, missionID: Long, submissionID: Long, s
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp)) {
             DetailArtwork(submission, result.type, result.spec)
-            if (result.type == MissionType.PHOTO) submission.aiReview?.let {
-                AiReviewLine(it, Modifier.padding(top = 12.dp), commentLines = 2)
-            }
-            if (result.type == MissionType.DRAW && aiAvailable) {
-                Spacer(Modifier.height(12.dp))
-                AiShowButton(enabled = true, Modifier.fillMaxWidth()) {
-                    aiGuess.guess(mine = submission.isMine, load = { loadInkImage(context, imageModel(submission)) },
-                        subjectOf = { DrawSubjectMatcher.subjects(result.template, result.topic, result.spec, it) })
-                }
-            }
             Spacer(Modifier.height(24.dp))
             SubmissionSocial(submission.id, submission.reactions,
                 store.group(groupID)?.members.orEmpty(), repository)
         }
     }
-    AiGuessDialog(aiGuess)
 }
 
 @Composable

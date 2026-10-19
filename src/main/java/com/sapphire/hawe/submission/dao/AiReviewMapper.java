@@ -1,6 +1,5 @@
 package com.sapphire.hawe.submission.dao;
 
-import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -20,11 +19,6 @@ public interface AiReviewMapper {
             @Param("fitScore") Double fitScore, @Param("badge") String badge,
             @Param("comment") String comment, @Param("modelVersion") String modelVersion,
             @Param("attempts") int attempts);
-
-    @Select("<script>SELECT submission_id, status, fit_score, badge, comment, model_version, attempts "
-            + "FROM submission_ai_reviews WHERE kind='TOPIC_FIT' AND status='DONE' AND submission_id IN "
-            + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
-    List<AiReviewRow> findBySubmissionIds(@Param("ids") List<Long> ids);
 
     @Select("SELECT submission_id, status, fit_score, badge, comment, model_version, attempts "
             + "FROM submission_ai_reviews WHERE submission_id=#{submissionId} AND kind='TOPIC_FIT'")

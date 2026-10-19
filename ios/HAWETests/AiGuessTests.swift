@@ -157,6 +157,18 @@ final class AiGuessTests: XCTestCase {
         XCTAssertEqual(top[0].probability, 0.6)
     }
 
+    func testUploadEntriesUseTopThreeKoreanLabelsAndAllowNoPredictions() {
+        var probabilities = [Float](repeating: 0, count: categories.count)
+        probabilities[12] = 0.8
+        probabilities[13] = 0.6
+        probabilities[14] = 0.4
+        probabilities[15] = 0.2
+        let entries = uploadGuessEntries(probabilities, categories: categories)
+        XCTAssertEqual(entries.map(\.label), [categories[12].ko, categories[13].ko, categories[14].ko])
+        XCTAssertEqual(entries.map(\.probability), [0.8, 0.6, 0.4])
+        XCTAssertTrue(uploadGuessEntries([], categories: []).isEmpty)
+    }
+
     func testVerdicts() {
         let cat = category("고양이")
         XCTAssertEqual(aiVerdict(nil, subject: cat), .tooEmpty)

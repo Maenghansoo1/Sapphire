@@ -97,17 +97,4 @@ class ResultsFormatTest {
         } }
     }
 
-    @Test fun aiReviewCopyAndPendingCheck() {
-        assertEquals("오늘의 주제 찰떡상", aiBadgeLabel("PERFECT_FIT"))
-        assertNull(aiBadgeLabel(null))
-        assertNull(aiBadgeLabel("GOLDEN_FIT"))
-        val mine = Submission(1L, Profile.mockMine, true, MissionType.PHOTO, now.minusSeconds(30))
-        assertTrue(awaitsAiReview(listOf(mine), now))
-        assertFalse(awaitsAiReview(listOf(mine.copy(aiReview = AiReview("PERFECT_FIT", null))), now))
-        assertFalse(awaitsAiReview(listOf(mine.copy(isMine = false)), now))  // 친구 사진은 기다리지 않음
-        assertFalse(awaitsAiReview(listOf(mine.copy(type = MissionType.DRAW)), now))
-        assertFalse(awaitsAiReview(listOf(mine.copy(createdAt = now.minusSeconds(180))), now))  // 오래전 제출
-        assertFalse(awaitsAiReview(listOf(mine.copy(createdAt = now.plusSeconds(60))), now))  // 기기 시계가 늦음
-        assertFalse(awaitsAiReview(emptyList(), now))
-    }
 }

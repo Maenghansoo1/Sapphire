@@ -28,6 +28,19 @@ class AiGuessTest {
         assertThrows(IllegalArgumentException::class.java) { topGuesses(FloatArray(3), categories) }
     }
 
+    @Test fun uploadEntriesUseTopThreeKoreanLabelsAndAllowNoPredictions() {
+        val probabilities = FloatArray(categories.size).also {
+            it[12] = 0.8f
+            it[13] = 0.6f
+            it[14] = 0.4f
+            it[15] = 0.2f
+        }
+        val entries = uploadGuessEntries(probabilities, categories)
+        assertEquals(listOf(categories[12].ko, categories[13].ko, categories[14].ko), entries.map { it.label })
+        assertEquals(listOf(0.8f, 0.6f, 0.4f), entries.map { it.probability })
+        assertEquals(emptyList<com.sapphire.hawe.core.model.AiGuessEntry>(), uploadGuessEntries(floatArrayOf(), emptyList()))
+    }
+
     @Test fun verdicts() {
         val cat = category("고양이")
         assertEquals(AiVerdict.TooEmpty, aiVerdict(null, cat))

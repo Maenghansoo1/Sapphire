@@ -4,7 +4,8 @@ import java.time.LocalDateTime;
 
 public class CommentRow {
     private Long id, submissionId, userId;
-    private String nickname, characterKey, profileImageUrl, content, imageUrl;
+    private String nickname, characterKey, profileImageUrl, content, imageUrl, aiDetail;
+    private boolean ai;
     private LocalDateTime createdAt;
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -22,6 +23,10 @@ public class CommentRow {
     public void setContent(String content) { this.content = content; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getAiDetail() { return aiDetail; }
+    public void setAiDetail(String aiDetail) { this.aiDetail = aiDetail; }
+    public boolean isAi() { return ai; }
+    public void setAi(boolean ai) { this.ai = ai; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

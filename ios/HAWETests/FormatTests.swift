@@ -209,34 +209,9 @@ final class ResultsFormatTests: XCTestCase {
         }
     }
 
-    func testAiReviewCopyAndPendingCheck() {
-        XCTAssertEqual(ResultsFormat.aiBadgeLabel("PERFECT_FIT"), "오늘의 주제 찰떡상")
-        XCTAssertNil(ResultsFormat.aiBadgeLabel(nil))
-        XCTAssertNil(ResultsFormat.aiBadgeLabel("GOLDEN_FIT"))
-        let mine = Submission(id: 1, author: .mockMine, isMine: true, type: .photo, createdAt: now.addingTimeInterval(-30))
-        XCTAssertTrue(ResultsFormat.awaitsAiReview([mine], now: now))
-        var reviewed = mine
-        reviewed.aiReview = AiReview(badge: "PERFECT_FIT", comment: nil)
-        XCTAssertFalse(ResultsFormat.awaitsAiReview([reviewed], now: now))
-        var friend = mine
-        friend.isMine = false
-        XCTAssertFalse(ResultsFormat.awaitsAiReview([friend], now: now))
-        var drawing = mine
-        drawing.type = .draw
-        XCTAssertFalse(ResultsFormat.awaitsAiReview([drawing], now: now))
-        var old = mine
-        old.createdAt = now.addingTimeInterval(-180)
-        XCTAssertFalse(ResultsFormat.awaitsAiReview([old], now: now))
-        var future = mine
-        future.createdAt = now.addingTimeInterval(60)
-        XCTAssertFalse(ResultsFormat.awaitsAiReview([future], now: now))
-        XCTAssertFalse(ResultsFormat.awaitsAiReview([], now: now))
-    }
-
-    func testAiReviewDTOHidesEmptyValues() {
-        XCTAssertNil(AiReviewDTO(badge: nil, comment: "  ").model)
-        XCTAssertNil(AiReviewDTO(badge: " ", comment: nil).model)
-        XCTAssertEqual(AiReviewDTO(badge: "PERFECT_FIT", comment: " 멋져요 ").model, AiReview(badge: "PERFECT_FIT", comment: "멋져요"))
+    func testAiDetailMapsKnownKinds() {
+        XCTAssertEqual(AiDetailDTO(kind: "PHOTO_SCORE", score: 73, guesses: nil).model, .photoScore(73))
+        XCTAssertNil(AiDetailDTO(kind: "UNKNOWN", score: nil, guesses: nil).model)
     }
 }
 

@@ -1,7 +1,8 @@
 package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.data.SubmissionContent
-import com.sapphire.hawe.core.model.AiReview
+import com.sapphire.hawe.core.model.AiDetail
+import com.sapphire.hawe.core.model.AiGuessEntry
 import com.sapphire.hawe.core.model.AvatarContent
 import com.sapphire.hawe.core.model.MissionAggregate
 import com.sapphire.hawe.core.model.MissionTemplates
@@ -14,6 +15,8 @@ import com.sapphire.hawe.core.model.SubmissionComment
 import com.sapphire.hawe.designsystem.assets.ProfileCharacter
 import java.net.URI
 import java.time.OffsetDateTime
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 internal fun templateType(template: String): MissionType? = when {
     template.startsWith("PHOTO_") -> MissionType.PHOTO
@@ -28,13 +31,6 @@ internal fun scalarParts(content: SubmissionContent.Scalar): List<ApiClient.Mult
     content.caption?.let { add(ApiClient.MultipartPart.Text("caption", it)) }
     content.number?.let { add(ApiClient.MultipartPart.Text("number", it.toString())) }
     content.choice?.let { add(ApiClient.MultipartPart.Text("choice", it)) }
-}
-
-/** AI 심사 결과. 배지도 코멘트도 비어 있으면 보여 줄 게 없으니 null. */
-internal fun AiReviewDto.toModel(): AiReview? {
-    val badge = badge?.takeIf { it.isNotBlank() }
-    val comment = comment?.trim()?.takeIf { it.isNotEmpty() }
-    return if (badge == null && comment == null) null else AiReview(badge, comment)
 }
 
 /** 서버가 계산한 집계 결과를 앱 모델로. 앱이 모르는 틀이면 null. */
@@ -71,8 +67,13 @@ class SubmissionRepository(private val api: ApiClient) {
         val parts = when (content) {
             is SubmissionContent.Image -> {
                 val png = content.fileExtension.equals("png", ignoreCase = true)
-                listOf(ApiClient.MultipartPart.Bytes("file", if (png) "drawing.png" else "photo.jpg",
-                    if (png) "image/png" else "image/jpeg", content.bytes))
+                buildList {
+                    add(ApiClient.MultipartPart.Bytes("file", if (png) "drawing.png" else "photo.jpg",
+                        if (png) "image/png" else "image/jpeg", content.bytes))
+                    val guesses = content.aiGuesses.filter { it.probability.isFinite() && it.probability in 0f..1f }.take(3)
+                    if (png && guesses.isNotEmpty()) add(ApiClient.MultipartPart.Text("aiGuess",
+                        Json.encodeToString(guesses.map { AiGuessEntryDto(it.label, it.probability) })))
+                }
             }
             is SubmissionContent.Text -> listOf(ApiClient.MultipartPart.Text("text", content.body))
             is SubmissionContent.Scalar -> scalarParts(content)
@@ -122,13 +123,17 @@ class SubmissionRepository(private val api: ApiClient) {
     suspend fun deleteComment(commentId: Long) = api.delete("/api/comments/$commentId")
 
     private fun List<ReactionDto>.toReactions(): List<Reaction> = mapNotNull { dto ->
-        Sticker.fromKey(dto.stickerType)?.let { Reaction(it, dto.count, dto.reactedByMe, dto.userIds) }
+        Sticker.fromKey(dto.stickerType)?.let { Reaction(it, dto.count, dto.reactedByMe, dto.userIds, dto.aiReacted) }
     }
 
     private fun CommentDto.toModel() = SubmissionComment(id,
         Profile(api.avatarOf(author.characterKey, author.profileImageUrl), author.nickname),
         author.userId, content, imageUrl?.let { URI(api.absoluteUrl(it)) }, mentionedUserIds,
-        OffsetDateTime.parse(createdAt).toInstant(), mine)
+        OffsetDateTime.parse(createdAt).toInstant(), mine, ai, when (aiDetail?.kind) {
+            "PHOTO_SCORE" -> aiDetail.score?.let { AiDetail.PhotoScore(it) }
+            "DRAW_GUESS" -> aiDetail.guesses?.let { AiDetail.DrawGuess(it.map { entry -> AiGuessEntry(entry.label, entry.probability) }) }
+            else -> null
+        })
 
     private fun SubmissionDto.toModel(myUserId: Long): Submission? {
         val type = templateType(template) ?: return null
@@ -137,6 +142,6 @@ class SubmissionRepository(private val api: ApiClient) {
             OffsetDateTime.parse(submittedAt).toInstant(),
             mediaUrl?.let { URI(api.absoluteUrl(it)) }, text, isLate,
             author.userId, reactions.orEmpty().toReactions(), commentCount,
-            template, number, choice, caption, aiReview?.toModel())
+            template, number, choice, caption)
     }
 }

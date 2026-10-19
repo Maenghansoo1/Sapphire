@@ -8,7 +8,7 @@ import static org.mockito.Mockito.*;
 
 class TopicFitReviewListenerTests {
     TopicFitService reviews = mock(TopicFitService.class);
-    SubmissionCreatedEvent event = new SubmissionCreatedEvent(7L, "PHOTO_NOW");
+    SubmissionCreatedEvent event = new SubmissionCreatedEvent(7L, "PHOTO_NOW", null);
 
     @Test void disabledReviewDoesNotCallService() {
         var properties = new VisionProperties(false, null, null, null, null, null, null);

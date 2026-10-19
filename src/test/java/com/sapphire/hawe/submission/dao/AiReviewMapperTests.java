@@ -1,6 +1,5 @@
 package com.sapphire.hawe.submission.dao;
 
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,11 +28,9 @@ class AiReviewMapperTests {
         assertEquals(1, reviews.complete(ids[2], "SKIPPED", null, null, null, null, 0));
         assertEquals(1, reviews.insertPendingIfAbsent(ids[3]));
 
-        var done = reviews.findBySubmissionIds(List.of(ids));
-        assertEquals(1, done.size());
-        assertEquals(ids[0], done.getFirst().getSubmissionId());
-        assertEquals("PERFECT_FIT", done.getFirst().getBadge());
-        assertEquals(0.5, done.getFirst().getFitScore());
+        assertEquals(ids[0], reviews.findBySubmissionId(ids[0]).getSubmissionId());
+        assertEquals("PERFECT_FIT", reviews.findBySubmissionId(ids[0]).getBadge());
+        assertEquals(0.5, reviews.findBySubmissionId(ids[0]).getFitScore());
         assertEquals("DONE", reviews.findBySubmissionId(ids[0]).getStatus());
         assertEquals("FAILED", reviews.findBySubmissionId(ids[1]).getStatus());
         assertEquals("SKIPPED", reviews.findBySubmissionId(ids[2]).getStatus());

@@ -54,6 +54,20 @@ struct AiGuess: Hashable {
     let probability: Float
 }
 
+/// 그림을 올릴 때 후보만 전달한다. 모델이 없거나 그림이 비어도 제출은 계속한다.
+func guessForUpload(_ ink: InkImage?) async -> [AiGuessEntry] {
+    guard let ink, let classifier = await QuickDrawClassifier.shared() else { return [] }
+    return await Task.detached(priority: .userInitiated) {
+        guard let input = ink.modelInput, let probabilities = try? classifier.classify(input) else { return [] }
+        return uploadGuessEntries(probabilities, categories: classifier.categories)
+    }.value
+}
+
+func uploadGuessEntries(_ probabilities: [Float], categories: [DrawCategory]) -> [AiGuessEntry] {
+    topGuesses(probabilities, categories: categories)
+        .map { AiGuessEntry(label: $0.category.ko, probability: $0.probability) }
+}
+
 /// 확률이 높은 순서로 `count`개. 같은 확률이면 범주 번호 순.
 func topGuesses(_ probabilities: [Float], categories: [DrawCategory], count: Int = 3) -> [AiGuess] {
     precondition(probabilities.count == categories.count, "모델 출력 수와 범주 수가 달라요")
@@ -63,7 +77,7 @@ func topGuesses(_ probabilities: [Float], categories: [DrawCategory], count: Int
         .map { AiGuess(category: categories[$0], probability: probabilities[$0]) }
 }
 
-/// AI 추측 결과. 결과는 저장하거나 서버로 보내지 않아요 (재미용).
+/// 그림을 올릴 때 후보 이름과 확률을 그룹에 보여 줘요.
 enum AiVerdict: Hashable {
     /// 그림이 너무 비어서 추론하지 않음
     case tooEmpty

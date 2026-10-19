@@ -31,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 
 @Service
 public class CommentService {
@@ -40,10 +42,12 @@ public class CommentService {
     private final GroupMemberMapper members;
     private final FileStorage storage;
     private final ApplicationEventPublisher events;
+    private final ObjectMapper json;
     public CommentService(CommentMapper comments, SubmissionService submissions,
-            GroupMemberMapper members, FileStorage storage, ApplicationEventPublisher events) {
+            GroupMemberMapper members, FileStorage storage, ApplicationEventPublisher events, ObjectMapper json) {
         this.comments = comments; this.submissions = submissions; this.members = members; this.storage = storage;
         this.events = events;
+        this.json = json;
     }
 
     @Transactional
@@ -131,7 +135,14 @@ public class CommentService {
         return new CommentResponse(row.getId(), new MemberProfileResponse(row.getUserId(), row.getNickname(),
                 row.getCharacterKey(), row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())), row.getContent(),
                 row.getImageUrl() == null ? null : storage.publicUrl(row.getImageUrl()),
-                mentions, SeoulTime.toOffset(row.getCreatedAt()), row.getUserId().equals(userId));
+                mentions, SeoulTime.toOffset(row.getCreatedAt()), row.getUserId().equals(userId), row.isAi(),
+                parseDetail(row.getAiDetail()));
+    }
+
+    private JsonNode parseDetail(String detail) {
+        if (detail == null) return null;
+        try { return json.readTree(detail); }
+        catch (Exception error) { log.warn("Invalid AI comment detail", error); return null; }
     }
 
     private static void invalid(String message) {

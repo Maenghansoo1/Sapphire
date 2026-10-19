@@ -31,7 +31,7 @@ fun LicensesScreen(onBack: () -> Unit) {
         Text("SIL Open Font License 1.1 전문은 openfontlicense.org 에서 볼 수 있어요.",
             Modifier.padding(top = 16.dp), style = HType.caption12, color = HColors.textSecondary)
         Text("그림 인식 모델은 Quick, Draw! 데이터셋(creativecommons.org/licenses/by/4.0)으로 HA'WE 팀이 직접 학습했어요. " +
-            "AI 추측은 재미용이며, 그림은 휴대폰 안에서만 분석하고 서버로 보내지 않아요.",
+            "AI 추측은 재미용이며, 그림은 휴대폰 안에서 분석하고 추측 후보만 그룹에 공유해요.",
             Modifier.padding(top = 8.dp), style = HType.caption12, color = HColors.textSecondary)
     }
 }

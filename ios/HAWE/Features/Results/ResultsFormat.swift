@@ -33,20 +33,6 @@ enum ResultsFormat {
         return option.nonBlank.map { "\(choice!) · \($0)" } ?? choice
     }
 
-    /// AI 심사 배지 이름(B10). 앱이 모르는 배지는 이름 없이 코멘트만 보여요.
-    static func aiBadgeLabel(_ badge: String?) -> String? {
-        badge == "PERFECT_FIT" ? "오늘의 주제 찰떡상" : nil
-    }
-
-    /// 방금(2분 안) 올린 내 사진이 아직 AI 심사 전인지. 심사는 제출 뒤에 따로 끝나서 결과 화면이 한 번 더 불러와요.
-    static func awaitsAiReview(_ submissions: [Submission], now: Date) -> Bool {
-        submissions.contains { submission in
-            guard submission.isMine, submission.type == .photo, submission.aiReview == nil else { return false }
-            let age = now.timeIntervalSince(submission.createdAt)
-            return age >= 0 && age < 120
-        }
-    }
-
     static func commentSendEnabled(_ draft: String) -> Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }

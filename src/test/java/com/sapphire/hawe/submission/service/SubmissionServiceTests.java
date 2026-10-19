@@ -1,7 +1,6 @@
 package com.sapphire.hawe.submission.service;
 
 import com.sapphire.hawe.global.exception.BusinessException;
-import com.sapphire.hawe.global.config.VisionProperties;
 import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.mission.dao.MissionMapper;
@@ -9,8 +8,6 @@ import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.submission.dao.SubmissionInsertRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
-import com.sapphire.hawe.submission.dao.AiReviewMapper;
-import com.sapphire.hawe.submission.dao.AiReviewRow;
 import com.sapphire.hawe.submission.domain.SubmissionCreatedEvent;
 import com.sapphire.hawe.submission.dto.SubmissionResponse;
 import com.sapphire.hawe.reaction.dao.ReactionMapper;
@@ -43,11 +40,9 @@ class SubmissionServiceTests {
     FileStorage storage = mock(FileStorage.class);
     ReactionMapper reactions = mock(ReactionMapper.class);
     CommentMapper comments = mock(CommentMapper.class);
-    AiReviewMapper aiReviews = mock(AiReviewMapper.class);
     ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     SubmissionService service = new SubmissionService(missions, members, submissions, storage,
-            new ObjectMapper(), reactions, comments, aiReviews,
-            new VisionProperties(false, null, null, null, null, null, null), events);
+            new ObjectMapper(), reactions, comments, events);
     MissionRow mission = new MissionRow();
 
     @BeforeEach void setUp() {
@@ -173,51 +168,46 @@ class SubmissionServiceTests {
         assertTrue(page.content().get(1).reactions().isEmpty());
         verify(reactions, times(1)).findBySubmissionIds(List.of(10L, 11L));
         verify(comments, times(1)).countBySubmissionIds(List.of(10L, 11L));
-        verifyNoInteractions(aiReviews);
     }
 
-    @Test void publishesOnlySupportedPhotoEvents() {
-        assertNull(submitForEvent("PHOTO_NOW").aiReview());
-        assertNull(submitForEvent("PHOTO_COLOR").aiReview());
+    @Test void publishesSupportedPhotoAndDrawEvents() {
+        submitForEvent("PHOTO_NOW");
+        submitForEvent("PHOTO_COLOR");
         submitForEvent("PHOTO_GALLERY");
         submitForEvent("DRAW_SKETCH");
         submitForEvent("TEXT_FILL_BLANK");
         ArgumentCaptor<SubmissionCreatedEvent> emitted = ArgumentCaptor.forClass(SubmissionCreatedEvent.class);
-        verify(events, times(2)).publishEvent(emitted.capture());
-        assertEquals(List.of(new SubmissionCreatedEvent(99L, "PHOTO_NOW"),
-                new SubmissionCreatedEvent(99L, "PHOTO_COLOR")), emitted.getAllValues());
+        verify(events, times(3)).publishEvent(emitted.capture());
+        assertEquals(List.of(new SubmissionCreatedEvent(99L, "PHOTO_NOW", null),
+                new SubmissionCreatedEvent(99L, "PHOTO_COLOR", null),
+                new SubmissionCreatedEvent(99L, "DRAW_SKETCH", null)), emitted.getAllValues());
     }
 
     @Test void eventPublicationFailureDoesNotFailSubmission() {
         doThrow(new IllegalStateException("event bus failed")).when(events).publishEvent(any(SubmissionCreatedEvent.class));
         SubmissionResponse created = assertDoesNotThrow(() -> submitForEvent("PHOTO_NOW"));
         assertEquals(99L, created.id());
-        assertNull(created.aiReview());
     }
 
-    @Test void enabledFeedLoadsReviewsOnceForAllRows() {
-        SubmissionService enabled = new SubmissionService(missions, members, submissions, storage,
-                new ObjectMapper(), reactions, comments, aiReviews,
-                new VisionProperties(true, null, null, null, null, null, null), events);
-        when(submissions.existsByMissionIdAndUserId(1L, 3L)).thenReturn(true);
-        var first = feedRow(10L);
-        var second = feedRow(11L);
-        first.setTemplate("PHOTO_NOW"); second.setTemplate("PHOTO_NOW");
-        when(submissions.findFeedByMissionId(1L, 0L, 20)).thenReturn(List.of(first, second));
-        AiReviewRow review = new AiReviewRow();
-        review.setSubmissionId(10L); review.setStatus("DONE");
-        review.setBadge("PERFECT_FIT"); review.setComment("주제랑 딱 맞는 사진이에요!");
-        when(aiReviews.findBySubmissionIds(List.of(10L, 11L))).thenReturn(List.of(review));
+    @Test void drawingAcceptsOptionalGuessButPhotoRejectsIt() {
+        submitForEvent("DRAW_SKETCH", fields("aiGuess", "[{\"label\":\"고양이\",\"probability\":0.7}]"));
+        verify(events).publishEvent(new SubmissionCreatedEvent(99L, "DRAW_SKETCH",
+                "[{\"label\":\"고양이\",\"probability\":0.7}]"));
+        mission.setTemplate("PHOTO_NOW");
+        assertEquals("INVALID_SUBMISSION", error(fields("aiGuess", "[]"),
+                files(new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff})));
+    }
 
-        var content = enabled.feed(3L, 1L, 0, 20).content();
-
-        assertEquals("PERFECT_FIT", content.getFirst().aiReview().badge());
-        assertEquals("주제랑 딱 맞는 사진이에요!", content.getFirst().aiReview().comment());
-        assertNull(content.get(1).aiReview());
-        verify(aiReviews, times(1)).findBySubmissionIds(List.of(10L, 11L));
+    @Test void oversizedGuessDoesNotFailDrawingSubmission() {
+        submitForEvent("DRAW_A_TO_B", fields("aiGuess", "x".repeat(1001)));
+        verify(events).publishEvent(new SubmissionCreatedEvent(99L, "DRAW_A_TO_B", null));
     }
 
     private SubmissionResponse submitForEvent(String template) {
+        return submitForEvent(template, new LinkedMultiValueMap<>());
+    }
+
+    private SubmissionResponse submitForEvent(String template, MultiValueMap<String, String> extraFields) {
         mission.setTemplate(template);
         when(storage.store(eq("submissions"), any(), eq("jpg"))).thenReturn("submissions/event.jpg");
         doAnswer(invocation -> {
@@ -231,7 +221,7 @@ class SubmissionServiceTests {
             return row;
         });
         boolean text = "TEXT_FILL_BLANK".equals(template);
-        return service.submit(3L, 1L, text ? fields("text", "hello") : new LinkedMultiValueMap<>(),
+        return service.submit(3L, 1L, text ? fields("text", "hello") : extraFields,
                 text ? new LinkedMultiValueMap<>() : files(new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff}));
     }
 

@@ -52,12 +52,6 @@ struct ResultsView: View {
         .task(id: reload) { await load() }
         // 집계 틀의 그룹 결과. 제출이 늘면 값이 바뀌어서 피드와 같이 다시 불러요. 오류로 화면을 닫는 건 피드 쪽만 해요.
         .task(id: AggregateKey(reload: reload, retry: aggregateRetry, template: template)) { await loadAggregate() }
-        // AI 심사(B10)는 제출 뒤에 따로 끝나요. 방금 올린 내 사진이 아직이면 5초 뒤 한 번만 더 불러와요.
-        .task {
-            try? await Task.sleep(for: .seconds(5))
-            let submissions = store.result(groupID: groupID, missionID: missionID)?.submissions ?? []
-            if ResultsFormat.awaitsAiReview(submissions, now: AppClock.now()) { reload += 1 }
-        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { reload += 1 }
         }
@@ -113,7 +107,6 @@ private struct ResultsContent: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var openedID: Submission.ID?
-    @State private var aiGuess = AiGuessRunner()
 
     private var result: MissionResult { feed.result }
 
@@ -148,7 +141,6 @@ private struct ResultsContent: View {
         .navigationDestination(item: $openedID) { id in
             SubmissionDetailView(feed: feed, submissionID: id)
         }
-        .aiGuessCard(aiGuess)
     }
 
     /// 주제 22 Bold + 완료 현황 13 (위 8 · 아래 18)
@@ -200,9 +192,6 @@ private struct ResultsContent: View {
                         PhotoArtwork(submission: submission, height: 260)
                     }
                     .buttonStyle(.plain)
-                    if let review = submission.aiReview {
-                        AiReviewLine(review: review)
-                    }
                 }
             }
         }
@@ -219,11 +208,6 @@ private struct ResultsContent: View {
                         DrawingArtwork(submission: submission, height: 165, cornerRadius: 18, drawingSize: 130)
                     }
                     .buttonStyle(.plain)
-                    .overlay(alignment: .bottomTrailing) {
-                        if aiGuess.isAvailable {
-                            AiGuessChip { guess(submission) }
-                        }
-                    }
                     Button { openedID = submission.id } label: {
                         HStack(spacing: 8) {
                             HAvatar(content: submission.author.avatar, size: 26)
@@ -244,14 +228,6 @@ private struct ResultsContent: View {
                     .buttonStyle(.plain)
                 }
             }
-        }
-    }
-
-    private func guess(_ submission: Submission) {
-        let url = submission.mediaURL
-        let result = result
-        aiGuess.guess(mine: submission.isMine, load: { await InkSource.ink(url: url) }) {
-            DrawSubjectMatcher.match(template: result.template, topic: result.topic, spec: result.spec, categories: $0)
         }
     }
 

@@ -211,7 +211,7 @@
 ```json
 { "content": [
   { "id": 1, "author": { "userId": 3, "nickname": "잎사귀", "characterKey": "ipsagwi", "profileImageUrl": null },
-    "content": "...", "imageUrl": null, "mentionedUserIds": [1], "createdAt": "...", "mine": false }
+    "content": "...", "imageUrl": null, "mentionedUserIds": [1], "createdAt": "...", "mine": false, "ai": false }
 ], "page": 0, "size": 20, "totalPages": 1, "totalElements": 2 }
 ```
 
@@ -220,7 +220,7 @@
 ```json
 // Response 201
 { "id": 2, "author": { "userId": 3, "nickname": "잎사귀", "characterKey": "ipsagwi", "profileImageUrl": null },
-  "content": "@몽실이 이거 뭐야", "imageUrl": null, "mentionedUserIds": [1], "createdAt": "...", "mine": true }
+  "content": "@몽실이 이거 뭐야", "imageUrl": null, "mentionedUserIds": [1], "createdAt": "...", "mine": true, "ai": false }
 ```
 
 ### DELETE /comments/{commentId}
@@ -233,11 +233,13 @@
 
 // Response 200 (토글 후 이 제출의 전체 반응; 0개인 종류는 생략)
 { "reactions": [
-  { "stickerType": "heart", "count": 2, "reactedByMe": true, "userIds": [1, 3] },
-  { "stickerType": "fire", "count": 1, "reactedByMe": false, "userIds": [5] }
+  { "stickerType": "heart", "count": 2, "reactedByMe": true, "userIds": [1, 3], "aiReacted": false },
+  { "stickerType": "fire", "count": 1, "reactedByMe": false, "userIds": [], "aiReacted": true }
 ] }
 ```
 피드·상세의 `reactions`도 같은 배열이다. 종류 순서는 `heart`, `laugh`, `wow`, `sad`, `fire`이다. 피드·상세의 `commentCount`는 실제 댓글 수다. 작성·목록·반응은 모두 해당 미션에 제출한 그룹 멤버만 접근할 수 있다(403 `NOT_GROUP_MEMBER`, 423 `FEED_LOCKED`). 없는 제출은 404 `SUBMISSION_NOT_FOUND`, 없는 댓글은 404 `COMMENT_NOT_FOUND`, 남의 댓글 삭제는 403 `NOT_COMMENT_OWNER`이다. 잘못된 스티커·본문·멘션은 400 `VALIDATION_ERROR`, 파일 형식과 크기 오류는 각각 415 `UNSUPPORTED_FILE_TYPE`, 413 `FILE_TOO_LARGE`이다.
+
+`PHOTO_NOW`, `PHOTO_COLOR`, `DRAW_SKETCH`, `DRAW_A_TO_B` 제출에는 가상 참여자 별이의 반응이 비동기로 추가된다. 별이는 그룹 멤버가 아니며 댓글 알림을 만들지 않는다. 댓글의 `ai`가 `true`이면 별이 아바타를 표시한다. 사진 평가가 끝난 댓글에는 `aiDetail: {"kind":"PHOTO_SCORE","score":73}`, 그림 추측 댓글에는 `aiDetail: {"kind":"DRAW_GUESS","guesses":[{"label":"고양이","probability":0.62}]}`가 포함된다. 일반 댓글에서는 `aiDetail`을 생략한다. 반응의 `count`에는 별이가 포함되며 `userIds`에는 포함되지 않는다. `aiReacted`로 별이의 참여를 표시한다. 그림 제출의 선택적 multipart 텍스트 필드 `aiGuess`는 기기에서 계산한 후보 JSON 배열이며 최대 1000자이다. 사진 제출에 `aiGuess`를 보내면 400을 반환한다. 제출 응답과 피드에는 더 이상 `aiReview`가 없다. `PHOTO_GALLERY`와 글 제출에는 별이가 참여하지 않는다.
 
 ---
 

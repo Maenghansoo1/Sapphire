@@ -102,40 +102,6 @@ enum LateLabel {
     static let text = "지각"
 }
 
-/// AI 심사 배지·한 줄 코멘트(B10, 임시 UI: Figma 확정 시 교체). 점수는 숨기고, 배지 없이 격려 코멘트만 보여 줄 수도 있어요.
-/// 피드에서는 코멘트 1줄, 상세에서는 2줄까지.
-struct AiReviewLine: View {
-    let review: AiReview
-    var commentLines = 1
-
-    var body: some View {
-        let label = ResultsFormat.aiBadgeLabel(review.badge)
-        if label != nil || review.comment != nil {
-            VStack(alignment: .leading, spacing: 6) {
-                if let label {
-                    HStack(spacing: 5) {
-                        HIconView(icon: .badgeFitTemp, size: 16, color: .accentPressed)
-                        Text(label)
-                            .font(.plex(13, .semibold))
-                            .foregroundStyle(.accentPressed)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.accentSubtle, in: Capsule())
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(label)
-                }
-                if let comment = review.comment {
-                    Text(comment)
-                        .font(.caption13)
-                        .foregroundStyle(.textSecondary)
-                        .lineLimit(commentLines)
-                }
-            }
-        }
-    }
-}
-
 /// 제출물 본문. 새 틀은 틀별 모양(한 단어+이유, 별점+후기, 선택+이유)이고,
 /// 그 밖의 글 틀은 지금까지처럼 글만 보여요. `large` 는 상세 화면용 큰 글씨.
 struct TemplateAnswer: View {

@@ -1,7 +1,6 @@
 package com.sapphire.hawe.submission.service;
 
 import com.sapphire.hawe.global.dto.PageResponse;
-import com.sapphire.hawe.global.config.VisionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.storage.FileStorage;
@@ -21,10 +20,7 @@ import com.sapphire.hawe.reaction.service.ReactionService;
 import com.sapphire.hawe.submission.dao.SubmissionInsertRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
-import com.sapphire.hawe.submission.dao.AiReviewMapper;
-import com.sapphire.hawe.submission.dao.AiReviewRow;
 import com.sapphire.hawe.submission.domain.SubmissionCreatedEvent;
-import com.sapphire.hawe.submission.dto.AiReviewResponse;
 import com.sapphire.hawe.submission.dto.SubmissionResponse;
 import com.sapphire.hawe.submission.dto.ReactionSummary;
 import java.io.IOException;
@@ -58,16 +54,14 @@ public class SubmissionService {
     private final ObjectMapper json;
     private final ReactionMapper reactions;
     private final CommentMapper comments;
-    private final AiReviewMapper aiReviews;
-    private final VisionProperties vision;
     private final ApplicationEventPublisher events;
 
     public SubmissionService(MissionMapper missions, GroupMemberMapper members, SubmissionMapper submissions,
             FileStorage storage, ObjectMapper json, ReactionMapper reactions, CommentMapper comments,
-            AiReviewMapper aiReviews, VisionProperties vision, ApplicationEventPublisher events) {
+            ApplicationEventPublisher events) {
         this.missions = missions; this.members = members; this.submissions = submissions;
         this.storage = storage; this.json = json; this.reactions = reactions; this.comments = comments;
-        this.aiReviews = aiReviews; this.vision = vision; this.events = events;
+        this.events = events;
     }
 
     @Transactional
@@ -81,6 +75,8 @@ public class SubmissionService {
             throw new BusinessException(SubmissionErrorCode.ALREADY_SUBMITTED);
 
         String template = Objects.requireNonNullElse(mission.getTemplate(), "");
+        String aiGuess = one(fields, "aiGuess");
+        if (aiGuess != null && aiGuess.length() > 1000) aiGuess = null;
         Set<String> allowed = allowedFields(template);
         if (allowed == null) invalid("지원하지 않는 미션 틀입니다");
         for (String key : fields.keySet()) if (!allowed.contains(key)) invalid("요구하지 않는 필드: " + key);
@@ -157,11 +153,12 @@ public class SubmissionService {
             if (key != null) storage.delete(key);
             throw new BusinessException(SubmissionErrorCode.ALREADY_SUBMITTED);
         }
-        if (key != null && ("PHOTO_NOW".equals(template) || "PHOTO_COLOR".equals(template))) {
-            try { events.publishEvent(new SubmissionCreatedEvent(row.getId(), template)); }
+        if (key != null && ("PHOTO_NOW".equals(template) || "PHOTO_COLOR".equals(template)
+                || "DRAW_SKETCH".equals(template) || "DRAW_A_TO_B".equals(template))) {
+            try { events.publishEvent(new SubmissionCreatedEvent(row.getId(), template, aiGuess)); }
             catch (RuntimeException e) { log.warn("Vision event failed for submission {}", row.getId(), e); }
         }
-        return response(submissions.findDetailById(row.getId()), List.of(), 0, null);
+        return response(submissions.findDetailById(row.getId()), List.of(), 0);
     }
 
     @Transactional(readOnly = true)
@@ -201,12 +198,9 @@ public class SubmissionService {
         Map<Long, Integer> counts = new HashMap<>();
         for (CommentCountRow count : comments.countBySubmissionIds(ids))
             counts.put(count.getSubmissionId(), count.getCount());
-        Map<Long, AiReviewRow> reviewBySubmission = new HashMap<>();
-        if (vision.enabled()) for (AiReviewRow review : aiReviews.findBySubmissionIds(ids))
-            reviewBySubmission.put(review.getSubmissionId(), review);
         return rows.stream().map(row -> response(row,
                 ReactionService.summarize(bySubmission.getOrDefault(row.getId(), List.of()), userId),
-                counts.getOrDefault(row.getId(), 0), reviewResponse(reviewBySubmission.get(row.getId())))).toList();
+                counts.getOrDefault(row.getId(), 0))).toList();
     }
 
     private void requireMember(Long groupId, Long userId) {
@@ -223,7 +217,8 @@ public class SubmissionService {
     /** 틀마다 받는 필드 (MISSIONS_API §3-2). null 이면 제출을 받지 않는 틀(예전 음성 틀·2차 틀). */
     private static Set<String> allowedFields(String template) {
         return switch (template) {
-            case "PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "DRAW_SKETCH", "DRAW_A_TO_B" -> Set.of("file", "caption");
+            case "PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR" -> Set.of("file", "caption");
+            case "DRAW_SKETCH", "DRAW_A_TO_B" -> Set.of("file", "caption", "aiGuess");
             case "TEXT_ACROSTIC", "TEXT_FILL_BLANK" -> Set.of("text");
             case "TEXT_ONE_WORD" -> Set.of("text", "caption");
             case "TEXT_REVIEW" -> Set.of("number", "text");
@@ -281,14 +276,7 @@ public class SubmissionService {
         return String.join("\n", lines);
     }
 
-    private static AiReviewResponse reviewResponse(AiReviewRow review) {
-        if (review == null || !"DONE".equals(review.getStatus())
-                || (review.getBadge() == null && review.getComment() == null)) return null;
-        return new AiReviewResponse(review.getBadge(), review.getComment());
-    }
-
-    private SubmissionResponse response(SubmissionRow row, List<ReactionSummary> reactions, int commentCount,
-            AiReviewResponse aiReview) {
+    private SubmissionResponse response(SubmissionRow row, List<ReactionSummary> reactions, int commentCount) {
         if (row == null) throw new IllegalStateException("Inserted submission was not found");
         String text = null;
         if (row.getAnswerData() != null) try {
@@ -300,6 +288,6 @@ public class SubmissionService {
                         row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())),
                 row.getTemplate(), row.getMediaUrl() == null ? null : storage.publicUrl(row.getMediaUrl()),
                 row.getMediaType(), row.getCaption(), text, row.getNumberValue(), row.getChoiceValue(),
-                reactions, commentCount, aiReview, SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
+                reactions, commentCount, SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
     }
 }

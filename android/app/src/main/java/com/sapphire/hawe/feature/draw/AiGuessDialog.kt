@@ -41,7 +41,7 @@ sealed interface AiGuessState {
     data class Failed(val message: String) : AiGuessState
 }
 
-/** "AI에게 보여주기"·"AI의 추측" 한 번을 돌리고 결과 카드 상태를 들고 있어요. 결과는 화면에만 보이고 저장하지 않아요. */
+/** 제출 전 AI 미리보기 카드 상태를 들고 있어요. */
 class AiGuessRunner(private val context: Context, private val scope: CoroutineScope) {
     var state by mutableStateOf<AiGuessState?>(null)
         private set
@@ -124,7 +124,7 @@ fun AiGuessDialog(runner: AiGuessRunner) {
                     }
                 }
             }
-            if (state is AiGuessState.Done) Text("AI 추측은 재미용이에요. 그림은 휴대폰 안에서만 보고 저장하지 않아요.",
+            if (state is AiGuessState.Done) Text("AI 추측은 재미용이에요. 그림은 휴대폰 안에서 분석하고, 올리면 별이의 추측을 그룹에 보여줘요.",
                 style = HType.caption12, color = HColors.textTertiary)
             HButton("닫기", height = 48.dp, onClick = runner::dismiss)
         }
@@ -161,19 +161,5 @@ fun AiShowButton(enabled: Boolean, modifier: Modifier = Modifier, onClick: () ->
         val color = if (enabled) HColors.ink else HColors.textDisabled
         HIconView(HIcon.AI_GUESS_TEMP, size = 20.dp, color = color)
         Text("AI에게 보여주기", style = HType.plex(15, FontWeight.SemiBold), color = color, maxLines = 1)
-    }
-}
-
-/** 결과 화면 그림 위에 얹는 작은 "AI" 버튼(터치 영역 44dp). */
-@Composable
-fun AiGuessChip(modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(modifier.size(44.dp).clickable(role = Role.Button, onClick = onClick)
-        .semantics { contentDescription = "AI의 추측 보기" }, contentAlignment = Alignment.Center) {
-        Row(Modifier.background(HColors.bg.copy(alpha = 0.92f), CircleShape).border(1.dp, HColors.line, CircleShape)
-            .padding(horizontal = 7.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            HIconView(HIcon.AI_GUESS_TEMP, size = 14.dp, color = HColors.accentPressed)
-            Text("AI", style = HType.plex(11, FontWeight.Bold), color = HColors.accentPressed)
-        }
     }
 }

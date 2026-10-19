@@ -54,7 +54,7 @@ final class NetworkTests: XCTestCase {
                        PokeFailure(followUp: .none, message: "네트워크 연결을 확인해 주세요"))
     }
 
-    func testFeedParsesNewTemplatesReactionsAndAiReview() async throws {
+    func testFeedParsesNewTemplatesAndReactions() async throws {
         StubProtocol.respond(200, """
         {"content":[{"id":5,"missionId":9,"author":{"userId":2,"nickname":"지우","characterKey":"kkotnim",
           "profileImageUrl":"/files/p.jpg"},"template":"TEXT_REVIEW","number":4,"text":"맛있어요",
@@ -75,7 +75,6 @@ final class NetworkTests: XCTestCase {
         XCTAssertFalse(submission.isMine)
         XCTAssertEqual(submission.commentCount, 3)
         XCTAssertEqual(submission.reactions, [Reaction(sticker: .heart, count: 2, reactedByMe: true, userIDs: [1, 2])])
-        XCTAssertEqual(submission.aiReview, AiReview(badge: "PERFECT_FIT", comment: "멋져요"))
         XCTAssertEqual(submission.author.avatar, .photo(URL(string: "http://stub.local/files/p.jpg")!))
         XCTAssertEqual(StubProtocol.requests.first?.url?.query, "page=0&size=100")
     }
@@ -113,6 +112,24 @@ final class NetworkTests: XCTestCase {
         let body = String(data: StubProtocol.bodies.first ?? Data(), encoding: .utf8) ?? ""
         XCTAssertEqual(body.components(separatedBy: "name=\"mentionedUserIds\"").count - 1, 1)
         XCTAssertEqual(StubProtocol.requests.first?.url?.path, "/api/submissions/5/comments")
+    }
+
+    func testDrawingSubmitsGuessesWithoutUploadingThemForPhotos() async throws {
+        let response = #"{"id":7,"missionId":9,"author":{"userId":1,"nickname":"나"},"template":"DRAW_SKETCH","submittedAt":"2026-10-12T21:00:00+09:00"}"#
+        StubProtocol.respond(201, response)
+        _ = try await SubmissionRepository(api: api).submit(missionID: 9,
+            content: .image(Data([1]), fileExtension: "png", aiGuesses: [AiGuessEntry(label: "고양이", probability: 0.62)]), myUserID: 1)
+        let body = String(data: StubProtocol.bodies.first ?? Data(), encoding: .utf8) ?? ""
+        XCTAssertTrue(body.contains("name=\"aiGuess\""))
+        XCTAssertTrue(body.contains("고양이"))
+    }
+
+    func testMascotCommentMapsStructuredDetail() async throws {
+        StubProtocol.respond(200, #"{"content":[{"id":9,"author":{"userId":7,"nickname":"별이"},"content":"고양이인가요?","createdAt":"2026-10-12T21:00:00+09:00","ai":true,"aiDetail":{"kind":"DRAW_GUESS","guesses":[{"label":"고양이","probability":0.62}]}}]}"#)
+        let comments = try await SubmissionRepository(api: api).comments(submissionID: 5)
+        let comment = try XCTUnwrap(comments.first)
+        XCTAssertTrue(comment.isAi)
+        XCTAssertEqual(comment.aiDetail, .drawGuess([AiGuessEntry(label: "고양이", probability: 0.62)]))
     }
 
     func testTodayMissionsReadParamsPokesAndSlots() async throws {

@@ -22,14 +22,16 @@ struct Submission: Identifiable, Hashable {
     var number: Int? = nil
     var choice: String? = nil
     var caption: String? = nil
-    /// 사진-주제 적합도 AI 심사(B10). 심사가 끝나고 보여 줄 게 있을 때만 서버가 보내요(점수는 오지 않음).
-    var aiReview: AiReview? = nil
 }
 
-/// AI 심사 결과. `badge` 는 "PERFECT_FIT" 또는 nil, `comment` 는 칭찬 한 줄 또는 nil.
-struct AiReview: Hashable {
-    var badge: String?
-    var comment: String?
+struct AiGuessEntry: Codable, Hashable {
+    var label: String
+    var probability: Float
+}
+
+enum AiDetail: Hashable {
+    case photoScore(Int)
+    case drawGuess([AiGuessEntry])
 }
 
 /// 서버 스티커 종류(`stickerType`). 디자인이 나오기 전까지 이모지로 임시 표시해요.
@@ -62,6 +64,7 @@ struct Reaction: Hashable {
     var count: Int
     var reactedByMe: Bool
     var userIDs: [Int]
+    var aiReacted = false
 }
 
 struct SubmissionComment: Identifiable, Hashable {
@@ -73,6 +76,8 @@ struct SubmissionComment: Identifiable, Hashable {
     var mentionedUserIDs: [Int]
     var createdAt: Date
     var isMine: Bool
+    var isAi = false
+    var aiDetail: AiDetail? = nil
 }
 
 /// 하루치 미션 결과 (10~13)

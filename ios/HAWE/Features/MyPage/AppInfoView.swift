@@ -139,7 +139,7 @@ struct LicensesView: View {
                         .foregroundStyle(.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 16)
-                    Text("그림 인식 모델은 Quick, Draw! 데이터셋(creativecommons.org/licenses/by/4.0)으로 HA'WE 팀이 직접 학습했어요. AI 추측은 재미용이며, 그림은 휴대폰 안에서만 분석하고 서버로 보내지 않아요.")
+                    Text("그림 인식 모델은 Quick, Draw! 데이터셋(creativecommons.org/licenses/by/4.0)으로 HA'WE 팀이 직접 학습했어요. AI 추측은 재미용이며, 그림은 휴대폰 안에서 분석하고 추측 후보만 그룹에 공유해요.")
                         .font(.caption12)
                         .foregroundStyle(.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -12,7 +12,7 @@ import kotlinx.coroutines.withContext
 import org.tensorflow.lite.Interpreter
 
 /**
- * 그림 인식 모델(M1 `quickdraw_cnn.tflite`, 범주 50개)을 기기 안에서만 돌려요. 그림·결과는 어디에도 보내거나 남기지 않아요.
+ * 그림 인식 모델(M1 `quickdraw_cnn.tflite`, 범주 50개)을 기기 안에서 돌려요. 제출 시 추측 후보를 공유해요.
  * 처음 쓸 때 한 번만 불러오고(앱 시작 비용 없음), 불러오지 못하면 기능을 숨겨요(크래시 없음).
  */
 class QuickDrawClassifier private constructor(private val interpreter: Interpreter, val categories: List<DrawCategory>) {

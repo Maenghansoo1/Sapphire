@@ -260,6 +260,8 @@ hawe.mission.max-daily-count=5
   "submittedAt": "2026-10-13T21:00:00+09:00", "isLate": false }
 ```
 
+그림 틀(`DRAW_SKETCH`, `DRAW_A_TO_B`)은 기기에서 계산한 추측 후보를 선택적 multipart 텍스트 필드 `aiGuess`(JSON 배열, 최대 1000자)로 보낼 수 있다. 사진 틀에는 이 필드를 보낼 수 없다. 서버는 제출 이후 별이의 댓글에 후보를 표시하며 원본 그림은 추측을 위해 서버에서 다시 분석하지 않는다.
+
 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `ALREADY_SUBMITTED` (409), `INVALID_SUBMISSION` (400), `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413)
 
 ---
@@ -272,7 +274,7 @@ hawe.mission.max-daily-count=5
 | GET | `/submissions/{id}` | 게시물 상세 |
 
 ### GET /missions/{missionId}/submissions
-- `page` 기본 0(음수는 0), `size` 기본 20(1~100으로 보정), 정렬 `submitted_at ASC, id ASC`. 항목은 §3-3의 공통 응답이다. `reactions`는 스티커별 `{ stickerType, count, reactedByMe, userIds }` 배열이고 `commentCount`는 실제 댓글 수다. 반응이 없는 종류는 생략한다. 사진 제출의 비동기 판정이 끝나고 긍정 결과가 있으면 `aiReview: { "badge": "PERFECT_FIT", "comment": "주제랑 딱 맞는 사진이에요!" }`가 추가된다. 점수는 응답하지 않는다.
+- `page` 기본 0(음수는 0), `size` 기본 20(1~100으로 보정), 정렬 `submitted_at ASC, id ASC`. 항목은 §3-3의 공통 응답이다. `reactions`는 스티커별 `{ stickerType, count, reactedByMe, userIds, aiReacted }` 배열이고 `commentCount`는 실제 댓글 수다. 반응이 없는 종류는 생략한다. 별이의 댓글과 반응은 제출 이후 비동기로 추가되며 `aiReview` 필드는 없다. 별이 반응은 `count`에 포함되고 `userIds`에서는 제외된다.
 - 내가 아직 미제출: **423** `FEED_LOCKED`
 - 제출 완료: 페이지네이션 봉투. 항목은 §3-3의 공통 제출 응답.
 ```json

@@ -31,17 +31,20 @@ public interface InsightMapper {
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
     List<InsightRow> findSubmissions(@Param("ids") List<Long> ids);
 
-    @Select("<script>SELECT submission_id, COUNT(*) AS count FROM reactions WHERE submission_id IN "
+    @Select("<script>SELECT submission_id, COUNT(*) AS count FROM reactions WHERE "
+            + "NOT EXISTS (SELECT 1 FROM users au WHERE au.id = reactions.user_id AND au.is_ai = 1) AND submission_id IN "
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
             + "GROUP BY submission_id</script>")
     List<InsightRow> countReactionsBySubmission(@Param("ids") List<Long> ids);
 
-    @Select("<script>SELECT submission_id, sticker_type, COUNT(*) AS count FROM reactions WHERE submission_id IN "
+    @Select("<script>SELECT submission_id, sticker_type, COUNT(*) AS count FROM reactions WHERE "
+            + "NOT EXISTS (SELECT 1 FROM users au WHERE au.id = reactions.user_id AND au.is_ai = 1) AND submission_id IN "
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
             + "GROUP BY submission_id, sticker_type</script>")
     List<InsightRow> countStickersBySubmission(@Param("ids") List<Long> ids);
 
-    @Select("<script>SELECT submission_id, COUNT(*) AS count FROM comments WHERE submission_id IN "
+    @Select("<script>SELECT submission_id, COUNT(*) AS count FROM comments WHERE "
+            + "NOT EXISTS (SELECT 1 FROM users au WHERE au.id = comments.user_id AND au.is_ai = 1) AND submission_id IN "
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
             + "GROUP BY submission_id</script>")
     List<InsightRow> countCommentsBySubmission(@Param("ids") List<Long> ids);

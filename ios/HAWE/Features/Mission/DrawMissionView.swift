@@ -4,7 +4,7 @@ import SwiftUI
 /// 06 미션 수행 · 그림 (Figma 1:594)
 /// PencilKit. 펜/지우개, 굵기 3단계, 7색, 되돌리기/다시 실행. 올리기 → PNG
 /// 30초 스케치(`spec.seconds`)는 첫 획부터 시간을 재고, 시간이 끝나면 더 그릴 수 없어요.
-/// "AI에게 보여주기"는 기기 안 모델로 그림을 맞혀 봐요 (재미용 — 올리기·도장과 무관, 그림은 밖으로 나가지 않아요, A8).
+/// "AI에게 보여주기"는 기기 안 모델로 그림을 맞혀 봐요. 제출할 때는 추측 후보를 함께 보내요.
 struct DrawMissionView: View {
     let topic: String
     var template = MissionTemplates.drawSketch
@@ -86,9 +86,11 @@ struct DrawMissionView: View {
 
     private func submit() {
         guard !isSubmitting, let png = canvas.pngData() else { return }
+        let ink = canvas.inkImage()
         isSubmitting = true
         Task {
-            if await !onSubmit(.image(png, fileExtension: "png")) { isSubmitting = false }
+            let guesses = await guessForUpload(ink)
+            if await !onSubmit(.image(png, fileExtension: "png", aiGuesses: guesses)) { isSubmitting = false }
         }
     }
 

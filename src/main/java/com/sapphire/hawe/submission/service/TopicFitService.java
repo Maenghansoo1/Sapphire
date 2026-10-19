@@ -4,6 +4,7 @@ import com.sapphire.hawe.global.config.VisionProperties;
 import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
+import com.sapphire.hawe.mascot.service.MascotService;
 import com.sapphire.hawe.submission.dao.AiReviewMapper;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
@@ -23,10 +24,11 @@ public class TopicFitService {
     private final VisionClient client;
     private final VisionProperties properties;
     private final ObjectMapper json;
+    private final MascotService mascot;
     private final TopicFitJudge judge = new TopicFitJudge();
 
     public TopicFitService(SubmissionMapper submissions, MissionMapper missions, AiReviewMapper reviews,
-            FileStorage storage, VisionClient client, VisionProperties properties, ObjectMapper json) {
+            FileStorage storage, VisionClient client, VisionProperties properties, ObjectMapper json, MascotService mascot) {
         this.submissions = submissions;
         this.missions = missions;
         this.reviews = reviews;
@@ -34,6 +36,7 @@ public class TopicFitService {
         this.client = client;
         this.properties = properties;
         this.json = json;
+        this.mascot = mascot;
     }
 
     public void review(Long submissionId) {
@@ -70,6 +73,9 @@ public class TopicFitService {
                 TopicFitJudge.Verdict verdict = judge.judge(result.fit(), properties.thresholdFor(row.getTemplate()), submissionId);
                 reviews.complete(submissionId, "DONE", result.fit(), verdict.badge(), verdict.comment(),
                         result.model() + "/" + result.version(), attempt);
+                try { mascot.commentPhotoScore(submissionId, verdict.comment(),
+                        judge.score(result.fit(), properties.thresholdFor(row.getTemplate()))); }
+                catch (RuntimeException error) { log.warn("Mascot score comment failed for submission {}", submissionId, error); }
                 return;
             }
         } catch (RuntimeException e) {

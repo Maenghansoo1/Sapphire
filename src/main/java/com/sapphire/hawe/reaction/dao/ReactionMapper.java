@@ -19,12 +19,16 @@ public interface ReactionMapper {
     void insert(@Param("submissionId") Long submissionId, @Param("userId") Long userId,
             @Param("stickerType") String stickerType);
 
-    @Select("SELECT submission_id, user_id, sticker_type FROM reactions "
-            + "WHERE submission_id = #{submissionId} ORDER BY id")
+    @Select("SELECT COUNT(*) > 0 FROM reactions WHERE submission_id = #{submissionId} AND user_id = #{userId}")
+    boolean existsBySubmissionIdAndUserId(@Param("submissionId") Long submissionId, @Param("userId") Long userId);
+
+    @Select("SELECT r.submission_id, r.user_id, r.sticker_type, u.is_ai AS ai FROM reactions r "
+            + "JOIN users u ON u.id = r.user_id WHERE r.submission_id = #{submissionId} ORDER BY r.id")
     List<ReactionRow> findBySubmissionId(@Param("submissionId") Long submissionId);
 
-    @Select("<script>SELECT submission_id, user_id, sticker_type FROM reactions WHERE submission_id IN "
+    @Select("<script>SELECT r.submission_id, r.user_id, r.sticker_type, u.is_ai AS ai FROM reactions r "
+            + "JOIN users u ON u.id = r.user_id WHERE r.submission_id IN "
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
-            + "ORDER BY submission_id, id</script>")
+            + "ORDER BY r.submission_id, r.id</script>")
     List<ReactionRow> findBySubmissionIds(@Param("ids") List<Long> ids);
 }

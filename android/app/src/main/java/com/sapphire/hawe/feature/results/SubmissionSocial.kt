@@ -33,6 +33,8 @@ import com.sapphire.hawe.core.net.SubmissionRepository
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
 import com.sapphire.hawe.designsystem.components.HAvatar
+import com.sapphire.hawe.designsystem.components.MascotAvatar
+import com.sapphire.hawe.core.model.AiDetail
 import com.sapphire.hawe.designsystem.components.HTextField
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
@@ -153,7 +155,8 @@ private fun StickerBar(reactions: List<Reaction>, names: Map<Long, String>, onTo
             }
         }
         reactions.forEach { reaction ->
-            val who = reaction.userIds.joinToString(", ") { names[it] ?: "나간 멤버" }
+            val who = (reaction.userIds.map { names[it] ?: "나간 멤버" } +
+                if (reaction.aiReacted) listOf("별이") else emptyList()).joinToString(", ")
             Text("${reaction.sticker.emoji} $who", style = HType.caption13, color = HColors.textSecondary)
         }
     }
@@ -161,18 +164,25 @@ private fun StickerBar(reactions: List<Reaction>, names: Map<Long, String>, onTo
 
 @Composable
 private fun CommentRow(comment: SubmissionComment, onDelete: () -> Unit) {
+    var showingDetail by remember(comment.id) { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        HAvatar(comment.author.avatar, size = 30.dp)
+        if (comment.isAi) MascotAvatar(30.dp) else HAvatar(comment.author.avatar, size = 30.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(comment.author.nickname, style = HType.plex(14, FontWeight.SemiBold), color = HColors.ink)
+                if (comment.isAi) Text("AI", style = HType.caption12, color = HColors.accentPressed)
                 Text(koreanTimeText(comment.createdAt), style = HType.caption12, color = HColors.textSecondary)
                 Spacer(Modifier.weight(1f))
-                if (comment.isMine) Text("삭제", style = HType.caption12, color = HColors.textSecondary,
+                if (comment.isMine && !comment.isAi) Text("삭제", style = HType.caption12, color = HColors.textSecondary,
                     modifier = Modifier.clickable(onClick = onDelete).padding(vertical = 4.dp))
             }
             if (comment.content.isNotEmpty()) Text(comment.content, style = HType.plex(15, lineHeightMultiple = 1.5f),
-                color = HColors.ink)
+                color = HColors.ink, modifier = if (comment.aiDetail != null) Modifier.clickable { showingDetail = true } else Modifier)
+            comment.aiDetail?.let { detail ->
+                Text(if (detail is AiDetail.PhotoScore) "눌러서 점수 보기" else "눌러서 별이의 추측 보기",
+                    style = HType.caption12, color = HColors.accentPressed,
+                    modifier = Modifier.clickable { showingDetail = true })
+            }
             comment.imageURL?.let {
                 AsyncImage(model = it.toString(), contentDescription = "${comment.author.nickname}의 댓글 사진",
                     modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).clip(RoundedCornerShape(HRadius.card)),
@@ -180,6 +190,7 @@ private fun CommentRow(comment: SubmissionComment, onDelete: () -> Unit) {
             }
         }
     }
+    if (showingDetail) comment.aiDetail?.let { MascotDetailDialog(it) { showingDetail = false } }
 }
 
 @Composable

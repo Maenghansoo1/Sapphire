@@ -161,6 +161,9 @@ class MissionMapperTests {
         jdbc.update("INSERT INTO reactions (submission_id, user_id, sticker_type) VALUES (?, ?, 'heart'), (?, ?, 'fire')",
                 ownerAnswer, member, ownerAnswer, owner);
         jdbc.update("INSERT INTO comments (submission_id, user_id, content) VALUES (?, ?, 'ㅋㅋ')", ownerAnswer, member);
+        long mascot = jdbc.queryForObject("SELECT id FROM users WHERE is_ai=1", Long.class);
+        jdbc.update("INSERT INTO reactions (submission_id, user_id, sticker_type) VALUES (?, ?, 'wow')", ownerAnswer, mascot);
+        jdbc.update("INSERT INTO comments (submission_id, user_id, content) VALUES (?, ?, '별이')", ownerAnswer, mascot);
 
         var stats = missions.findClosedStatsByGroupId(groupId, SeoulTime.today().minusDays(30), 150);
 

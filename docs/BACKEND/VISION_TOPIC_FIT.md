@@ -8,9 +8,12 @@ See the [vision service contract](../../ml/vision-service/README.md).
 
 The service receives the image, template, and topic. Images go only to our configured vision
 service (`hawe.vision.base-url`), not to the mission text AI. Scores stay in `fit_score` in the
-database. Feed and detail responses include `aiReview: { badge, comment }` for a completed
-review, including comment-only low-score reviews. They never include `fit`, `fit_score`, or `cosine`.
-The response omits `aiReview` when review is disabled, pending, failed, or skipped.
+database. Once a review is `DONE`, Byeol posts the existing verdict as a comment with
+`aiDetail: {"kind":"PHOTO_SCORE","score":73}`. Feed and detail responses omit `aiReview`.
+The displayed score maps fit to 0–100: 0 maps to 0, `good` to 60, `perfect` to 80,
+and fit at or above 0.5 to 100, interpolating between boundaries. Disabled, pending,
+failed, and skipped reviews do not create a score comment. Byeol still adds a random
+reaction to supported photo submissions independently of the vision service.
 
 | Template | Perfect badge | Good comment |
 | --- | ---: | ---: |

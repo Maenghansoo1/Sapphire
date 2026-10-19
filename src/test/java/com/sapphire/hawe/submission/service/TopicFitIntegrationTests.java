@@ -45,14 +45,12 @@ class TopicFitIntegrationTests {
             files.add("file", new MockMultipartFile("file", "photo.jpg", "image/jpeg",
                     new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff}));
             var created = submissions.submit(userId, missionId, new LinkedMultiValueMap<>(), files);
-            assertNull(created.aiReview());
             long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
             while (System.nanoTime() < deadline && jdbc.queryForObject(
                     "SELECT COUNT(*) FROM submission_ai_reviews WHERE submission_id=? AND status='DONE'",
                     Integer.class, created.id()) == 0) Thread.sleep(50);
-            var reviewed = submissions.detail(userId, created.id()).aiReview();
-            assertNotNull(reviewed, "Vision review did not complete within five seconds");
-            assertEquals("PERFECT_FIT", reviewed.badge());
+            assertEquals("DONE", jdbc.queryForObject(
+                    "SELECT status FROM submission_ai_reviews WHERE submission_id=?", String.class, created.id()));
             groups.leaveGroup(userId, groupId, null);
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM submission_ai_reviews WHERE submission_id=?",
                     Integer.class, created.id()));

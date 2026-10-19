@@ -36,10 +36,10 @@ public class ReactionService {
 
     public static List<ReactionSummary> summarize(List<ReactionRow> rows, Long viewerId) {
         return java.util.Arrays.stream(StickerType.values()).map(type -> {
-            List<Long> userIds = rows.stream().filter(row -> type.value().equals(row.getStickerType()))
-                    .map(ReactionRow::getUserId).toList();
-            return userIds.isEmpty() ? null : new ReactionSummary(type.value(), userIds.size(),
-                    userIds.contains(viewerId), userIds);
+            List<ReactionRow> matching = rows.stream().filter(row -> type.value().equals(row.getStickerType())).toList();
+            List<Long> userIds = matching.stream().filter(row -> !row.isAi()).map(ReactionRow::getUserId).toList();
+            return matching.isEmpty() ? null : new ReactionSummary(type.value(), matching.size(),
+                    userIds.contains(viewerId), userIds, matching.stream().anyMatch(ReactionRow::isAi));
         }).filter(summary -> summary != null).toList();
     }
 }

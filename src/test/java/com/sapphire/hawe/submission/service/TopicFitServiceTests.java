@@ -4,6 +4,7 @@ import com.sapphire.hawe.global.config.VisionProperties;
 import com.sapphire.hawe.global.storage.FileStorage;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.MissionRow;
+import com.sapphire.hawe.mascot.service.MascotService;
 import com.sapphire.hawe.submission.dao.AiReviewMapper;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
@@ -21,7 +22,8 @@ class TopicFitServiceTests {
     FileStorage storage = mock(FileStorage.class);
     VisionClient client = mock(VisionClient.class);
     VisionProperties properties = new VisionProperties(true, null, null, null, Duration.ZERO, null, null);
-    TopicFitService service = new TopicFitService(submissions, missions, reviews, storage, client, properties, new ObjectMapper());
+    MascotService mascot = mock(MascotService.class);
+    TopicFitService service = new TopicFitService(submissions, missions, reviews, storage, client, properties, new ObjectMapper(), mascot);
     SubmissionRow row = new SubmissionRow();
     MissionRow mission = new MissionRow();
 
@@ -40,6 +42,7 @@ class TopicFitServiceTests {
                 .thenReturn(new TopicFitResult(0.5, "model", "1"));
         service.review(1L);
         verify(reviews).complete(eq(1L), eq("DONE"), eq(0.5), eq("PERFECT_FIT"), anyString(), eq("model/1"), eq(1));
+        verify(mascot).commentPhotoScore(eq(1L), anyString(), eq(100));
     }
 
     @Test void lowFitStoresEncouragingCommentWithoutBadge() {
@@ -47,6 +50,7 @@ class TopicFitServiceTests {
                 .thenReturn(new TopicFitResult(0.016, "model", "1"));
         service.review(1L);
         verify(reviews).complete(1L, "DONE", 0.016, null, "오늘의 한 장, 잘 남겼어요", "model/1", 1);
+        verify(mascot).commentPhotoScore(1L, "오늘의 한 장, 잘 남겼어요", new TopicFitJudge().score(0.016, properties.photoNow()));
     }
 
     @Test void failureRetriesOnceAndCompletesFailed() {
@@ -54,6 +58,7 @@ class TopicFitServiceTests {
         service.review(1L);
         verify(client, times(2)).call(anyString(), anyString(), any(), anyString());
         verify(reviews).complete(1L, "FAILED", null, null, null, null, 2);
+        verifyNoInteractions(mascot);
     }
 
     @Test void doneWriteFailureDoesNotRepeatVisionCall() {
@@ -71,6 +76,7 @@ class TopicFitServiceTests {
         service.review(1L);
         verify(reviews).complete(1L, "SKIPPED", null, null, null, null, 0);
         verifyNoInteractions(client);
+        verifyNoInteractions(mascot);
     }
 
     @Test void missingSubmissionAndDuplicateEventDoNothing() {

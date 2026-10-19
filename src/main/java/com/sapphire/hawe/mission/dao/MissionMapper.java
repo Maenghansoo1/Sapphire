@@ -81,9 +81,11 @@ public interface MissionMapper {
     @Select("SELECT m.template, m.content, "
             + "(SELECT COUNT(*) FROM submissions s WHERE s.mission_id = m.id) AS submitted_count, "
             + MEMBER_COUNT + "AS member_count, "
-            + "(SELECT COUNT(*) FROM reactions r JOIN submissions s ON s.id = r.submission_id WHERE s.mission_id = m.id) "
+            + "(SELECT COUNT(*) FROM reactions r JOIN submissions s ON s.id = r.submission_id WHERE s.mission_id = m.id "
+            + "AND NOT EXISTS (SELECT 1 FROM users au WHERE au.id = r.user_id AND au.is_ai = 1)) "
             + "+ (SELECT COUNT(*) FROM comments c JOIN submissions s ON s.id = c.submission_id "
-            + "WHERE s.mission_id = m.id) AS engagement_count "
+            + "WHERE s.mission_id = m.id AND NOT EXISTS (SELECT 1 FROM users au WHERE au.id = c.user_id "
+            + "AND au.is_ai = 1)) AS engagement_count "
             + "FROM missions m WHERE m.group_id = #{groupId} AND m.mission_date >= #{since} AND NOT (" + CURRENT + ") "
             + "ORDER BY m.published_at DESC, m.id DESC LIMIT #{limit}")
     List<MissionStatRow> findClosedStatsByGroupId(@Param("groupId") Long groupId, @Param("since") LocalDate since,

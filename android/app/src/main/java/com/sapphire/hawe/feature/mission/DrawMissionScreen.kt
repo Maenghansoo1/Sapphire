@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +47,8 @@ import com.sapphire.hawe.feature.draw.DrawSubjectMatcher
 import com.sapphire.hawe.feature.draw.rememberAiGuessAvailable
 import com.sapphire.hawe.feature.draw.rememberAiGuessRunner
 import com.sapphire.hawe.feature.draw.strokeInkImage
+import com.sapphire.hawe.feature.draw.guessForUpload
+import com.sapphire.hawe.core.model.AiGuessEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,7 +56,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClose: () -> Unit,
-    onSubmit: suspend (ByteArray) -> Boolean) {
+    onSubmit: suspend (ByteArray, List<AiGuessEntry>) -> Boolean) {
     val model = remember { DrawingModel() }
     val timer = remember(spec.seconds) { spec.seconds?.let { SketchTimer(it) } }
     val toast = rememberHToastState()
@@ -76,6 +79,7 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
     var submitted by remember { mutableStateOf(false) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current.density
+    val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val aiAvailable = rememberAiGuessAvailable()
     val aiGuess = rememberAiGuessRunner()
@@ -158,7 +162,7 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
         }
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // AI 추측은 재미용이라 올리기·도장에 영향이 없고, 그림은 기기 밖으로 나가지 않아요(A8)
+            // 미리보기는 계속 로컬에서 실행해요.
             if (aiAvailable) AiShowButton(enabled = hasDraft && canvasSize.width > 0) {
                 val strokes = model.strokes
                 val width = canvasSize.width / density
@@ -174,7 +178,11 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
                 val width = canvasSize.width / density
                 val height = canvasSize.height / density
                 scope.launch {
-                    try { if (!onSubmit(withContext(Dispatchers.Default) { renderDrawingPng(strokes, width, height) })) submitted = false }
+                    try {
+                        val png = withContext(Dispatchers.Default) { renderDrawingPng(strokes, width, height) }
+                        val ink = withContext(Dispatchers.Default) { strokeInkImage(strokes, width, height) }
+                        if (!onSubmit(png, guessForUpload(context, ink))) submitted = false
+                    }
                     catch (error: Exception) { submitted = false }
                 }
             }

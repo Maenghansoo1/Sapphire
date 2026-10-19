@@ -19,7 +19,8 @@ import java.time.YearMonth
 import kotlin.random.Random
 
 sealed interface SubmissionContent {
-    data class Image(val bytes: ByteArray, val fileExtension: String) : SubmissionContent
+    data class Image(val bytes: ByteArray, val fileExtension: String,
+        val aiGuesses: List<com.sapphire.hawe.core.model.AiGuessEntry> = emptyList()) : SubmissionContent
     data class Text(val body: String) : SubmissionContent
     /** 새 틀(한 단어·후기·밸런스)의 글·숫자·선택 필드. null 인 필드는 보내지 않아요. */
     data class Scalar(val number: Int? = null, val choice: String? = null,

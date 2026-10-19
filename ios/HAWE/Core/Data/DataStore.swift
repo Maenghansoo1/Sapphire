@@ -12,7 +12,7 @@ struct ScalarAnswer: Equatable {
 /// 미션 수행 화면에서 올리는 내용
 enum SubmissionContent {
     /// 그림(PNG)·사진(JPEG)
-    case image(Data, fileExtension: String)
+    case image(Data, fileExtension: String, aiGuesses: [AiGuessEntry] = [])
     case text(String)
     case scalar(ScalarAnswer)
 }

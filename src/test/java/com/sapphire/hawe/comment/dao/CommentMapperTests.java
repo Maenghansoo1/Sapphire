@@ -48,6 +48,15 @@ class CommentMapperTests {
                 .getFirst().getSubmissionId());
         assertEquals(2, comments.countBySubmissionIds(List.of(firstSubmission, secondSubmission))
                 .getFirst().getCount());
+        assertFalse(comments.findDetailById(first.getId()).isAi());
+        assertNull(comments.findDetailById(first.getId()).getAiDetail());
+        Long mascot = jdbc.queryForObject("SELECT id FROM users WHERE is_ai=1", Long.class);
+        CommentInsertRow ai = new CommentInsertRow(firstSubmission, mascot, "고양이인가요?", null,
+                "{\"kind\":\"DRAW_GUESS\",\"guesses\":[]}", at);
+        comments.insert(ai);
+        assertTrue(comments.findDetailById(ai.getId()).isAi());
+        assertEquals(ai.getAiDetail(), comments.findDetailById(ai.getId()).getAiDetail());
+        assertTrue(comments.existsBySubmissionIdAndUserId(firstSubmission, mascot));
         comments.deleteMentionsByCommentId(first.getId());
         comments.deleteById(first.getId());
         assertNull(comments.findDetailById(first.getId()));

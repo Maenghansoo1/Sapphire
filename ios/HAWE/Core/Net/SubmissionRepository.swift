@@ -39,9 +39,14 @@ final class SubmissionRepository: Sendable {
     func submit(missionID: Int, content: SubmissionContent, myUserID: Int) async throws -> Submission {
         let parts: [APIClient.Part]
         switch content {
-        case .image(let data, let ext):
+        case .image(let data, let ext, let guesses):
             let png = ext.lowercased() == "png"
-            parts = [.file(name: "file", filename: png ? "drawing.png" : "photo.jpg", mime: png ? "image/png" : "image/jpeg", data: data)]
+            var imageParts: [APIClient.Part] = [.file(name: "file", filename: png ? "drawing.png" : "photo.jpg", mime: png ? "image/png" : "image/jpeg", data: data)]
+            if png, !guesses.isEmpty, let encoded = try? JSONEncoder().encode(Array(guesses.prefix(3))),
+               let json = String(data: encoded, encoding: .utf8) {
+                imageParts.append(.text(name: "aiGuess", value: json))
+            }
+            parts = imageParts
         case .text(let body):
             parts = [.text(name: "text", value: body)]
         case .scalar(let scalar):
@@ -110,7 +115,8 @@ final class SubmissionRepository: Sendable {
     static func reactions(_ dtos: [ReactionDTO]) -> [Reaction] {
         dtos.compactMap { dto in
             Sticker(rawValue: dto.stickerType).map {
-                Reaction(sticker: $0, count: dto.count ?? 0, reactedByMe: dto.reactedByMe ?? false, userIDs: dto.userIds ?? [])
+                Reaction(sticker: $0, count: dto.count ?? 0, reactedByMe: dto.reactedByMe ?? false,
+                         userIDs: dto.userIds ?? [], aiReacted: dto.aiReacted ?? false)
             }
         }
     }
@@ -125,7 +131,9 @@ final class SubmissionRepository: Sendable {
             imageURL: dto.imageUrl.map(api.absoluteURL),
             mentionedUserIDs: dto.mentionedUserIds ?? [],
             createdAt: ServerDate.instant(dto.createdAt) ?? .now,
-            isMine: dto.mine ?? false
+            isMine: dto.mine ?? false,
+            isAi: dto.ai ?? false,
+            aiDetail: dto.aiDetail?.model
         )
     }
 
@@ -147,19 +155,8 @@ final class SubmissionRepository: Sendable {
             template: dto.template,
             number: dto.number,
             choice: dto.choice,
-            caption: dto.caption,
-            aiReview: dto.aiReview?.model
+            caption: dto.caption
         )
-    }
-}
-
-extension AiReviewDTO {
-    /// 배지도 코멘트도 비어 있으면 보여 줄 게 없으니 nil
-    var model: AiReview? {
-        let badge = badge.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-        let comment = comment?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let shown = comment?.isEmpty == false ? comment : nil
-        return badge == nil && shown == nil ? nil : AiReview(badge: badge, comment: shown)
     }
 }
 

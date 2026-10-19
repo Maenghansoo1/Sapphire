@@ -28,7 +28,7 @@ class CommentServiceTests {
     GroupMemberMapper members = mock(GroupMemberMapper.class);
     FileStorage storage = mock(FileStorage.class);
     ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-    CommentService service = new CommentService(comments, submissions, members, storage, events);
+    CommentService service = new CommentService(comments, submissions, members, storage, events, new tools.jackson.databind.ObjectMapper());
 
     @BeforeEach void setUp() {
         SubmissionRow submission = new SubmissionRow();
@@ -72,6 +72,22 @@ class CommentServiceTests {
         assertError("VALIDATION_ERROR", () -> service.create(3L, 10L, "hello", List.of(5L), jpg()));
         verify(storage, never()).store(anyString(), any(), anyString());
         verify(comments, never()).insert(any());
+    }
+
+    @Test void listExposesMascotDetailAndOmitsItForPeople() {
+        CommentRow human = row(1L, 4L, "안녕", null);
+        CommentRow mascot = row(2L, 7L, "고양이인가요?", null);
+        mascot.setAi(true);
+        mascot.setAiDetail("{\"kind\":\"DRAW_GUESS\",\"guesses\":[{\"label\":\"고양이\",\"probability\":0.62}]}");
+        when(comments.findPageBySubmissionId(10L, 0, 20)).thenReturn(List.of(human, mascot));
+        var result = service.list(3L, 10L, 0, 20).content();
+        assertFalse(result.getFirst().ai());
+        assertNull(result.getFirst().aiDetail());
+        assertTrue(result.get(1).ai());
+        assertFalse(result.get(1).mine());
+        assertEquals("DRAW_GUESS", result.get(1).aiDetail().path("kind").asString());
+        String encoded = new tools.jackson.databind.ObjectMapper().writeValueAsString(result.getFirst());
+        assertFalse(encoded.contains("aiDetail"));
     }
 
     @Test void deletionChecksExistenceAccessAndOwnerBeforeDeleting() {

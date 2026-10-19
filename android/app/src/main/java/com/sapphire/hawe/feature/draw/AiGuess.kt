@@ -1,6 +1,11 @@
 package com.sapphire.hawe.feature.draw
 
+import android.content.Context
+import com.sapphire.hawe.core.model.AiGuessEntry
 import com.sapphire.hawe.core.josa
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 /**
@@ -15,6 +20,19 @@ const val AI_CLOSE_MIN_PROBABILITY = 0.15f
 
 data class AiGuess(val category: DrawCategory, val probability: Float)
 
+/** 업로드와 함께 보낼 후보만 계산한다. 모델을 사용할 수 없으면 제출은 계속된다. */
+suspend fun guessForUpload(context: Context, ink: InkImage?): List<AiGuessEntry> = withContext(Dispatchers.Default) {
+    try {
+        val classifier = QuickDrawClassifier.get(context) ?: return@withContext emptyList()
+        val input = ink?.modelInput() ?: return@withContext emptyList()
+        uploadGuessEntries(classifier.classify(input), classifier.categories)
+    } catch (error: CancellationException) { throw error }
+    catch (error: Exception) { emptyList() }
+}
+
+fun uploadGuessEntries(probabilities: FloatArray, categories: List<DrawCategory>): List<AiGuessEntry> =
+    topGuesses(probabilities, categories).map { AiGuessEntry(it.category.ko, it.probability) }
+
 /** 확률이 높은 순서로 [count]개. 같은 확률이면 범주 번호 순. */
 fun topGuesses(probabilities: FloatArray, categories: List<DrawCategory>, count: Int = 3): List<AiGuess> {
     require(probabilities.size == categories.size) { "모델 출력 수와 범주 수가 달라요" }
@@ -22,7 +40,7 @@ fun topGuesses(probabilities: FloatArray, categories: List<DrawCategory>, count:
         .take(count).map { AiGuess(categories[it], probabilities[it]) }
 }
 
-/** AI 추측 결과. 결과는 저장하거나 서버로 보내지 않아요(재미용). */
+/** 그림을 올릴 때 후보 이름과 확률을 그룹에 보여 줘요. */
 sealed interface AiVerdict {
     /** 그림이 너무 비어서 추론하지 않음 */
     data object TooEmpty : AiVerdict

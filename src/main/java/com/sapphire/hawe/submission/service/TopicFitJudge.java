@@ -9,6 +9,18 @@ public class TopicFitJudge {
 
     public record Verdict(String badge, String comment) { }
 
+    public int score(double fit, Threshold threshold) {
+        if (!Double.isFinite(fit) || fit <= 0) return 0;
+        if (fit >= 0.5) return 100;
+        double good = threshold.good();
+        double perfect = threshold.perfect();
+        double value;
+        if (fit < good) value = 60 * fit / good;
+        else if (fit < perfect) value = 60 + 20 * (fit - good) / (perfect - good);
+        else value = perfect >= 0.5 ? 80 : 80 + 20 * (fit - perfect) / (0.5 - perfect);
+        return (int) Math.round(Math.clamp(value, 0, 100));
+    }
+
     public Verdict judge(double fit, Threshold threshold, long submissionId) {
         if (fit >= threshold.perfect())
             return new Verdict("PERFECT_FIT", PERFECT[Math.floorMod(submissionId, PERFECT.length)]);

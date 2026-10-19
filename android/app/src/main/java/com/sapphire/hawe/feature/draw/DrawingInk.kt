@@ -1,13 +1,7 @@
 package com.sapphire.hawe.feature.draw
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import coil3.imageLoader
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.request.allowHardware
-import coil3.toBitmap
 import com.sapphire.hawe.feature.mission.DrawStroke
 import com.sapphire.hawe.feature.mission.drawStrokes
 import kotlin.math.roundToInt
@@ -36,12 +30,4 @@ fun strokeInkImage(strokes: List<DrawStroke>, widthDp: Float, heightDp: Float): 
         drawStrokes(Canvas(bitmap), strokes.map { if (it.isEraser) it else it.copy(color = android.graphics.Color.BLACK) }, 1f)
         bitmap.toInkImage()
     } finally { bitmap.recycle() }
-}
-
-/** 결과 화면의 그림 PNG(흰 배경 + 색 잉크) → 픽셀. 화면에 이미 띄운 이미지라 보통 Coil 캐시에서 바로 와요. 실패하면 null. */
-suspend fun loadInkImage(context: Context, model: Any?): InkImage? {
-    model ?: return null
-    val request = ImageRequest.Builder(context).data(model).allowHardware(false).build()
-    val result = context.imageLoader.execute(request) as? SuccessResult ?: return null
-    return result.image.toBitmap().toInkImage()
 }

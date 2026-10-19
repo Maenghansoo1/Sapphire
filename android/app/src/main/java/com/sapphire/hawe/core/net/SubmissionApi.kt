@@ -10,13 +10,10 @@ import kotlinx.serialization.Serializable
     val mediaType: String? = null,
     val caption: String? = null, val text: String? = null, val number: Int? = null,
     val choice: String? = null, val submittedAt: String,
-    val isLate: Boolean = false, val reactions: List<ReactionDto>? = null, val commentCount: Int = 0,
-    val aiReview: AiReviewDto? = null)
-
-@Serializable internal data class AiReviewDto(val badge: String? = null, val comment: String? = null)
+    val isLate: Boolean = false, val reactions: List<ReactionDto>? = null, val commentCount: Int = 0)
 
 @Serializable internal data class ReactionDto(val stickerType: String, val count: Int = 0,
-    val reactedByMe: Boolean = false, val userIds: List<Long> = emptyList())
+    val reactedByMe: Boolean = false, val userIds: List<Long> = emptyList(), val aiReacted: Boolean = false)
 
 @Serializable internal data class ReactionsDto(val reactions: List<ReactionDto> = emptyList())
 
@@ -24,7 +21,12 @@ import kotlinx.serialization.Serializable
 
 @Serializable internal data class CommentDto(val id: Long, val author: SubmissionAuthorDto,
     val content: String = "", val imageUrl: String? = null, val mentionedUserIds: List<Long> = emptyList(),
-    val createdAt: String, val mine: Boolean = false)
+    val createdAt: String, val mine: Boolean = false, val ai: Boolean = false, val aiDetail: AiDetailDto? = null)
+
+@Serializable internal data class AiDetailDto(val kind: String, val score: Int? = null,
+    val guesses: List<AiGuessEntryDto>? = null)
+
+@Serializable internal data class AiGuessEntryDto(val label: String, val probability: Float)
 
 @Serializable internal data class CommentPageDto(val content: List<CommentDto>, val page: Int,
     val size: Int, val totalPages: Int, val totalElements: Long)

@@ -273,12 +273,6 @@ struct SubmissionDTO: Decodable {
     let isLate: Bool?
     let reactions: [ReactionDTO]?
     let commentCount: Int?
-    let aiReview: AiReviewDTO?
-}
-
-struct AiReviewDTO: Decodable {
-    let badge: String?
-    let comment: String?
 }
 
 struct ReactionDTO: Decodable {
@@ -286,6 +280,7 @@ struct ReactionDTO: Decodable {
     let count: Int?
     let reactedByMe: Bool?
     let userIds: [Int]?
+    let aiReacted: Bool?
 }
 
 struct ReactionsDTO: Decodable {
@@ -304,6 +299,22 @@ struct CommentDTO: Decodable {
     let mentionedUserIds: [Int]?
     let createdAt: String
     let mine: Bool?
+    let ai: Bool?
+    let aiDetail: AiDetailDTO?
+}
+
+struct AiDetailDTO: Decodable {
+    let kind: String
+    let score: Int?
+    let guesses: [AiGuessEntry]?
+
+    var model: AiDetail? {
+        switch kind {
+        case "PHOTO_SCORE": score.map(AiDetail.photoScore)
+        case "DRAW_GUESS": guesses.map(AiDetail.drawGuess)
+        default: nil
+        }
+    }
 }
 
 struct SubmissionPageDTO: Decodable {

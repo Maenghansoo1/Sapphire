@@ -36,6 +36,10 @@ class ReactionMapperTests {
         assertEquals(1, reactions.delete(first, firstUser, "heart"));
         assertEquals(0, reactions.delete(first, firstUser, "heart"));
         assertEquals(2, reactions.findBySubmissionId(first).size());
+        Long mascot = jdbc.queryForObject("SELECT id FROM users WHERE is_ai=1", Long.class);
+        reactions.insert(first, mascot, "wow");
+        assertTrue(reactions.existsBySubmissionIdAndUserId(first, mascot));
+        assertTrue(reactions.findBySubmissionId(first).stream().anyMatch(row -> row.getUserId().equals(mascot) && row.isAi()));
     }
 
     private Long user() {

@@ -95,6 +95,12 @@ class InsightMapperTests {
         assertEquals(1, insights.countReactionsBySubmission(List.of(submission)).getFirst().getCount());
         assertEquals("heart", insights.countStickersBySubmission(List.of(submission)).getFirst().getStickerType());
         assertEquals(1, insights.countCommentsBySubmission(List.of(submission)).getFirst().getCount());
+        long mascot = jdbc.queryForObject("SELECT id FROM users WHERE is_ai=1", Long.class);
+        jdbc.update("INSERT INTO reactions(submission_id,user_id,sticker_type) VALUES (?,?,'wow')", submission, mascot);
+        jdbc.update("INSERT INTO comments(submission_id,user_id,content) VALUES (?,?,'별이')", submission, mascot);
+        assertEquals(1, insights.countReactionsBySubmission(List.of(submission)).getFirst().getCount());
+        assertEquals(1, insights.countStickersBySubmission(List.of(submission)).size());
+        assertEquals(1, insights.countCommentsBySubmission(List.of(submission)).getFirst().getCount());
         assertEquals("In group", insights.findDisplayProfiles(group, List.of(member)).getFirst().getNickname());
         jdbc.update("INSERT INTO group_insights(group_id,month,status) VALUES (?,'2026-09','READY')", group);
         withdraw.deleteInsightsInvolvingUser(member);

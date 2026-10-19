@@ -9,7 +9,6 @@ struct SubmissionDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(Services.self) private var services
-    @State private var aiGuess = AiGuessRunner()
 
     private var submission: Submission? { feed.submission(submissionID) }
 
@@ -23,11 +22,9 @@ struct SubmissionDetailView: View {
         }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
-        .aiGuessCard(aiGuess)
     }
 
     private func content(_ submission: Submission) -> some View {
-        let result = feed.result
         return VStack(spacing: 0) {
             header(submission)
                 .padding(.horizontal, HLayout.screenPaddingCompact)
@@ -35,18 +32,6 @@ struct SubmissionDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     artwork(submission)
-                    if result.type == .photo, let review = submission.aiReview {
-                        AiReviewLine(review: review, commentLines: 2).padding(.top, 12)
-                    }
-                    if result.type == .draw, aiGuess.isAvailable {
-                        AiShowButton(fillsWidth: true) {
-                            let url = submission.mediaURL
-                            aiGuess.guess(mine: submission.isMine, load: { await InkSource.ink(url: url) }) {
-                                DrawSubjectMatcher.match(template: result.template, topic: result.topic, spec: result.spec, categories: $0)
-                            }
-                        }
-                        .padding(.top, 12)
-                    }
                     SubmissionSocial(submissionID: submission.id, initialReactions: submission.reactions,
                                      members: feed.members, repository: services.submissions)
                         .padding(.top, 24)
@@ -209,7 +194,8 @@ struct SubmissionSocial: View {
                 }
             }
             ForEach(reactions, id: \.sticker) { reaction in
-                Text("\(reaction.sticker.emoji) " + reaction.userIDs.map { names[$0] ?? "나간 멤버" }.joined(separator: ", "))
+                Text("\(reaction.sticker.emoji) " +
+                     (reaction.userIDs.map { names[$0] ?? "나간 멤버" } + (reaction.aiReacted ? ["별이"] : [])).joined(separator: ", "))
                     .font(.caption13)
                     .foregroundStyle(.textSecondary)
             }
@@ -270,20 +256,29 @@ struct SubmissionSocial: View {
 private struct CommentRow: View {
     let comment: SubmissionComment
     let onDelete: () -> Void
+    @State private var showingDetail = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            HAvatar(content: comment.author.avatar, size: 30)
+            if comment.isAi {
+                Image("byeol").resizable().scaledToFit().frame(width: 30, height: 30)
+                    .background(.surface, in: Circle()).clipShape(Circle())
+            } else {
+                HAvatar(content: comment.author.avatar, size: 30)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(comment.author.nickname)
                         .font(.plex(14, .semibold))
                         .foregroundStyle(.ink)
+                    if comment.isAi {
+                        Text("AI").font(.caption12).foregroundStyle(.accentPressed)
+                    }
                     Text(comment.createdAt.koreanTime)
                         .font(.caption12)
                         .foregroundStyle(.textSecondary)
                     Spacer(minLength: 0)
-                    if comment.isMine {
+                    if comment.isMine && !comment.isAi {
                         Button("삭제", action: onDelete)
                             .font(.caption12)
                             .foregroundStyle(.textSecondary)
@@ -297,6 +292,14 @@ private struct CommentRow: View {
                         .plexLineHeight(1.5, size: 15)
                         .foregroundStyle(.ink)
                         .fixedSize(horizontal: false, vertical: true)
+                        .onTapGesture { if comment.aiDetail != nil { showingDetail = true } }
+                }
+                if let detail = comment.aiDetail {
+                    Button(detail.isPhotoScore ? "눌러서 점수 보기" : "눌러서 별이의 추측 보기") {
+                        showingDetail = true
+                    }
+                    .font(.caption12).foregroundStyle(.accentPressed)
+                    .buttonStyle(.plain)
                 }
                 if let url = comment.imageURL {
                     AsyncImage(url: url) { image in
@@ -310,6 +313,55 @@ private struct CommentRow: View {
                 }
             }
         }
+        .sheet(isPresented: $showingDetail) {
+            if let detail = comment.aiDetail { MascotDetailCard(detail: detail) }
+        }
+    }
+}
+
+private extension AiDetail {
+    var isPhotoScore: Bool { if case .photoScore = self { true } else { false } }
+}
+
+private struct MascotDetailCard: View {
+    let detail: AiDetail
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            switch detail {
+            case .photoScore(let score):
+                Text("별이가 생각한 점수").font(.plex(20, .bold)).foregroundStyle(.ink)
+                Text("\(score)점").font(.plex(32, .bold)).foregroundStyle(.accentPressed)
+                Text("별이의 점수는 재미용이에요.").font(.caption13).foregroundStyle(.textSecondary)
+            case .drawGuess(let guesses):
+                Text("별이는 이렇게 생각했어요!").font(.plex(20, .bold)).foregroundStyle(.ink)
+                ForEach(Array(guesses.enumerated()), id: \.offset) { item in
+                    let rank = item.offset
+                    let guess = item.element
+                    VStack(spacing: 5) {
+                        HStack {
+                            Text("\(rank + 1)  \(guess.label)")
+                            Spacer()
+                            Text("\(Int((min(1, max(0, guess.probability)) * 100).rounded()))%")
+                        }
+                        .font(.plex(15, .medium)).foregroundStyle(.ink)
+                        GeometryReader { geometry in
+                            Capsule().fill(.surfaceStrong)
+                                .overlay(alignment: .leading) {
+                                    Capsule().fill(.accent).frame(width: geometry.size.width * CGFloat(min(1, max(0, guess.probability))))
+                                }
+                        }
+                        .frame(height: 8)
+                    }
+                }
+                Text("별이의 추측은 재미용이에요.").font(.caption13).foregroundStyle(.textSecondary)
+            }
+            HButton("닫기") { dismiss() }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.medium])
     }
 }
 
