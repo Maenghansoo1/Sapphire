@@ -64,7 +64,7 @@ enum MissionFormat {
 
     /// 제출한 뒤 05 카드 버튼. 집계 틀은 결과 카드가 먼저 보여서 "결과 보기"예요.
     static func resultsActionTitle(template: String) -> String {
-        MissionTemplates.isAggregate(template) ? "결과 보기" : "친구들 작품 보기"
+        MissionTemplates.isAggregate(template) ? "결과 보기" : "작품 보기"
     }
 
     /// 새 틀의 방법 안내(05 카드·수행 화면 제목 아래). 기존 틀은 주제 문장만으로 충분해서 nil.

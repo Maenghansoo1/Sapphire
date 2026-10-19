@@ -68,7 +68,7 @@ fun missionActionTitle(type: MissionType, template: String): String = when (temp
 
 /** 제출한 뒤 05 카드 버튼. 집계 틀은 결과 카드가 먼저 보여서 "결과 보기"예요. */
 fun resultsActionTitle(template: String): String =
-    if (isAggregateTemplate(template)) "결과 보기" else "친구들 작품 보기"
+    if (isAggregateTemplate(template)) "결과 보기" else "작품 보기"
 
 /** 새 틀의 방법 안내(05 카드·수행 화면 제목 아래). 기존 틀은 주제 문장만으로 충분해서 null — "A를 B로"는 뜻이 잘 안 전해져서 안내를 둬요. */
 fun templateGuideText(template: String, spec: MissionSpec): String? = when (template) {

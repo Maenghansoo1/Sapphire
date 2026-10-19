@@ -87,8 +87,8 @@ final class MissionFormatTests: XCTestCase {
         XCTAssertEqual(MissionFormat.actionTitle(.photo, template: MissionTemplates.photoNow), "사진 찍기")
         XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textBalance), "결과 보기")
         XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.sliderConsensus), "결과 보기")
-        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textOneWord), "친구들 작품 보기")
-        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.drawSketch), "친구들 작품 보기")
+        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textOneWord), "작품 보기")
+        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.drawSketch), "작품 보기")
         XCTAssertEqual(MissionFormat.unsupportedText, "앱을 업데이트하면 이 미션을 할 수 있어요")
     }
 }

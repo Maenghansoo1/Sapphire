@@ -120,8 +120,8 @@ class MissionFormatTest {
         assertEquals("사진 찍기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_COLOR))
         assertEquals("결과 보기", resultsActionTitle(MissionTemplates.TEXT_BALANCE))
         assertEquals("결과 보기", resultsActionTitle(MissionTemplates.SLIDER_CONSENSUS))
-        assertEquals("친구들 작품 보기", resultsActionTitle(MissionTemplates.TEXT_ONE_WORD))
-        assertEquals("친구들 작품 보기", resultsActionTitle(MissionTemplates.DRAW_SKETCH))
+        assertEquals("작품 보기", resultsActionTitle(MissionTemplates.TEXT_ONE_WORD))
+        assertEquals("작품 보기", resultsActionTitle(MissionTemplates.DRAW_SKETCH))
         assertEquals("앱을 업데이트하면 이 미션을 할 수 있어요", UNSUPPORTED_MISSION_TEXT)
     }
 }
