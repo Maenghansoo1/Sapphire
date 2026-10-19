@@ -25,6 +25,7 @@ fun parseDrawCategories(json: String): List<DrawCategory> {
 /**
  * 미션 주제가 모델 범주 중 무엇인지 찾아요. 찾으면 "AI가 맞혔는지" 판정하고, 못 찾으면 추측만 보여요.
  * - 30초 스케치는 빈칸 `subject`(없으면 주제 문장), A를 B로는 결과물인 `b`(없으면 주제 문장)로 판정해요.
+ *   A를 B로는 출발한 `a` 를 알아봐도 맞힌 걸로 쳐요([subjects]).
  * - 사람(`[대상]`)을 그리는 스케치는 범주에 없으니 판정하지 않아요.
  * - 한 글자 범주(해·달·별·산·차·개…)는 다른 낱말 속 글자와 헷갈리기 쉬워서 낱말이 통째로 같을 때만 맞다고 봐요.
  */
@@ -40,6 +41,17 @@ object DrawSubjectMatcher {
             }
         }
         return matchText(text, categories)
+    }
+
+    /**
+     * 맞힌 걸로 칠 범주들. 첫 번째가 대표 주제예요.
+     * A를 B로는 A 에서 출발한 그림이라 AI가 A 로 보는 게 자연스러워서 a 도 넣어요. a 가 사람([대상])이면 빼요.
+     */
+    fun subjects(template: String, topic: String, spec: MissionSpec, categories: List<DrawCategory>): List<DrawCategory> {
+        val primary = match(template, topic, spec, categories)
+        if (template != MissionTemplates.DRAW_A_TO_B || spec.hasTarget) return listOfNotNull(primary)
+        val from = spec.drawFrom?.takeIf { it.isNotBlank() && "[대상]" !in it }?.let { matchText(it, categories) }
+        return listOfNotNull(primary, from).distinctBy { it.id }
     }
 
     internal fun matchText(text: String, categories: List<DrawCategory>): DrawCategory? {

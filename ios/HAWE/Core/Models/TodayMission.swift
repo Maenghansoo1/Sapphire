@@ -63,9 +63,9 @@ enum MissionTemplates {
     static func isAggregate(_ template: String) -> Bool { aggregate.contains(template) }
 }
 
-/// 재촉 종류(콕 찌르기·똥뿌리기). rawValue 는 서버 `type` 값.
+/// 재촉 종류(콕 찌르기). rawValue 는 서버 `type` 값.
 enum PokeKind: String, CaseIterable, Hashable {
-    case poke, fling
+    case poke
 }
 
 /// 오늘의 미션 참여 현황 한 줄

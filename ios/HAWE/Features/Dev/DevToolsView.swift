@@ -250,7 +250,7 @@ struct DevToolsView: View {
                 }
             }
             HStack(spacing: 8) {
-                ForEach([("콕", "poke"), ("똥", "fling")], id: \.1) { label, kind in
+                ForEach([("콕", "poke")], id: \.1) { label, kind in
                     chip(label, enabled: !busy && groupID != nil && memberID != nil && toMemberID != nil && memberID != toMemberID) {
                         run(label) {
                             guard let groupID, let memberID, let toMemberID else { return "" }

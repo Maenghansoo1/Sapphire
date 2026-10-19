@@ -49,12 +49,9 @@ final class MissionFormatTests: XCTestCase {
         XCTAssertEqual(MissionFormat.lockNoticeText(.slider, template: MissionTemplates.sliderTaste), "내 답을 올리면 친구들의 답과 그룹 결과가 열려요.")
         XCTAssertEqual(MissionFormat.lockNoticeText(.slider), "내 미션을 올리면 친구들의 슬라이더가 열려요.")
         XCTAssertEqual(MissionFormat.pokeSentText(.poke, nickname: "민준"), "민준님을 콕 찔렀어요")
-        XCTAssertEqual(MissionFormat.pokeSentText(.fling, nickname: "민준"), "민준님에게 똥을 뿌렸어요")
-        XCTAssertEqual(PokeKind.allCases.map(MissionFormat.pokeButtonLabel), ["콕", "똥"])
+        XCTAssertEqual(PokeKind.allCases.map(MissionFormat.pokeButtonLabel), ["콕"])
         XCTAssertEqual(MissionFormat.pokeButtonDescription(.poke, nickname: "민준", sent: false), "민준님 콕 찌르기")
-        XCTAssertEqual(MissionFormat.pokeButtonDescription(.fling, nickname: "민준", sent: false), "민준님에게 똥 뿌리기")
         XCTAssertEqual(MissionFormat.pokeButtonDescription(.poke, nickname: "민준", sent: true), "민준님을 콕 찔렀어요")
-        XCTAssertEqual(MissionFormat.pokeButtonDescription(.fling, nickname: "민준", sent: true), "민준님에게 똥을 뿌렸어요")
     }
 
     func testDeadlineShowsNormalLateAndClosedStates() {
@@ -87,8 +84,8 @@ final class MissionFormatTests: XCTestCase {
         XCTAssertEqual(MissionFormat.actionTitle(.photo, template: MissionTemplates.photoNow), "사진 찍기")
         XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textBalance), "결과 보기")
         XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.sliderConsensus), "결과 보기")
-        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textOneWord), "친구들 작품 보기")
-        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.drawSketch), "친구들 작품 보기")
+        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textOneWord), "작품 보기")
+        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.drawSketch), "작품 보기")
         XCTAssertEqual(MissionFormat.unsupportedText, "앱을 업데이트하면 이 미션을 할 수 있어요")
     }
 }

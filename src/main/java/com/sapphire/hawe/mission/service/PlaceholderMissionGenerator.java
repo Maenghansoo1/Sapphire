@@ -1,5 +1,6 @@
 package com.sapphire.hawe.mission.service;
 
+import com.sapphire.hawe.global.text.KoreanJosa;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
 import com.sapphire.hawe.mission.domain.GenerationContext;
 import com.sapphire.hawe.mission.domain.MissionTemplate;
@@ -102,7 +103,7 @@ public class PlaceholderMissionGenerator implements MissionGenerator {
     }
 
     private GeneratedMission acrostic(String word) {
-        return new GeneratedMission(word + "로 삼행시를 지어줘", "유머", Map.of("word", word));
+        return new GeneratedMission(KoreanJosa.toward(word) + " 삼행시를 지어줘", "유머", Map.of("word", word));
     }
 
     private GeneratedMission blank(String sentence) {
@@ -110,12 +111,13 @@ public class PlaceholderMissionGenerator implements MissionGenerator {
     }
 
     private GeneratedMission sketch(boolean withTarget, String subject) {
-        return new GeneratedMission((withTarget ? "[대상]의 " : "오늘의 ") + subject + "을 30초 안에 그려줘",
+        return new GeneratedMission((withTarget ? "[대상]의 " : "오늘의 ") + KoreanJosa.object(subject) + " 30초 안에 그려줘",
                 "유머", Map.of("subject", subject, "seconds", 30));
     }
 
     private GeneratedMission drawTo(boolean withTarget, String a, String b) {
-        return new GeneratedMission((withTarget ? "[대상]을 " : a + "을 ") + b + "로 바꿔 그려줘",
+        // [대상] 뒤 조사는 닉네임으로 바꿀 때 받침에 맞춘다(KoreanJosa.replaceTarget).
+        return new GeneratedMission((withTarget ? "[대상]을 " : KoreanJosa.object(a) + " ") + KoreanJosa.toward(b) + " 바꿔 그려줘",
                 "유머", Map.of("a", a, "b", b));
     }
 }

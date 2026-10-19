@@ -157,7 +157,7 @@ class MissionServiceTests {
     }
 
     @Test
-    void memberStatusesShowOnlyMySentTypesInFixedOrder() {
+    void memberStatusesShowOnlyMySentPokes() {
         when(missions.findById(10L, 7L)).thenReturn(row(10L, 11L, 1, "{}"));
         when(members.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
         MissionMemberRow me = new MissionMemberRow();
@@ -171,7 +171,7 @@ class MissionServiceTests {
         var response = service.getMission(7L, 10L);
 
         assertEquals(List.of(), response.members().get(0).pokedByMe());
-        assertEquals(List.of("poke", "fling"), response.members().get(1).pokedByMe());
+        assertEquals(List.of("poke"), response.members().get(1).pokedByMe());
         verify(pokes).findSentTypes(10L, 7L);
     }
 
@@ -228,7 +228,8 @@ class MissionServiceTests {
         assertFalse(summaries.containsKey(15L));
         var summary = summaries.get(11L).getFirst();
         assertEquals("TEXT", summary.media());
-        assertEquals("잎사귀은 ___ 할 것 같다", summary.content());
+        // [대상] 뒤 조사는 닉네임 받침에 맞춘다(잎사귀 → 는)
+        assertEquals("잎사귀는 ___ 할 것 같다", summary.content());
         assertEquals(2, summary.submittedCount());
         assertTrue(summary.submittedByMe());
         assertEquals("PHOTO", summaries.get(11L).get(1).media());

@@ -333,7 +333,7 @@ private fun MissionMemberRow(member: MissionMember, sending: Set<PokeKind>, onPo
     }
 }
 
-/** 콕·똥 버튼. 보낸 종류는 체크와 강조색으로 바뀌고 다시 누를 수 없다(미션마다 종류별 1번). */
+/** 콕 버튼. 보내면 체크와 강조색으로 바뀌고 다시 누를 수 없다(미션마다 1번). */
 @Composable
 private fun PokeButton(kind: PokeKind, nickname: String, sent: Boolean, busy: Boolean, onClick: () -> Unit) {
     val description = pokeButtonDescription(kind, nickname, sent)
@@ -353,5 +353,4 @@ private fun PokeButton(kind: PokeKind, nickname: String, sent: Boolean, busy: Bo
 
 private val PokeKind.icon: HIcon get() = when (this) {
     PokeKind.POKE -> HIcon.POKE_TEMP
-    PokeKind.FLING -> HIcon.FLING_TEMP
 }

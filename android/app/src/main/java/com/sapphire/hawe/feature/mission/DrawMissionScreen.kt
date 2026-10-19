@@ -92,8 +92,7 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
         })
         Spacer(Modifier.height(16.dp))
         MissionTitle(MissionType.DRAW, topic)
-        if (spec.drawFrom != null && spec.drawTo != null) Text("‘${spec.drawFrom}’를 ‘${spec.drawTo}’로",
-            style = HType.caption13, color = HColors.textSecondary)
+        templateGuideText(template, spec)?.let { Text(it, style = HType.caption13, color = HColors.textSecondary) }
         Spacer(Modifier.height(16.dp))
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val canvasHeight = minOf(maxHeight, 400.dp)
@@ -165,7 +164,7 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
                 val width = canvasSize.width / density
                 val height = canvasSize.height / density
                 aiGuess.guess(mine = true, load = { withContext(Dispatchers.Default) { strokeInkImage(strokes, width, height) } },
-                    subjectOf = { DrawSubjectMatcher.match(template, topic, spec, it) })
+                    subjectOf = { DrawSubjectMatcher.subjects(template, topic, spec, it) })
             }
             HButton(if (submitted) "올리는 중..." else "올리기", Modifier.weight(1f),
                 enabled = hasDraft && !submitted && canvasSize.width > 0) {

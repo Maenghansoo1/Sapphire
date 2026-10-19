@@ -84,7 +84,7 @@ class MultiMissionDayControllerTests {
             // 같은 날 두 개를 내도 이번 달 제출한 날은 1일, 2번 슬롯만 냈어도 오늘 도장은 있다
             jdbc.update("INSERT INTO submissions (mission_id, user_id) VALUES (?, ?), (?, ?)", slot2, member, slot3, member);
             mvc.perform(post(pokes).header("Authorization", ownerAuth).contentType("application/json")
-                    .content(poke(member, "fling", slot2))).andExpect(status().isConflict())
+                    .content(poke(member, "poke", slot2))).andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("TARGET_ALREADY_SUBMITTED"));
             mvc.perform(get("/api/groups/" + groupId + "/members").header("Authorization", memberAuth))
                     .andExpect(status().isOk())

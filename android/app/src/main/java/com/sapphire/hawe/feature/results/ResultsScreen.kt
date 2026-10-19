@@ -180,7 +180,7 @@ private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit, aiAvail
                             DrawingArtwork(submission, 165.dp, 130.dp, cornerRadius = 18.dp)
                             if (aiAvailable) AiGuessChip(Modifier.align(Alignment.BottomEnd)) {
                                 aiGuess.guess(mine = submission.isMine, load = { loadInkImage(context, imageModel(submission)) },
-                                    subjectOf = { DrawSubjectMatcher.match(result.template, result.topic, result.spec, it) })
+                                    subjectOf = { DrawSubjectMatcher.subjects(result.template, result.topic, result.spec, it) })
                             }
                         }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp),

@@ -69,7 +69,9 @@ public class VisionClient {
     }
 
     private static JdkClientHttpRequestFactory requestFactory(VisionProperties properties) {
-        HttpClient client = HttpClient.newBuilder().connectTimeout(properties.connectTimeout()).build();
+        // uvicorn 은 JDK 클라이언트 기본값(HTTP/2)이 보내는 h2c 업그레이드 요청을 400 으로 거절해서 HTTP/1.1 로 고정한다.
+        HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(properties.connectTimeout()).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
         factory.setReadTimeout(properties.readTimeout());
         return factory;

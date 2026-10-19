@@ -1,6 +1,7 @@
 package com.sapphire.hawe.feature.mission
 
 import com.sapphire.hawe.core.HaweTime
+import com.sapphire.hawe.core.josa
 import com.sapphire.hawe.core.model.MissionMember
 import com.sapphire.hawe.core.model.MissionSpec
 import com.sapphire.hawe.core.model.MissionTemplates
@@ -58,15 +59,18 @@ fun lockNoticeText(type: MissionType, template: String = ""): String =
 /** 서버가 새 틀을 켰는데 이 앱에 그 화면이 없을 때(구형 앱) 05 카드에 보여요. */
 const val UNSUPPORTED_MISSION_TEXT = "앱을 업데이트하면 이 미션을 할 수 있어요"
 
-/** 05 카드의 수행 버튼. 밸런스 게임은 글을 쓰는 게 아니라 고르는 거라 따로 불러요. */
-fun missionActionTitle(type: MissionType, template: String): String =
-    if (template == MissionTemplates.TEXT_BALANCE) "하나 고르기" else type.actionTitle
+/** 05 카드의 수행 버튼. 밸런스 게임은 고르는 거라, 갤러리 발굴은 찍지 않고 갤러리에서 찾는 거라 따로 불러요. */
+fun missionActionTitle(type: MissionType, template: String): String = when (template) {
+    MissionTemplates.TEXT_BALANCE -> "하나 고르기"
+    MissionTemplates.PHOTO_GALLERY -> "갤러리 둘러보기"
+    else -> type.actionTitle
+}
 
 /** 제출한 뒤 05 카드 버튼. 집계 틀은 결과 카드가 먼저 보여서 "결과 보기"예요. */
 fun resultsActionTitle(template: String): String =
-    if (isAggregateTemplate(template)) "결과 보기" else "친구들 작품 보기"
+    if (isAggregateTemplate(template)) "결과 보기" else "작품 보기"
 
-/** 새 틀의 방법 안내(05 카드·수행 화면 제목 아래). 기존 틀은 주제 문장만으로 충분해서 null. */
+/** 새 틀의 방법 안내(05 카드·수행 화면 제목 아래). 기존 틀은 주제 문장만으로 충분해서 null — "A를 B로"는 뜻이 잘 안 전해져서 안내를 둬요. */
 fun templateGuideText(template: String, spec: MissionSpec): String? = when (template) {
     MissionTemplates.TEXT_ONE_WORD -> "띄어쓰기 없이 한 단어로 남겨요"
     MissionTemplates.TEXT_REVIEW -> "별점 1~5개와 한 줄 후기를 남겨요"
@@ -78,6 +82,7 @@ fun templateGuideText(template: String, spec: MissionSpec): String? = when (temp
     MissionTemplates.SLIDER_POSITION, MissionTemplates.SLIDER_TASTE -> sliderEnds(spec)
         ?.let { "$it 사이에서 내 위치를 골라요" } ?: "내 위치를 골라요"
     MissionTemplates.SLIDER_CONSENSUS -> "내 위치와 우리 그룹 평균을 함께 예측해요"
+    MissionTemplates.DRAW_A_TO_B -> drawToGuide(spec)
     else -> null
 }
 
@@ -86,19 +91,23 @@ private fun sliderEnds(spec: MissionSpec): String? {
     val right = spec.right?.takeIf { it.isNotBlank() } ?: return null
     return "‘$left’ ↔ ‘$right’"
 }
+
+/** A를 B로: A 를 B 처럼 보이게 바꿔 그리기. A 가 사람([대상])이면 이름을 빼고 B 만 말해요. */
+private fun drawToGuide(spec: MissionSpec): String {
+    val to = spec.drawTo?.takeIf { it.isNotBlank() } ?: return "주제를 다른 모습으로 바꿔서 그려요"
+    val from = spec.drawFrom?.takeIf { it.isNotBlank() && !spec.hasTarget && "[대상]" !in it }
+    return if (from != null) "‘$from’${josa(from, "을", "를")} ‘$to’처럼 보이게 바꿔서 그려요"
+    else "‘$to’처럼 보이게 바꿔서 그려요"
+}
 fun pokeToastText(nickname: String): String = "${nickname}님을 콕 찔렀어요"
-fun flingToastText(nickname: String): String = "${nickname}님에게 똥을 뿌렸어요"
 fun pokeSentText(kind: PokeKind, nickname: String): String = when (kind) {
     PokeKind.POKE -> pokeToastText(nickname)
-    PokeKind.FLING -> flingToastText(nickname)
 }
 fun pokeButtonLabel(kind: PokeKind): String = when (kind) {
     PokeKind.POKE -> "콕"
-    PokeKind.FLING -> "똥"
 }
 /** 화면 읽기(TalkBack)용. 보낸 뒤에는 보낸 사실을 읽어 준다. */
 fun pokeButtonDescription(kind: PokeKind, nickname: String, sent: Boolean): String = if (sent) pokeSentText(kind, nickname)
     else when (kind) {
         PokeKind.POKE -> "${nickname}님 콕 찌르기"
-        PokeKind.FLING -> "${nickname}님에게 똥 뿌리기"
     }

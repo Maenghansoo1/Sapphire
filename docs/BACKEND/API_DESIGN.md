@@ -232,16 +232,16 @@
 
 | Method | Path | 설명 |
 |---|---|---|
-| POST | `/groups/{groupId}/pokes` | 콕찌르기/똥뿌리기 전송 |
+| POST | `/groups/{groupId}/pokes` | 콕찌르기 전송 |
 
 ```json
 // Request
-{ "toUserId": 7, "type": "poke", "missionId": 10 }   // type: "poke" | "fling", missionId: 선택
+{ "toUserId": 7, "type": "poke", "missionId": 10 }   // type: "poke"만 (똥뿌리기 "fling"은 2026-10-19 삭제, 보내면 400), missionId: 선택
 
 // Response 201
 { "id": 1, "toUserId": 7, "type": "poke", "missionId": 10, "sentAt": "2026-09-28T15:41:48+09:00" }
 ```
-`missionId`를 보내지 않으면 그룹의 현재 미션 중 가장 작은 슬롯 번호의 미션에 보낸다. 보내면(B7) 그 미션이 그 그룹의 현재 미션이어야 한다. 현재 미션이 없거나 보낸 `missionId`가 현재 미션이 아니면 409 `NO_OPEN_MISSION`. 같은 보낸 사람·받는 사람·미션·종류마다 한 번만 보낼 수 있으므로 `poke`와 `fling`은 미션마다 각각 한 번 가능하다. 알림 발송은 9단계에서 연결한다.
+`missionId`를 보내지 않으면 그룹의 현재 미션 중 가장 작은 슬롯 번호의 미션에 보낸다. 보내면(B7) 그 미션이 그 그룹의 현재 미션이어야 한다. 현재 미션이 없거나 보낸 `missionId`가 현재 미션이 아니면 409 `NO_OPEN_MISSION`. 같은 보낸 사람·받는 사람·미션마다 콕은 한 번만 보낼 수 있다. 알림 발송은 9단계에서 연결한다.
 
 에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `CANNOT_POKE_SELF` (400), `TARGET_NOT_GROUP_MEMBER` (404), `NO_OPEN_MISSION` (409), `TARGET_ALREADY_SUBMITTED` (409), `ALREADY_POKED` (409), `VALIDATION_ERROR` (400).
 

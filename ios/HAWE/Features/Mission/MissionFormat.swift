@@ -64,7 +64,7 @@ enum MissionFormat {
 
     /// 제출한 뒤 05 카드 버튼. 집계 틀은 결과 카드가 먼저 보여서 "결과 보기"예요.
     static func resultsActionTitle(template: String) -> String {
-        MissionTemplates.isAggregate(template) ? "결과 보기" : "친구들 작품 보기"
+        MissionTemplates.isAggregate(template) ? "결과 보기" : "작품 보기"
     }
 
     /// 새 틀의 방법 안내(05 카드·수행 화면 제목 아래). 기존 틀은 주제 문장만으로 충분해서 nil.
@@ -94,14 +94,12 @@ enum MissionFormat {
     static func pokeSentText(_ kind: PokeKind, nickname: String) -> String {
         switch kind {
         case .poke: "\(nickname)님을 콕 찔렀어요"
-        case .fling: "\(nickname)님에게 똥을 뿌렸어요"
         }
     }
 
     static func pokeButtonLabel(_ kind: PokeKind) -> String {
         switch kind {
         case .poke: "콕"
-        case .fling: "똥"
         }
     }
 
@@ -110,7 +108,6 @@ enum MissionFormat {
         if sent { return pokeSentText(kind, nickname: nickname) }
         switch kind {
         case .poke: return "\(nickname)님 콕 찌르기"
-        case .fling: return "\(nickname)님에게 똥 뿌리기"
         }
     }
 }

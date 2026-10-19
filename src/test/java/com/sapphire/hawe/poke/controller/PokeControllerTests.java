@@ -24,7 +24,7 @@ class PokeControllerTests {
 	@Autowired JwtTokenProvider tokens;
 
 	@Test
-	void pokeAndFlingAreIndependentAndVisibleOnlyToSender() throws Exception {
+	void pokeIsVisibleOnlyToSender() throws Exception {
 		Long sender = user("Sender");
 		Long target = user("Target");
 		Long group = group(sender);
@@ -53,16 +53,20 @@ class PokeControllerTests {
 				.content(request(target, "poke"))).andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("ALREADY_POKED"));
 		mvc.perform(post(endpoint).header("Authorization", senderAuth).contentType("application/json")
-				.content(request(target, "fling"))).andExpect(status().isCreated());
+				.content(request(target, "fling"))).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 		mvc.perform(get("/api/missions/" + mission).header("Authorization", senderAuth))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.members[1].pokedByMe[0]").value("poke"))
-				.andExpect(jsonPath("$.members[1].pokedByMe[1]").value("fling"));
+				.andExpect(jsonPath("$.members[1].pokedByMe.length()").value(1));
 		mvc.perform(get("/api/missions/" + mission).header("Authorization", targetAuth))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.members[1].pokedByMe").isEmpty());
 
-		jdbc.update("INSERT INTO submissions (mission_id, user_id, media_url) VALUES (?, ?, 'test.png')", mission, target);
+		// 같은 트랜잭션에서 MyBatis 가 앞서 조회한 결과를 캐시하므로, 제출 확인은 아직 조회하지 않은 멤버로 한다
+		Long submitted = user("Submitted");
+		member(group, submitted, "MEMBER");
+		jdbc.update("INSERT INTO submissions (mission_id, user_id, media_url) VALUES (?, ?, 'test.png')", mission, submitted);
 		mvc.perform(post(endpoint).header("Authorization", senderAuth).contentType("application/json")
-				.content(request(target, "poke"))).andExpect(status().isConflict())
+				.content(request(submitted, "poke"))).andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("TARGET_ALREADY_SUBMITTED"));
 	}
 

@@ -23,6 +23,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlaceholderMissionGeneratorTests {
     private final PlaceholderMissionGenerator generator = new PlaceholderMissionGenerator();
 
+    @Test void fallbackSentencesUseParticlesThatFitTheWord() {
+        Set<String> drawTo = new HashSet<>();
+        Set<String> acrostic = new HashSet<>();
+        for (long seed = 0; seed < 100; seed++) {
+            drawTo.add(generator.generate(MissionTemplate.DRAW_A_TO_B, seed, null, false).content());
+            acrostic.add(generator.generate(MissionTemplate.TEXT_ACROSTIC, seed, null, false).content());
+        }
+        assertEquals(Set.of("구름을 풍선으로 바꿔 그려줘", "컵을 화분으로 바꿔 그려줘", "책을 집으로 바꿔 그려줘"), drawTo);
+        assertEquals(Set.of("퇴근길로 삼행시를 지어줘", "바람결로 삼행시를 지어줘", "별자리로 삼행시를 지어줘"), acrostic);
+    }
+
     @Test void everyMvpTemplateHasValidDeterministicVariants() {
         for (MissionTemplate template : MissionTemplateSelector.MVP_POOL) {
             Set<String> contents = new HashSet<>();

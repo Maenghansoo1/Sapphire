@@ -96,5 +96,29 @@ class AiGuessTest {
         assertEquals("고양이", match(MissionTemplates.DRAW_A_TO_B, "잎사귀를 고양이로", MissionSpec(drawTo = "고양이", hasTarget = true)))
         assertNull(match(MissionTemplates.DRAW_SKETCH, "오늘 기분을 날씨로 그려줘"))
         assertNull(match(MissionTemplates.DRAW_SKETCH, ""))
+        // 모델에 '풍선'이 없어요('열기구'의 다른 이름에서 뺐어요) → 판정하지 않음
+        assertNull(match(MissionTemplates.DRAW_SKETCH, "", MissionSpec(subject = "풍선")))
+    }
+
+    @Test fun aToBCountsEitherSide() {
+        fun subjects(topic: String, spec: MissionSpec, template: String = MissionTemplates.DRAW_A_TO_B) =
+            DrawSubjectMatcher.subjects(template, topic, spec, categories).map { it.ko }
+        // 결과물 b 가 먼저, 출발한 a 도 맞힌 걸로
+        assertEquals(listOf("화분", "컵"), subjects("컵을 화분으로 바꿔 그려줘", MissionSpec(drawFrom = "컵", drawTo = "화분")))
+        // b 가 모델에 없으면 a 만
+        assertEquals(listOf("구름"), subjects("구름을 풍선으로 바꿔 그려줘", MissionSpec(drawFrom = "구름", drawTo = "풍선")))
+        // a 가 사람이면 b 만
+        assertEquals(listOf("화분"), subjects("[대상]을 화분으로", MissionSpec(drawFrom = "컵", drawTo = "화분", hasTarget = true)))
+        // 다른 틀은 지금처럼 하나
+        assertEquals(listOf("고양이"), subjects("", MissionSpec(subject = "고양이"), MissionTemplates.DRAW_SKETCH))
+
+        val cupToPot = listOf(category("화분"), category("컵"))
+        assertEquals(AiVerdict.Correct(guesses("컵" to 0.9f)), aiVerdict(guesses("컵" to 0.9f), cupToPot))
+        assertEquals(AiVerdict.Correct(guesses("화분" to 0.9f)), aiVerdict(guesses("화분" to 0.9f), cupToPot))
+        val cupSecond = guesses("해" to 0.6f, "컵" to 0.3f)
+        assertEquals(AiVerdict.Close(cupSecond, category("컵"), 2), aiVerdict(cupSecond, cupToPot))
+        val neither = guesses("해" to 0.9f)
+        assertEquals(AiVerdict.Missed(neither, category("화분")), aiVerdict(neither, cupToPot))
+        assertEquals(AiVerdict.Guessed(neither), aiVerdict(neither, emptyList()))
     }
 }

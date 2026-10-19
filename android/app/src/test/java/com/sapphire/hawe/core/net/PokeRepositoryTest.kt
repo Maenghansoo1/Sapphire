@@ -22,15 +22,15 @@ class PokeRepositoryTest {
     @Test fun sendsKindAndMapsResponse() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(201).setBody(
-                """{"id":1,"toUserId":7,"type":"fling","missionId":10,"sentAt":"2026-10-13T15:41:48+09:00"}"""))
+                """{"id":1,"toUserId":7,"type":"poke","missionId":10,"sentAt":"2026-10-13T15:41:48+09:00"}"""))
             val tokens = InMemoryTokenStore().apply { save("access", "refresh") }
-            val sent = PokeRepository(ApiClient(server.url("/").toString(), tokens)).send(3L, 7L, PokeKind.FLING)
-            assertEquals(SentPoke(7L, PokeKind.FLING, 10L), sent)
+            val sent = PokeRepository(ApiClient(server.url("/").toString(), tokens)).send(3L, 7L, PokeKind.POKE)
+            assertEquals(SentPoke(7L, PokeKind.POKE, 10L), sent)
             val request = server.takeRequest()
             assertEquals("POST", request.method)
             assertEquals("/api/groups/3/pokes", request.path)
             assertEquals("Bearer access", request.getHeader("Authorization"))
-            assertEquals("""{"toUserId":7,"type":"fling"}""", request.body.readUtf8())
+            assertEquals("""{"toUserId":7,"type":"poke"}""", request.body.readUtf8())
         }
     }
 

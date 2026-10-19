@@ -47,8 +47,8 @@ class AiGuessRunner(private val context: Context, private val scope: CoroutineSc
         private set
     private var job: Job? = null
 
-    /** [load] 는 그림 픽셀을, [subjectOf] 는 미션 주제에 해당하는 범주(없으면 null)를 줘요. */
-    fun guess(mine: Boolean, load: suspend () -> InkImage?, subjectOf: (List<DrawCategory>) -> DrawCategory?) {
+    /** [load] 는 그림 픽셀을, [subjectOf] 는 맞힌 걸로 칠 범주들(없으면 빈 목록, [DrawSubjectMatcher.subjects])을 줘요. */
+    fun guess(mine: Boolean, load: suspend () -> InkImage?, subjectOf: (List<DrawCategory>) -> List<DrawCategory>) {
         job?.cancel()
         state = AiGuessState.Thinking
         job = scope.launch {

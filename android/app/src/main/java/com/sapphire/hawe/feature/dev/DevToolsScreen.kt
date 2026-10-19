@@ -212,7 +212,7 @@ fun DevToolsScreen(session: AppSession, store: DataStore, dev: DevRepository,
                         val result = dev.submitMissing(missionId!!); refreshMission(); result.joinToString { "${it.userId}:${it.errorCode ?: "OK"}" }
                     } }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("콕" to "poke", "똥" to "fling").forEach { (label, kind) ->
+                        listOf("콕" to "poke").forEach { (label, kind) ->
                             Chip(label, false, !busy && groupId != null && memberId != null &&
                                 toMemberId != null && memberId != toMemberId, Modifier.weight(1f)) {
                                 runAction(label) { dev.poke(groupId!!, memberId!!, toMemberId!!, kind, missionId); "완료" }

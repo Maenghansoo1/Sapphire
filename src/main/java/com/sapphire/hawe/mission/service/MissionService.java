@@ -1,5 +1,6 @@
 package com.sapphire.hawe.mission.service;
 
+import com.sapphire.hawe.global.text.KoreanJosa;
 import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.auth.domain.User;
 import com.sapphire.hawe.global.config.MissionProperties;
@@ -137,7 +138,7 @@ public class MissionService {
                 .map(member -> {
                     Set<String> types = member.getUserId().equals(viewerId)
                             ? Set.of() : sent.getOrDefault(member.getUserId(), Set.of());
-                    List<String> pokedByMe = List.of("poke", "fling").stream()
+                    List<String> pokedByMe = List.of("poke").stream()
                             .filter(types::contains).toList();
                     return new MissionMemberStatus(member.getUserId(), member.isSubmitted(), pokedByMe);
                 }).toList();
@@ -154,7 +155,7 @@ public class MissionService {
         Object target = params.get("target");
         String nickname = target instanceof Map<?, ?> map && map.get("nickname") instanceof String name
                 ? name : "친구";
-        return content.replace("[대상]", nickname);
+        return KoreanJosa.replaceTarget(content, nickname);
     }
 
     private Map<String, Object> resolveParams(String json) {

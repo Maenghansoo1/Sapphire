@@ -66,14 +66,10 @@ class MissionFormatTest {
             lockNoticeText(MissionType.SLIDER, MissionTemplates.SLIDER_TASTE))
         assertEquals("내 미션을 올리면 친구들의 슬라이더가 열려요.", lockNoticeText(MissionType.SLIDER))
         assertEquals("민준님을 콕 찔렀어요", pokeToastText("민준"))
-        assertEquals("민준님에게 똥을 뿌렸어요", flingToastText("민준"))
         assertEquals("민준님을 콕 찔렀어요", pokeSentText(PokeKind.POKE, "민준"))
-        assertEquals("민준님에게 똥을 뿌렸어요", pokeSentText(PokeKind.FLING, "민준"))
-        assertEquals(listOf("콕", "똥"), PokeKind.entries.map(::pokeButtonLabel))
+        assertEquals(listOf("콕"), PokeKind.entries.map(::pokeButtonLabel))
         assertEquals("민준님 콕 찌르기", pokeButtonDescription(PokeKind.POKE, "민준", sent = false))
-        assertEquals("민준님에게 똥 뿌리기", pokeButtonDescription(PokeKind.FLING, "민준", sent = false))
         assertEquals("민준님을 콕 찔렀어요", pokeButtonDescription(PokeKind.POKE, "민준", sent = true))
-        assertEquals("민준님에게 똥을 뿌렸어요", pokeButtonDescription(PokeKind.FLING, "민준", sent = true))
     }
 
     @Test fun deadlineShowsNormalLateAndClosedStates() {
@@ -100,15 +96,28 @@ class MissionFormatTest {
         // 기존 틀은 주제 문장만으로 충분해서 안내가 없어요
         assertNull(templateGuideText(MissionTemplates.TEXT_ACROSTIC, MissionSpec(word = "퇴근길")))
         assertNull(templateGuideText(MissionTemplates.PHOTO_NOW, MissionSpec()))
+        // A를 B로는 뜻이 잘 안 전해져서 안내를 둬요(받침에 맞는 조사, 사람이 대상이면 B 만)
+        assertEquals("‘구름’을 ‘풍선’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "구름", drawTo = "풍선")))
+        assertEquals("‘고양이’를 ‘화분’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "고양이", drawTo = "화분")))
+        assertEquals("‘풍선’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "구름", drawTo = "풍선", hasTarget = true)))
+        assertEquals("‘집’처럼 보이게 바꿔서 그려요",
+            templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec(drawFrom = "[대상]", drawTo = "집")))
+        assertEquals("주제를 다른 모습으로 바꿔서 그려요", templateGuideText(MissionTemplates.DRAW_A_TO_B, MissionSpec()))
+        assertNull(templateGuideText(MissionTemplates.DRAW_SKETCH, MissionSpec(subject = "고양이")))
 
         assertEquals("하나 고르기", missionActionTitle(MissionType.WRITE, MissionTemplates.TEXT_BALANCE))
         assertEquals("글 쓰기", missionActionTitle(MissionType.WRITE, MissionTemplates.TEXT_REVIEW))
         assertEquals("슬라이더 정하기", missionActionTitle(MissionType.SLIDER, MissionTemplates.SLIDER_POSITION))
         assertEquals("사진 찍기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_NOW))
+        assertEquals("갤러리 둘러보기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_GALLERY))
+        assertEquals("사진 찍기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_COLOR))
         assertEquals("결과 보기", resultsActionTitle(MissionTemplates.TEXT_BALANCE))
         assertEquals("결과 보기", resultsActionTitle(MissionTemplates.SLIDER_CONSENSUS))
-        assertEquals("친구들 작품 보기", resultsActionTitle(MissionTemplates.TEXT_ONE_WORD))
-        assertEquals("친구들 작품 보기", resultsActionTitle(MissionTemplates.DRAW_SKETCH))
+        assertEquals("작품 보기", resultsActionTitle(MissionTemplates.TEXT_ONE_WORD))
+        assertEquals("작품 보기", resultsActionTitle(MissionTemplates.DRAW_SKETCH))
         assertEquals("앱을 업데이트하면 이 미션을 할 수 있어요", UNSUPPORTED_MISSION_TEXT)
     }
 }
