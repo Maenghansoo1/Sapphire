@@ -2,6 +2,8 @@ package com.sapphire.hawe.auth.service;
 
 import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.auth.domain.User;
+import com.sapphire.hawe.auth.dto.EmailCheckRequest;
+import com.sapphire.hawe.auth.dto.EmailCheckResponse;
 import com.sapphire.hawe.auth.dto.LoginRequest;
 import com.sapphire.hawe.auth.dto.MeResponse;
 import com.sapphire.hawe.auth.dto.PasswordChangeRequest;
@@ -62,6 +64,11 @@ public class AuthService {
         }
 
         return new RegisterResponse(user.getId(), user.getEmail(), user.getNickname());
+    }
+
+    /** 가입 전에 이메일을 쓸 수 있는지 알려 준다. 그사이 다른 사람이 가입할 수 있어서 register 도 다시 확인한다. */
+    public EmailCheckResponse checkEmail(EmailCheckRequest request) {
+        return new EmailCheckResponse(!userMapper.existsByEmail(request.email()));
     }
 
     public TokenResponse login(LoginRequest request) {

@@ -20,16 +20,25 @@ import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.AppLinks
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.HCtaScaffold
+import com.sapphire.hawe.core.net.ApiException
 import com.sapphire.hawe.designsystem.tokens.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable
 fun SignupAccountScreen(password: String, onPasswordChange: (String) -> Unit,
-    confirm: String, onConfirmChange: (String) -> Unit,
+    confirm: String, onConfirmChange: (String) -> Unit, checkEmail: suspend (String) -> Boolean,
     onBack: () -> Unit, onNext: (String, Boolean, Boolean) -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
     var service by rememberSaveable { mutableStateOf(false) }
     var privacy by rememberSaveable { mutableStateOf(false) }
-    val state = SignupAccountState(email, password, confirm, service, privacy)
+    // 이미 가입된 이메일로 다음 화면까지 갔다가 되돌아오지 않게 여기서 먼저 확인해요.
+    var availableEmail by rememberSaveable { mutableStateOf<String?>(null) }
+    var takenEmail by rememberSaveable { mutableStateOf<String?>(null) }
+    var failedEmail by rememberSaveable { mutableStateOf<String?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val state = SignupAccountState(email, password, confirm, service, privacy, availableEmail, takenEmail, failedEmail)
     val context = LocalContext.current
     Column {
         Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
@@ -38,9 +47,33 @@ fun SignupAccountScreen(password: String, onPasswordChange: (String) -> Unit,
         HCtaScaffold(content = {
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Text("계정을 만들어요", style = HType.screenTitle, color = HColors.ink)
-                HTextField(email, { email = it }, "example@email.com", label = "이메일", error = state.emailError,
-                    keyboardType = KeyboardType.Email, capitalization = KeyboardCapitalization.None,
-                    autoCorrectEnabled = false, imeAction = ImeAction.Next)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("이메일", style = HType.fieldLabel, color = HColors.textSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HTextField(email, { email = it }, "example@email.com", Modifier.weight(1f),
+                            helper = state.emailHelper, error = state.emailError,
+                            keyboardType = KeyboardType.Email, capitalization = KeyboardCapitalization.None,
+                            autoCorrectEnabled = false, imeAction = ImeAction.Next)
+                        HButton(if (checking) "확인 중" else "중복 확인", Modifier.width(100.dp), HButtonKind.SECONDARY,
+                            height = 54.dp, enabled = state.canCheckEmail && !checking) {
+                            val target = state.normalizedEmail
+                            checking = true
+                            scope.launch {
+                                try {
+                                    if (checkEmail(target)) availableEmail = target else takenEmail = target
+                                    failedEmail = null
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                    // 확인 기능이 아직 없는 서버(404)면 가입할 때 서버가 다시 확인하니 넘어가요.
+                                    if (e is ApiException && e.status == 404) availableEmail = target
+                                    else failedEmail = target
+                                } finally {
+                                    checking = false
+                                }
+                            }
+                        }
+                    }
+                }
                 HTextField(password, onPasswordChange, "8자 이상, 영문·숫자 포함", label = "비밀번호",
                     isSecure = true, error = state.passwordError, capitalization = KeyboardCapitalization.None,
                     autoCorrectEnabled = false, imeAction = ImeAction.Next)

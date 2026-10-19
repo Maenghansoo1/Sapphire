@@ -39,10 +39,23 @@
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
+| POST | `/auth/email-check` | ✗ | 가입 전 이메일 중복 확인 |
 | POST | `/auth/register` | ✗ | 회원가입 |
 | POST | `/auth/login` | ✗ | 로그인 |
 | POST | `/auth/refresh` | ✗ | accessToken 재발급 |
 | GET | `/me` | ✓ | 내 계정 정보 |
+
+### POST /auth/email-check
+```json
+// Request
+{ "email": "a@b.com" }
+
+// Response 200
+{ "available": true }
+```
+가입 화면의 "중복 확인" 버튼이 부른다. 이메일은 register 와 같게 앞뒤 공백 제거·소문자 변환 후 확인한다. 이미 가입된 이메일이면 `available: false`. 확인한 뒤 그사이 다른 사람이 가입할 수 있어서 register 도 `EMAIL_TAKEN` 을 다시 검사한다.
+
+에러: `VALIDATION_ERROR` (400, 이메일 형식·최대 255자)
 
 ### POST /auth/register
 ```json

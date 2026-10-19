@@ -54,14 +54,19 @@ data class WriteMissionState(val text: String = "", val spec: WriteMissionSpec =
     val trimmed: String get() = text.trim()
     val canSubmit: Boolean get() = trimmed.isNotEmpty() && count <= spec.maxLength && acrosticError() == null
     val counterText: String get() = "$count / ${spec.maxLength}"
+    /** 올릴 글. 삼행시는 빈 줄을 빼고 3줄로 보내요(서버도 같은 규칙으로 정리해요). */
+    val submitText: String get() = if (spec.acrosticWord != null) acrosticLines().joinToString("\n") else trimmed
+
+    /** 빈 줄(공백만 있는 줄 포함)은 세지 않아요. 줄 사이를 띄워 써도 3줄이면 돼요. */
+    private fun acrosticLines(): List<String> = text.lines().filter { it.isNotBlank() }
 
     fun acrosticError(): String? {
         val word = spec.acrosticWord ?: return null
-        val lines = text.lines().dropLastWhile { it.isBlank() }
+        val lines = acrosticLines()
         if (lines.size != 3) return "3줄로 써 주세요"
         for (index in 0..2) {
             val line = lines[index].trim()
-            if (line.isEmpty() || limitGraphemes(line, 1) != word.getOrNull(index)?.toString())
+            if (limitGraphemes(line, 1) != word.getOrNull(index)?.toString())
                 return "‘${word.getOrNull(index) ?: ""}’로 시작해 주세요"
         }
         return null
@@ -115,7 +120,7 @@ fun WriteMissionScreen(topic: String, template: String, missionSpec: MissionSpec
             }, cta = {
                 HButton(if (submitted) "올리는 중..." else "올리기", enabled = state.canSubmit && !submitted) {
                     if (!submitted) { submitted = true; scope.launch {
-                        try { if (!onSubmit(state.trimmed)) submitted = false }
+                        try { if (!onSubmit(state.submitText)) submitted = false }
                         catch (error: Exception) { submitted = false }
                     } }
                 }

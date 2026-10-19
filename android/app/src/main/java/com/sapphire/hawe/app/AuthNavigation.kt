@@ -38,7 +38,7 @@ fun AuthNavHost(session: AppSession, store: DataStore, auth: AuthRepository) {
         }
         composable<AuthRoute.SignupAccount> {
             SignupAccountScreen(signupPassword, { signupPassword = it }, signupConfirm, { signupConfirm = it },
-                onBack = { nav.popBackStack() },
+                checkEmail = auth::isEmailAvailable, onBack = { nav.popBackStack() },
                 onNext = { email, terms, privacy ->
                     signupAgreeTerms = terms
                     signupAgreePrivacy = privacy

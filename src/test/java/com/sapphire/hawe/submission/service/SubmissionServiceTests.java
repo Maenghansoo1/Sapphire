@@ -97,6 +97,11 @@ class SubmissionServiceTests {
         assertEquals("INVALID_SUBMISSION", error(fields("text", "가\n \n다"), new LinkedMultiValueMap<>()));
         doThrow(new DuplicateKeyException("duplicate")).when(submissions).insert(any());
         assertEquals("ALREADY_SUBMITTED", error(fields("text", "가\r\n나\r\n다\n\n"), new LinkedMultiValueMap<>()));
+        // 줄 사이 빈 줄(공백만 있는 줄 포함)은 세지 않고, 빈 줄을 뺀 3줄로 저장한다
+        assertEquals("ALREADY_SUBMITTED", error(fields("text", "\n가 하나\n\n나 둘\n  \n다 셋"), new LinkedMultiValueMap<>()));
+        ArgumentCaptor<SubmissionInsertRow> stored = ArgumentCaptor.forClass(SubmissionInsertRow.class);
+        verify(submissions, atLeastOnce()).insert(stored.capture());
+        assertTrue(stored.getValue().getAnswerData().contains("가 하나\\n나 둘\\n다 셋"), stored.getValue().getAnswerData());
         mission.setTemplate("TEXT_FILL_BLANK");
         assertEquals("ALREADY_SUBMITTED", error(fields("text", "😀".repeat(100)), new LinkedMultiValueMap<>()));
         assertEquals("INVALID_SUBMISSION", error(fields("text", "😀".repeat(101)), new LinkedMultiValueMap<>()));

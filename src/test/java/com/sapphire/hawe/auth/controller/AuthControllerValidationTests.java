@@ -1,5 +1,7 @@
 package com.sapphire.hawe.auth.controller;
 
+import com.sapphire.hawe.auth.dto.EmailCheckRequest;
+import com.sapphire.hawe.auth.dto.EmailCheckResponse;
 import com.sapphire.hawe.auth.dto.RegisterRequest;
 import com.sapphire.hawe.auth.dto.RegisterResponse;
 import com.sapphire.hawe.auth.service.AuthService;
@@ -44,6 +46,21 @@ class AuthControllerValidationTests {
                 {"email":"a@test.com","password":"abcd1234","nickname":"가나다라마바사아자차카",
                  "agreeTerms":true,"agreePrivacy":true}
                 """);
+    }
+
+    @Test
+    void emailCheckValidatesAndReturnsAvailability() throws Exception {
+        when(service.checkEmail(any(EmailCheckRequest.class))).thenReturn(new EmailCheckResponse(false));
+        mvc.perform(post("/api/auth/email-check").contentType(MediaType.APPLICATION_JSON).content("""
+                {"email":"a@test.com"}
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(false));
+        mvc.perform(post("/api/auth/email-check").contentType(MediaType.APPLICATION_JSON).content("""
+                {"email":"not-an-email"}
+                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test

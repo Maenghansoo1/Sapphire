@@ -101,7 +101,7 @@ public class SubmissionService {
                 String normalized = requiredText(fields);
                 if ("TEXT_FILL_BLANK".equals(template) && graphemes(normalized) > 100)
                     invalid("글은 100자 이하로 입력해 주세요");
-                if ("TEXT_ACROSTIC".equals(template)) validateAcrostic(normalized, mission.getParams());
+                if ("TEXT_ACROSTIC".equals(template)) normalized = validateAcrostic(normalized, mission.getParams());
                 answerData = json.writeValueAsString(Map.of("text", normalized));
             }
             case "TEXT_ONE_WORD" -> {
@@ -272,22 +272,21 @@ public class SubmissionService {
         return count;
     }
 
-    private void validateAcrostic(String text, String paramsJson) {
-        String[] lines = text.split("\n", -1);
-        int length = lines.length;
-        while (length > 0 && lines[length - 1].isBlank()) length--;
-        if (length != 3) invalid("3줄로 써 주세요");
+    /** 빈 줄(공백만 있는 줄 포함)은 세지 않는다. 줄 사이를 띄워 써도 올릴 수 있게 하고, 빈 줄을 뺀 3줄로 저장한다. */
+    private String validateAcrostic(String text, String paramsJson) {
+        List<String> lines = text.lines().filter(line -> !line.isBlank()).toList();
+        if (lines.size() != 3) invalid("3줄로 써 주세요");
         String word = null;
         try {
             Object value = json.readValue(paramsJson, Map.class).get("word");
             if (value instanceof String s && s.codePointCount(0, s.length()) == 3) word = s;
         } catch (Exception ignored) { }
         for (int i = 0; i < 3; i++) {
-            String line = lines[i].trim();
-            if (line.isEmpty()) invalid("각 줄에 글을 입력해 주세요");
+            String line = lines.get(i).trim();
             if (word != null && line.codePointAt(0) != word.codePointAt(word.offsetByCodePoints(0, i)))
                 invalid("제시된 글자로 각 줄을 시작해 주세요");
         }
+        return String.join("\n", lines);
     }
 
     private static AiReviewResponse reviewResponse(AiReviewRow review) {
