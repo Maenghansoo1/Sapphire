@@ -19,9 +19,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.dev.DevMode
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.components.HToastHost
 import com.sapphire.hawe.designsystem.components.rememberHToastState
+import com.sapphire.hawe.feature.dev.DevUserSwitcher
 import com.sapphire.hawe.feature.splash.SplashScreen
 import kotlinx.coroutines.delay
 
@@ -53,6 +55,10 @@ fun RootScreen(viewModel: AppViewModel) {
                     viewModel.switchMessage, viewModel::clearSwitchMessage)
                 AppSession.State.RESTORING -> Box(Modifier.fillMaxSize().background(HColors.bg))
             }
+            // 전환하는 동안(RESTORING)에도 남겨 둬야 옮겨 둔 위치가 유지돼요.
+            if (DevMode.enabled && viewModel.appSession.state != AppSession.State.SIGNED_OUT)
+                DevUserSwitcher(viewModel.dev, viewModel.appSession.account.userId, viewModel.switchBusy,
+                    viewModel::switchUser)
             HToastHost(toast)
         }
         AnimatedVisibility(showsSplash, enter = EnterTransition.None, exit = fadeOut(tween(300))) {
