@@ -3,7 +3,7 @@ package com.sapphire.hawe.core.push
 import com.sapphire.hawe.core.model.NotificationPrefs
 
 enum class PushKind(val value: String) {
-    TOPIC("topic"), POKE("poke"), FRIEND_DONE("friend_done"), COMMENT("comment");
+    TOPIC("topic"), POKE("poke"), COMMENT("comment");
     companion object { fun fromValue(value: String?): PushKind? = entries.firstOrNull { it.value == value } }
 }
 
@@ -32,7 +32,6 @@ fun isNotificationEnabled(prefs: NotificationPrefs, kind: PushKind, groupNotify:
     prefs.all && groupNotify != false && when (kind) {
         PushKind.TOPIC -> prefs.topic
         PushKind.POKE -> prefs.poke
-        PushKind.FRIEND_DONE -> prefs.friendDone
         PushKind.COMMENT -> prefs.comment
     }
 
@@ -41,14 +40,14 @@ fun defaultPushTexts(kind: PushKind, groupName: String?): PushTexts = PushTexts(
     groupName?.takeIf(String::isNotBlank) ?: "HA'WE", when (kind) {
         PushKind.TOPIC -> "오늘의 주제가 도착했어요"
         PushKind.POKE -> "누군가 콕 찔렀어요"
-        PushKind.FRIEND_DONE -> "친구가 미션을 완료했어요"
         PushKind.COMMENT -> "내 작품에 댓글이 달렸어요"
     })
 
 data class PushChannelSpec(val id: String, val name: String, val description: String)
+/** 없앤 알림의 채널 — 이미 설치한 기기에서 지워요(그룹원 작품 제출 알림, 2026-10-19). */
+val removedPushChannelIds = listOf("friend_done")
 val pushChannelSpecs = listOf(
     PushChannelSpec("topic", "오늘의 주제", "그룹의 오늘의 주제가 도착하면 알려드려요"),
     PushChannelSpec("poke", "콕 찌르기", "친구가 콕 찌르면 알려드려요"),
-    PushChannelSpec("friend_done", "친구 완료", "친구가 미션을 완료하면 알려드려요"),
     PushChannelSpec("comment", "댓글", "내 작품에 댓글이 달리면 알려드려요"),
 )

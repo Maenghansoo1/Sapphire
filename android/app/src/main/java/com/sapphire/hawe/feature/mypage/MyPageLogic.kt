@@ -15,12 +15,11 @@ fun statsDisplay(stats: ActivityStats?) = if (stats == null) StatsDisplay("-", "
 fun byTypeCount(stats: ActivityStats, type: MissionType) = stats.byType[type] ?: 0
 fun byTypeText(stats: ActivityStats?, type: MissionType) = stats?.let { byTypeCount(it, type).toString() } ?: "-"
 
-enum class NotificationKey { ALL, TOPIC, POKE, FRIEND_DONE, COMMENT }
+enum class NotificationKey { ALL, TOPIC, POKE, COMMENT }
 fun NotificationPrefs.with(key: NotificationKey, enabled: Boolean): NotificationPrefs = when (key) {
     NotificationKey.ALL -> copy(all = enabled)
     NotificationKey.TOPIC -> if (all) copy(topic = enabled) else this
     NotificationKey.POKE -> if (all) copy(poke = enabled) else this
-    NotificationKey.FRIEND_DONE -> if (all) copy(friendDone = enabled) else this
     NotificationKey.COMMENT -> if (all) copy(comment = enabled) else this
 }
 fun individualEnabled(prefs: NotificationPrefs) = prefs.all

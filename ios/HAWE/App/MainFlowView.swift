@@ -122,7 +122,7 @@ struct MainFlowView: View {
         let requested = destination.groupID.flatMap(Int.init)
         guard let group = store.groups.first(where: { $0.id == requested }) ?? store.groups.first else { return }
         switch destination.kind {
-        case .topic, .poke, .friendDone:
+        case .topic, .poke:
             path = [.mission(groupID: group.id)]
         case .comment:
             // 하루 여러 미션이면 내가 낸 마지막 미션의 결과로 가요 (Android `pushTarget`).

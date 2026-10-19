@@ -588,15 +588,15 @@ POST /api/submissions/{id}/comments   multipart/form-data
 ## 8. Notifications — 상태: 앱 안 알림 API 반영됨; 푸시·설정·그룹별 알림 미구현
 
 이번 구현은 `topic`·`poke`·`comment`·`mention`의 앱 안 알림 목록과 읽음 처리, 안 읽은 개수만 다룬다.
-`friend_done`은 이번 범위에서 제외했으며 도입하려면 별도 결정이 필요하다. 아래 푸시·기기 토큰·설정은 후속 작업 범위다.
+`friend_done`(그룹원 작품 제출 알림)은 2026-10-19 **없애기로 결정**했다(푸시·앱 안 알림·설정 항목 모두). 아래 푸시·기기 토큰·설정은 후속 작업 범위다.
 
 ### 8-1. 결정
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
 | 전체 목표 | 서버 푸시 발송(FCM·APNs) + 기기 토큰 등록, 알림 설정 저장, 그룹별 알림, 앱 안 알림 목록. 이번 단계는 앱 안 알림만 구현 | 사용자 결정 |
-| 알림 종류 | 현재 `topic`(주제 도착), `poke`(콕), `comment`(내 작품에 댓글), `mention`(댓글 멘션) — 4종. `friend_done`(친구 완료)은 제외, `fling`은 삭제됨 | 이번 구현 범위 |
-| 알림 설정 항목 | 앱 17-1 항목 그대로: 전체, 주제 도착, 콕 찌르기, 친구 완료(기본 OFF), 댓글(**멘션 포함**) | 사용자 결정 (기존 항목에 묶기). 앱 화면·채널을 늘리지 않음 |
+| 알림 종류 | 서버 구현: `topic`(주제 도착), `poke`(콕), `comment`(내 작품에 댓글), `mention`(댓글 멘션) — 4종. **추가 요청(2026-10-19, 서버 미구현)**: `reaction`(내 작품에 스티커 반응) — 앱 알림 목록은 이미 그릴 수 있고, 푸시 발송·설정 항목은 미정. `friend_done`(그룹원 작품 제출)은 2026-10-19 삭제. `fling`(똥뿌리기)은 2026-10-19 삭제 | 이번 구현 범위 + 사용자 추가 요청 |
+| 알림 설정 항목 | 앱 17-1 항목 그대로: 전체, 주제 도착, 콕 찌르기, 댓글(**멘션 포함**). 친구 완료 항목은 2026-10-19 삭제 | 사용자 결정 (기존 항목에 묶기). 앱 화면·채널을 늘리지 않음 |
 | 설정·그룹 알림 적용 대상 | 설정과 그룹별 알림은 **푸시 발송만** 거른다. 앱 안 알림 목록에는 모두 쌓인다 | 목록은 받은편지함 역할, 푸시는 방해 여부 — 역할 분리 (제안, 이견 있으면 변경) |
 | 그룹별 알림 | 멤버마다 저장. 끄면 그 그룹에서 오는 모든 종류의 푸시를 보내지 않는다 | 앱 주석의 서버 필터 규칙(`notification_prefs` + `group_members.notify`)과 같음 |
 | 자기 자신 | 내 행동으로 나에게 알림을 보내지 않는다 (내 작품에 내가 댓글 등) | — |
@@ -608,7 +608,6 @@ POST /api/submissions/{id}/comments   multipart/form-data
 |---|---|---|---|
 | `topic` | 그룹 멤버 전원 | 미션 발행 | 주제 도착 |
 | `poke` | 받는 사람 | 전송 즉시 | 콕 찌르기 |
-| `friend_done` (미구현·재결정 필요) | 제출자를 뺀 멤버 | 제출 즉시 | 친구 완료 (기본 OFF) |
 | `comment` | 작품 작성자 | 댓글 작성 | 댓글 |
 | `mention` | 멘션된 멤버 | 댓글 작성 | 댓글 |
 
@@ -626,9 +625,9 @@ DELETE /api/me/devices/{token}    로그아웃 시 해제, 204 (없는 토큰도
 
 ```json
 // GET /api/me/notification-prefs
-{ "all": true, "topic": true, "poke": true, "friendDone": false, "comment": true }
+{ "all": true, "topic": true, "poke": true, "comment": true }
 // PATCH /api/me/notification-prefs — 일부만 보내도 됨, 응답은 전체
-{ "friendDone": true }
+{ "poke": false }
 ```
 - 처음 가입한 사용자는 위 기본값. 앱 `NotificationPrefs`와 필드가 같다.
 
@@ -646,8 +645,8 @@ DELETE /api/me/devices/{token}    로그아웃 시 해제, 204 (없는 토큰도
 // 알림 표시: title = 그룹 이름, body = 서버가 만든 문장 (예: "서연님이 내 작품에 댓글을 남겼어요")
 ```
 - 키 이름은 앱이 이미 처리하는 snake_case(`type`, `group_id`, `submission_id`)를 유지하고 `mission_id`를 더한다. 값은 문자열.
-- 종류별 포함 키: `topic`·`poke`·`friend_done` → `group_id`, `mission_id` / `comment`·`mention` → + `submission_id`.
-- 앱 이동 규칙: `topic`·`poke`·`friend_done` → 그 그룹 05 화면, `comment`·`mention` → 그 미션 결과 화면(내가 제출했을 때, 아니면 05). 앱의 "그룹을 못 찾으면 첫 그룹" 임시 규칙은 서버 연결 뒤 "못 찾으면 이동하지 않음"으로 바꾼다.
+- 종류별 포함 키: `topic`·`poke` → `group_id`, `mission_id` / `comment`·`mention` → + `submission_id`.
+- 앱 이동 규칙: `topic`·`poke` → 그 그룹 05 화면, `comment`·`mention` → 그 미션 결과 화면(내가 제출했을 때, 아니면 05). 앱의 "그룹을 못 찾으면 첫 그룹" 임시 규칙은 서버 연결 뒤 "못 찾으면 이동하지 않음"으로 바꾼다.
 
 ```json
 // GET /api/notifications — 앱 안 알림 목록 (최신순, 페이지네이션)
@@ -662,9 +661,9 @@ DELETE /api/me/devices/{token}    로그아웃 시 해제, 204 (없는 토큰도
 PATCH /api/notifications/{id}/read     204
 PATCH /api/notifications/read-all      204
 GET /api/notifications/unread-count    { "unreadCount": 3 }
+```
 - `type`: `topic` · `poke` · `comment` · `mention` · `reaction`. `reaction`은 `submissionId`·`missionId`를 넣고, `body`에 스티커를 담아도 된다(예: "서준님이 내 작품에 ❤️ 반응을 남겼어요"). 앱은 모르는 `type`을 목록에서 뺀다.
 - 앱(2026-10-19): 홈 상단 종 아이콘 → 알림 목록. `body`가 없으면 앱이 종류별 기본 문장을 쓴다. 누르면 읽음 처리 후 `topic`·`poke`는 05, `comment`·`mention`·`reaction`은 내가 낸 미션이면 결과 화면으로 간다.
-```
 - 설계의 `payload` 객체 대신 필요한 id를 평평하게 내린다. `fromUser`는 그 그룹의 표시 프로필, `topic`이면 `null`. 설계의 `mission_open`은 `topic`으로 이름을 바꾼다.
 
 ### 8-4. 수정 대상

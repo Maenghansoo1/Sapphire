@@ -35,7 +35,6 @@ class MyPageLogicTest {
 
     @Test fun notificationsAndProviders() {
         val prefs = NotificationPrefs()
-        assertFalse(prefs.friendDone)
         val off = prefs.with(NotificationKey.ALL, false)
         assertFalse(individualEnabled(off))
         assertEquals(off, off.with(NotificationKey.TOPIC, false))

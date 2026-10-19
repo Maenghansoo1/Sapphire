@@ -45,8 +45,6 @@ fun NotificationSettingsScreen(session: AppSession, onBack: () -> Unit) {
                 prefs, NotificationKey.TOPIC, prefs.topic, update)
             SectionLabel("친구 활동")
             NotificationRow("콕 찌르기", null, prefs, NotificationKey.POKE, prefs.poke, update)
-            NotificationRow("친구가 미션을 완료했을 때", null, prefs,
-                NotificationKey.FRIEND_DONE, prefs.friendDone, update)
             NotificationRow("내 작품에 댓글", null, prefs, NotificationKey.COMMENT, prefs.comment, update)
             Text("그룹별 알림은 각 그룹의 '그룹 정보'에서 따로 끌 수 있어요.",
                 Modifier.padding(top = 16.dp), style = HType.caption12, color = HColors.textSecondary)

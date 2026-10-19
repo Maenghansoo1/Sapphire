@@ -10,7 +10,7 @@ enum class LoginProvider(val value: String, val displayName: String) {
 
 data class NotificationPrefs(
     val all: Boolean = true, val topic: Boolean = true, val poke: Boolean = true,
-    val friendDone: Boolean = false, val comment: Boolean = true,
+    val comment: Boolean = true,
 )
 
 data class ActivityStats(

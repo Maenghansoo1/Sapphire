@@ -8,8 +8,6 @@ enum PushKind: String {
     case topic
     /// 콕 찌르기
     case poke
-    /// 친구가 미션 완료 (기본 OFF)
-    case friendDone = "friend_done"
     /// 내 작품에 댓글
     case comment
 }

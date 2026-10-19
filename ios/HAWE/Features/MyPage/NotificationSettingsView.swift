@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 17-1 알림 설정 (Figma 1:1614)
-/// 전체 알림 / 오늘의 주제 도착 / 콕 찌르기 / 친구 완료 / 내 작품에 댓글. 전체 OFF 면 나머지 비활성.
+/// 전체 알림 / 오늘의 주제 도착 / 콕 찌르기 / 내 작품에 댓글. 전체 OFF 면 나머지 비활성.
 struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSession.self) private var session
@@ -37,7 +37,6 @@ struct NotificationSettingsView: View {
 
                     sectionLabel("친구 활동")
                     row("콕 찌르기", isOn: $session.notificationPrefs.poke)
-                    row("친구가 미션을 완료했을 때", isOn: $session.notificationPrefs.friendDone)
                     row("내 작품에 댓글", isOn: $session.notificationPrefs.comment)
 
                     Text("그룹별 알림은 각 그룹의 '그룹 정보'에서 따로 끌 수 있어요.")

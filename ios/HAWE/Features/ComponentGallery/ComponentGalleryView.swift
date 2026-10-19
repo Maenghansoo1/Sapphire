@@ -7,7 +7,6 @@ struct ComponentGalleryView: View {
     @State private var email = ""
     @State private var nickname = "하늘"
     @State private var notifyAll = true
-    @State private var notifyFriendDone = false
     @State private var agreeAll = false
     @State private var agreeTerms = true
 
@@ -173,7 +172,6 @@ struct ComponentGalleryView: View {
         VStack(spacing: 4) {
             Toggle(isOn: $notifyAll) { Text("전체 알림").font(.plex(16, .bold)) }
                 .toggleStyle(.hawe)
-            Toggle(isOn: $notifyFriendDone) { Text("친구가 미션을 완료했을 때").font(.body15) }
                 .toggleStyle(.hawe)
                 .disabled(!notifyAll)
         }

@@ -21,8 +21,6 @@ struct NotificationPrefs: Hashable, Codable {
     var all = true
     var topic = true
     var poke = true
-    /// 기본 OFF (CLAUDE.md §7)
-    var friendDone = false
     var comment = true
 }
 

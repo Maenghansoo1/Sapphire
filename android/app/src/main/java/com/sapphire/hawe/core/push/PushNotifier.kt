@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object PushChannels {
     fun ensure(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
+        removedPushChannelIds.forEach(manager::deleteNotificationChannel)
         pushChannelSpecs.forEach { spec ->
             manager.createNotificationChannel(NotificationChannel(spec.id, spec.name,
                 NotificationManager.IMPORTANCE_DEFAULT).apply { description = spec.description })

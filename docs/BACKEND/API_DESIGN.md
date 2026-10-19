@@ -280,7 +280,7 @@
 ```
 모든 그룹의 알림을 최신순으로 합친다. `page`는 0 이상, `size`는 1~100으로 조정한다.
 종류는 `topic`, `poke`, `comment`, `mention`이다. `topic`의 `fromUser`는 `null`이다.
-`friend_done`·푸시·기기 토큰·알림 설정·그룹별 알림은 아직 구현하지 않았다.
+푸시·기기 토큰·알림 설정·그룹별 알림은 아직 구현하지 않았다. `friend_done`(그룹원 작품 제출 알림)은 2026-10-19 없애기로 했다.
 
 ### GET /notifications/unread-count
 ```json
