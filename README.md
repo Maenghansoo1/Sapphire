@@ -35,6 +35,16 @@ xcodebuild -project HAWE.xcodeproj -scheme HAWE -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
+단위 테스트(`HAWETests`, Android 단위 테스트를 옮긴 것 — 그림 모델 골든 포함):
+
+```bash
+xcodebuild -project HAWE.xcodeproj -scheme HAWE \
+  -destination 'platform=iOS Simulator,name=iPhone 17' CODE_SIGNING_ALLOWED=NO test
+```
+
+그림 인식 Core ML 모델(`HAWE/Resources/QuickDraw/QuickDrawCNN.mlpackage`)은 `ml/quickdraw/export/quickdraw_cnn.tflite` 를
+`ios/Tools/quickdraw_coreml.py` 로 옮긴 거예요. 모델을 다시 만들면 이 스크립트를 다시 돌려 주세요(사용법은 스크립트 맨 위).
+
 ## Android 실행
 
 - Android SDK(API 35)와 **JDK 17~23** 이 필요해요. Gradle 8.13 은 JDK 25 에서 실행되지 않으니,

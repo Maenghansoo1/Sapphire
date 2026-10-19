@@ -5,6 +5,7 @@ import com.sapphire.hawe.core.model.MissionMember
 import com.sapphire.hawe.core.model.MissionSpec
 import com.sapphire.hawe.core.model.MissionTemplates
 import com.sapphire.hawe.core.model.MissionType
+import com.sapphire.hawe.core.model.TodayMission
 import com.sapphire.hawe.core.model.PokeKind
 import com.sapphire.hawe.core.model.isAggregateTemplate
 import java.time.Duration
@@ -40,6 +41,15 @@ fun deadlineText(deadlineAt: Instant, closesAt: Instant, now: Instant): String? 
 
 fun memberDisplayName(member: MissionMember): String =
     if (member.isMe) "${member.profile.nickname} (나)" else member.profile.nickname
+
+fun selectedMission(missions: List<TodayMission>, selectedId: Long?): TodayMission? =
+    missions.firstOrNull { it.id == selectedId } ?: missions.firstOrNull()
+
+fun submittedToastText(index: Int, total: Int, late: Boolean): String = when {
+    total <= 1 -> if (late) "지각으로 올렸어요" else "오늘의 미션을 올렸어요"
+    late -> "${index + 1}번째 미션을 지각으로 올렸어요"
+    else -> "${index + 1}번째 미션을 올렸어요"
+}
 
 fun lockNoticeText(type: MissionType, template: String = ""): String =
     if (isAggregateTemplate(template)) "내 답을 올리면 친구들의 답과 그룹 결과가 열려요."

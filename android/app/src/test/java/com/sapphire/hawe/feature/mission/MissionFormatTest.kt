@@ -13,6 +13,19 @@ import java.util.Locale
 import java.util.TimeZone
 
 class MissionFormatTest {
+    @Test fun multiMissionSelectionAndSubmittedMessages() {
+        val first = com.sapphire.hawe.core.model.TodayMission(10,
+            com.sapphire.hawe.core.model.GroupDetail.mock, MissionType.WRITE, "주제", 1,
+            now, now.plusSeconds(3600), emptyList())
+        val second = first.copy(id = first.id + 1)
+        assertEquals(first, selectedMission(listOf(first, second), null))
+        assertEquals(second, selectedMission(listOf(first, second), second.id))
+        assertEquals(first, selectedMission(listOf(first, second), 999))
+        assertEquals("오늘의 미션을 올렸어요", submittedToastText(0, 1, false))
+        assertEquals("지각으로 올렸어요", submittedToastText(0, 1, true))
+        assertEquals("2번째 미션을 올렸어요", submittedToastText(1, 2, false))
+        assertEquals("2번째 미션을 지각으로 올렸어요", submittedToastText(1, 2, true))
+    }
     private val now = Instant.parse("2026-10-12T00:00:00Z")
 
     @Test fun countdownClampsAndPadsHours() {

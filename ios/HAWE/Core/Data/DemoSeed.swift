@@ -57,7 +57,7 @@ enum DemoSeed {
             id: LocalID.next(),
             name: "우리 둘",
             relationship: .lover,
-            createdAt: calendar.date(byAdding: .day, value: -127, to: .now) ?? .now,
+            createdAt: calendar.date(byAdding: .day, value: -127, to: AppClock.now()) ?? AppClock.now(),
             missionCount: 0,
             inviteCode: "LOVE22",
             topicTime: DateComponents(hour: 9, minute: 0),
@@ -90,9 +90,9 @@ enum DemoSeed {
 
     /// 만든 날부터 오늘까지 미션. 지난날은 3~4명이 올렸고, 오늘은 앞 `todayDone` 명이 올렸어요.
     private static func history(from start: Date, members: [GroupMember], todayDone: Int) -> [StoredMission] {
-        let pattern: [MissionType] = [.draw, .photo, .write, .voice, .draw, .photo, .voice, .write, .draw, .photo]
+        let pattern: [MissionType] = [.draw, .photo, .write, .photo, .draw, .photo, .write, .write, .draw, .photo]
         let topicTime = DateComponents(hour: 9, minute: 0)
-        let todayWindow = TodayMission.window(topicTime: topicTime, now: .now)
+        let todayWindow = TodayMission.window(topicTime: topicTime, now: AppClock.now())
         var missions: [StoredMission] = []
         var opens = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: start) ?? start
         var index = 0
@@ -112,6 +112,7 @@ enum DemoSeed {
                 opensAt: opens,
                 closesAt: calendar.date(byAdding: .day, value: 1, to: opens) ?? opens,
                 submissions: submissions,
+                template: TopicPool.template(for: type),
                 serverMembers: Dictionary(submissions.compactMap { $0.authorID.map { ($0, true) } }, uniquingKeysWith: { a, _ in a })
             ))
             index += 1
@@ -127,8 +128,6 @@ enum DemoSeed {
             "조별과제 팀원이 네 덕분에 끝났다고 말해줬다. 사실 나도 덕분이었는데.",
             "교수님이 질문 좋다고 하셨다.",
         ]
-        let base: [CGFloat] = [6, 10, 16, 22, 14, 20, 24, 12, 8, 18, 22, 16, 10, 6, 12, 20, 24, 18, 12, 8, 14, 20, 16, 10, 6, 10, 14, 8]
-        let shift = (seed * 5) % base.count
         var submission = Submission(
             id: LocalID.next(),
             author: member.displayed,
@@ -136,8 +135,7 @@ enum DemoSeed {
             type: type,
             createdAt: date,
             text: type == .write ? texts[seed % texts.count] : nil,
-            duration: type == .voice ? TimeInterval(7 + seed % 6) : nil,
-            waveform: type == .voice ? (base[shift...] + base[..<shift]).map { $0 / 24 } : []
+            template: TopicPool.template(for: type)
         )
         submission.authorID = member.id
         return submission

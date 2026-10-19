@@ -45,8 +45,12 @@ class ApiClient(
     suspend inline fun <reified T> postMultipart(path: String, parts: List<MultipartPart>): T =
         decode(executeMultipart(path, parts))
 
-    @PublishedApi internal suspend fun executeMultipart(path: String, parts: List<MultipartPart>): Pair<Int, String> =
-        executeRequest("POST", path, true, true) {
+    suspend inline fun <reified T> putMultipart(path: String, parts: List<MultipartPart>): T =
+        decode(executeMultipart(path, parts, "PUT"))
+
+    @PublishedApi internal suspend fun executeMultipart(path: String, parts: List<MultipartPart>,
+        method: String = "POST"): Pair<Int, String> =
+        executeRequest(method, path, true, true) {
             MultipartBody.Builder().setType(MultipartBody.FORM).apply {
                 parts.forEach { part -> when (part) {
                     is MultipartPart.Text -> addFormDataPart(part.name, part.value)
@@ -64,12 +68,18 @@ class ApiClient(
     suspend inline fun <reified B, reified T> post(path: String, body: B, auth: Boolean = true): T =
         decode(execute("POST", path, json.encodeToString(body), auth))
 
+    suspend inline fun <reified B, reified T> put(path: String, body: B, auth: Boolean = true): T =
+        decode(execute("PUT", path, json.encodeToString(body), auth))
+
     suspend inline fun <reified B, reified T> patch(path: String, body: B, auth: Boolean = true): T =
         decode(execute("PATCH", path, json.encodeToString(body), auth))
 
     suspend fun delete(path: String, auth: Boolean = true) {
         execute("DELETE", path, null, auth)
     }
+
+    suspend inline fun <reified T> deleteReturning(path: String, auth: Boolean = true): T =
+        decode(execute("DELETE", path, null, auth))
 
     @PublishedApi internal inline fun <reified T> decode(result: Pair<Int, String>): T = try {
         json.decodeFromString<T>(result.second)
@@ -92,10 +102,10 @@ class ApiClient(
             val access = refreshOnce(usedAccess)
             val retry = send(method, path, body, access, upload)
             if (retry.first in 200..299) return retry
-            if (retry.first == 401) expireSession()
+            if (retry.first == 401) expireSession(access)
             throw error(retry)
         }
-        if (auth && first.first == 401 && error.code == "INVALID_TOKEN") expireSession()
+        if (auth && first.first == 401 && error.code == "INVALID_TOKEN") expireSession(usedAccess)
         throw error
     }
 
@@ -103,14 +113,14 @@ class ApiClient(
         val current = tokens.accessToken
         if (current != null && current != usedAccess) return@withLock current
         val refresh = tokens.refreshToken ?: run {
-            expireSession()
+            expireSession(usedAccess)
             throw ApiException(401, "INVALID_TOKEN", "다시 로그인해 주세요")
         }
         val response = send("POST", "/api/auth/refresh",
             { json.encodeToString(RefreshRequestDto(refresh)).toRequestBody(mediaType) }, null, false)
         if (response.first !in 200..299) {
             val error = error(response)
-            if (response.first == 401) expireSession()
+            if (response.first == 401) expireSession(usedAccess)
             throw error
         }
         val updated = decode<TokenResponseDto>(response)
@@ -118,8 +128,9 @@ class ApiClient(
         updated.accessToken
     }
 
-    private fun expireSession() {
+    private fun expireSession(expectedAccess: String?) {
         val hadSession = synchronized(tokens) {
+            if (tokens.accessToken != expectedAccess) return@synchronized false
             val present = tokens.accessToken != null || tokens.refreshToken != null
             if (present) tokens.clear()
             present

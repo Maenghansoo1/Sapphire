@@ -1,23 +1,33 @@
 import Foundation
 import Observation
 
+/// 새 틀(한 단어·후기·밸런스·슬라이더)의 글·숫자·선택 필드. nil 인 필드는 보내지 않아요.
+struct ScalarAnswer: Equatable {
+    var number: Int? = nil
+    var guess: Int? = nil
+    var choice: String? = nil
+    var text: String? = nil
+    var caption: String? = nil
+}
+
 /// 미션 수행 화면에서 올리는 내용
 enum SubmissionContent {
     /// 그림(PNG)·사진(JPEG)
     case image(Data, fileExtension: String)
     case text(String)
-    case voice(fileURL: URL, duration: TimeInterval, waveform: [CGFloat])
+    case scalar(ScalarAnswer)
 }
 
 /// 초대 코드 조회 결과
 enum InviteLookupError: Error, Equatable {
-    case notFound, full, alreadyMember, network, unavailable
+    case notFound, full, alreadyMember, tooMany, network, unavailable
 
     var message: String {
         switch self {
         case .notFound: "초대 코드를 찾을 수 없어요. 다시 확인해 주세요."
         case .full: "이 그룹은 정원이 다 찼어요."
         case .alreadyMember: "이미 참여 중인 그룹이에요."
+        case .tooMany: "시도가 너무 많아요. 잠시 후 다시 시도해 주세요"
         case .network: "네트워크 연결을 확인해 주세요"
         case .unavailable: "잠시 후 다시 시도해 주세요"
         }
@@ -32,6 +42,7 @@ enum InviteLookupError: Error, Equatable {
         case "INVITE_NOT_FOUND": self = .notFound
         case "GROUP_FULL": self = .full
         case "ALREADY_MEMBER": self = .alreadyMember
+        case "TOO_MANY_REQUESTS": self = .tooMany
         default: self = .unavailable
         }
     }
@@ -45,15 +56,16 @@ enum LoadState: Hashable {
 /// 그룹 하나와 그 그룹의 미션
 struct StoredGroup: Identifiable, Hashable {
     var detail: GroupDetail
-    /// 오래된 순 (서버 연결 뒤에는 지금 열린 미션 하나만 들고 있어요)
+    /// 서버 연결 뒤에는 지금 열린 미션들(슬롯 순서)만 들고 있어요. 체험 데이터는 지난 미션도 있어요.
     var missions: [StoredMission] = []
     /// 그룹 목록이 알려 준 오늘 미션 요약 (홈 카드)
-    var summary: MissionSummary?
+    var summaries: [MissionSummary] = []
     /// 미션이 없을 때 다음 미션이 열리는 시각
     var nextPublishAt: Date?
     var missionState: LoadState = .notLoaded
 
     var id: Int { detail.id }
+    var summary: MissionSummary? { summaries.first }
 }
 
 /// 미션 하나와 제출물
@@ -65,8 +77,8 @@ struct StoredMission: Identifiable, Hashable {
     var opensAt: Date
     var closesAt: Date
     var submissions: [Submission] = []
-    /// 오늘 내가 콕 찌른 멤버
-    var poked: Set<Int> = []
+    /// 이 미션에서 내가 보낸 재촉 (userId → 종류)
+    var poked: [Int: Set<PokeKind>] = [:]
     var deadlineAt: Date? = nil
     var template: String = ""
     var spec = MissionSpec()
@@ -92,6 +104,8 @@ final class DataStore {
     private var calendars: [CalendarKey: [DayRecord]] = [:]
     /// 달력에서 연 지난 미션의 피드 (missionID → 제출물)
     private var pastFeeds: [Int: [Submission]] = [:]
+    /// 달력에서 연 지난 미션의 틀·빈칸(밸런스 선택지, 슬라이더 양 끝 라벨). 달력 응답에는 없어서 따로 받아 둬요.
+    private var pastSpecs: [Int: (template: String, spec: MissionSpec)] = [:]
 
     private struct CalendarKey: Hashable {
         let groupID: Int
@@ -111,7 +125,7 @@ final class DataStore {
         }
     }
 
-    /// 로그아웃·회원 탈퇴 — 모두 지워요
+    /// 로그아웃·회원 탈퇴·유저 전환 — 모두 지워요
     func reset() {
         groups = []
         groupsState = .notLoaded
@@ -119,6 +133,7 @@ final class DataStore {
         stats = nil
         calendars = [:]
         pastFeeds = [:]
+        pastSpecs = [:]
     }
 
     /// 17 마이페이지 활동 요약 (`/api/me/stats`)
@@ -141,6 +156,8 @@ final class DataStore {
         groups.map { stored in
             let detail = stored.detail
             let summary = stored.summary
+            let missionCount = stored.summaries.count
+            let mySubmittedCount = stored.summaries.filter(\.submittedByMe).count
             return GroupSummary(
                 id: detail.id,
                 name: detail.name,
@@ -150,7 +167,9 @@ final class DataStore {
                 missionType: summary?.type,
                 topic: summary?.topic,
                 submittedCount: summary?.submittedCount ?? 0,
-                didSubmit: summary?.submittedByMe ?? false
+                didSubmit: missionCount > 0 && mySubmittedCount == missionCount,
+                missionCount: missionCount,
+                mySubmittedCount: mySubmittedCount
             )
         }
     }
@@ -163,7 +182,7 @@ final class DataStore {
             return StoredGroup(
                 detail: item.detail,
                 missions: previous?.missions ?? [],
-                summary: item.mission,
+                summaries: item.missions,
                 nextPublishAt: previous?.nextPublishAt,
                 missionState: previous?.missionState ?? .notLoaded
             )
@@ -188,14 +207,25 @@ final class DataStore {
         groups.removeAll { $0.id == groupID }
     }
 
+    func setTopicTime(_ time: DateComponents, groupID: Int) {
+        update(groupID) { $0.detail.topicTime = time }
+    }
+
+    func setNotify(_ on: Bool, groupID: Int) {
+        update(groupID) { $0.detail.notify = on }
+    }
+
     // MARK: - 미션 (서버)
 
-    /// 05 화면에서 받은 지금 미션. 같은 미션이면 받아 둔 피드·제출 상태를 유지해요.
+    /// 05 화면에서 받은 지금 미션들. 같은 미션(같은 주제·틀·빈칸)이면 받아 둔 피드·재촉·제출 상태를 유지해요.
     func applyCurrentMission(_ state: CurrentMissionState, groupID: Int) {
         update(groupID) { group in
-            let previous = group.missions.last.flatMap { $0.id == state.mission?.id ? $0 : nil }
-            let current = state.mission.map { row in
-                StoredMission(
+            let previousByID = Dictionary(group.missions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            group.missions = state.missions.map { row in
+                let previous = previousByID[row.id].flatMap {
+                    $0.topic == row.topic && $0.template == row.template && $0.spec == row.spec ? $0 : nil
+                }
+                return StoredMission(
                     id: row.id,
                     type: row.type,
                     topic: row.topic,
@@ -203,7 +233,7 @@ final class DataStore {
                     opensAt: row.publishedAt,
                     closesAt: row.closesAt,
                     submissions: previous?.submissions ?? [],
-                    poked: previous?.poked ?? [],
+                    poked: Self.mergePoked(row.pokedByMe, previous?.poked ?? [:]),
                     deadlineAt: row.deadlineAt,
                     template: row.template,
                     spec: row.spec,
@@ -212,9 +242,31 @@ final class DataStore {
                     feedLoaded: previous?.feedLoaded ?? false
                 )
             }
-            group.missions = current.map { [$0] } ?? []
+            let byID = Dictionary(state.missions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            group.summaries = group.summaries.map { summary in
+                guard let row = byID[summary.missionID] else { return summary }
+                return MissionSummary(missionID: row.id, type: row.type, topic: row.topic,
+                                      submittedCount: row.members.values.filter { $0 }.count, submittedByMe: row.submittedByMe)
+            }
             group.nextPublishAt = state.nextPublishAt
             group.missionState = .loaded
+        }
+    }
+
+    /// 개발자 모드 리롤 — 서버가 제출·반응·댓글·콕을 지웠으니 앱이 들고 있던 것도 지워요.
+    func clearMissionForReroll(_ missionID: Int, groupID: Int) {
+        update(groupID) { group in
+            for index in group.missions.indices where group.missions[index].id == missionID {
+                group.missions[index].submissions = []
+                group.missions[index].poked = [:]
+                group.missions[index].serverMembers = [:]
+                group.missions[index].serverSubmittedByMe = false
+                group.missions[index].feedLoaded = false
+            }
+            for index in group.summaries.indices where group.summaries[index].missionID == missionID {
+                group.summaries[index].submittedCount = 0
+                group.summaries[index].submittedByMe = false
+            }
         }
     }
 
@@ -224,16 +276,29 @@ final class DataStore {
         }
     }
 
-    /// 05 화면용 오늘 미션
+    /// 05 화면용 지금 열린 미션들. 체험 데이터(음수 id)는 지난 미션도 들고 있어서 마지막 것만 보여요.
+    func todayMissions(_ groupID: Int) -> [TodayMission] {
+        guard let stored = groups.first(where: { $0.id == groupID }) else { return [] }
+        let current = groupID < 0 ? Array(stored.missions.suffix(1)) : stored.missions
+        return current.map { Self.todayMission(stored, $0) }
+    }
+
     func todayMission(_ groupID: Int) -> TodayMission? {
-        guard let stored = groups.first(where: { $0.id == groupID }), let mission = stored.missions.last else { return nil }
+        todayMissions(groupID).first
+    }
+
+    func todayMission(_ groupID: Int, missionID: Int) -> TodayMission? {
+        todayMissions(groupID).first { $0.id == missionID }
+    }
+
+    private static func todayMission(_ stored: StoredGroup, _ mission: StoredMission) -> TodayMission {
         let members = stored.detail.members.map { member in
             MissionMember(
                 id: member.id,
                 profile: member.displayed,
                 isMe: member.isMe,
                 isDone: mission.serverMembers[member.id] == true || (member.isMe && mission.serverSubmittedByMe),
-                pokedToday: mission.poked.contains(member.id)
+                poked: mission.poked[member.id] ?? []
             )
         }
         return TodayMission(
@@ -254,40 +319,56 @@ final class DataStore {
     /// 06~09 올리기 성공 — 서버가 돌려준 제출을 반영해요.
     func applySubmitted(_ submission: Submission, missionID: Int, groupID: Int) {
         update(groupID) { group in
-            guard let index = group.missions.indices.last, group.missions[index].id == missionID else { return }
+            guard let index = group.missions.firstIndex(where: { $0.id == missionID }) else { return }
             group.missions[index].serverSubmittedByMe = true
             if let myID = group.detail.me?.id { group.missions[index].serverMembers[myID] = true }
             if !group.missions[index].submissions.contains(where: { $0.id == submission.id }) {
                 group.missions[index].submissions.append(submission)
             }
-            if var summary = group.summary, summary.missionID == missionID {
-                if !summary.submittedByMe { summary.submittedCount += 1 }
-                summary.submittedByMe = true
-                group.summary = summary
+            for summaryIndex in group.summaries.indices where group.summaries[summaryIndex].missionID == missionID {
+                if !group.summaries[summaryIndex].submittedByMe { group.summaries[summaryIndex].submittedCount += 1 }
+                group.summaries[summaryIndex].submittedByMe = true
             }
         }
     }
 
+    /// 서버가 재촉을 받은 뒤에만 불러요. 그사이 미션이 바뀌었으면 반영하지 않아요.
+    func markPoked(_ memberID: Int, kind: PokeKind, missionID: Int, groupID: Int) {
+        update(groupID) { group in
+            for index in group.missions.indices where group.missions[index].id == missionID {
+                group.missions[index].poked = Self.mergePoked(group.missions[index].poked, [memberID: [kind]])
+            }
+        }
+    }
+
+    /// 재촉은 취소가 없어서 서버 값과 앱이 아는 값을 합쳐요 (보낸 직후 늦게 온 새로고침이 표시를 지우지 않게).
+    private static func mergePoked(_ server: [Int: Set<PokeKind>], _ local: [Int: Set<PokeKind>]) -> [Int: Set<PokeKind>] {
+        server.merging(local) { a, b in a.union(b) }
+    }
+
     /// 10~13 결과 피드 — 달력에서 연 지난 미션이면 pastFeeds 에 따로 둬요.
     func applyFeed(_ submissions: [Submission], missionID: Int, groupID: Int) {
-        let isCurrent = groups.first { $0.id == groupID }?.missions.last?.id == missionID
+        let isCurrent = groups.first { $0.id == groupID }?.missions.contains { $0.id == missionID } ?? false
         if !isCurrent && calendarRecord(groupID: groupID, missionID: missionID) != nil {
             pastFeeds[missionID] = submissions
             return
         }
         update(groupID) { group in
-            guard let index = group.missions.indices.last, group.missions[index].id == missionID else { return }
-            group.missions[index].submissions = submissions
-            group.missions[index].feedLoaded = true
+            for index in group.missions.indices where group.missions[index].id == missionID {
+                group.missions[index].submissions = submissions
+                group.missions[index].feedLoaded = true
+            }
         }
     }
 
-    /// 콕 찌르기 — 서버 기능이 생기기 전까지 화면에서는 숨겨요.
-    func poke(_ memberID: Int, groupID: Int) {
-        update(groupID) { group in
-            guard let index = group.missions.indices.last else { return }
-            group.missions[index].poked.insert(memberID)
-        }
+    func applyMissionSpec(_ missionID: Int, template: String, spec: MissionSpec) {
+        pastSpecs[missionID] = (template, spec)
+    }
+
+    /// 결과 화면이 지난 미션의 틀·빈칸을 서버에서 받아 와야 하는지. 지금 미션은 이미 알고 있어요.
+    func needsMissionSpec(groupID: Int, missionID: Int) -> Bool {
+        guard let stored = groups.first(where: { $0.id == groupID }) else { return false }
+        return !stored.missions.contains { $0.id == missionID } && pastSpecs[missionID] == nil
     }
 
     // MARK: - 결과
@@ -308,7 +389,9 @@ final class DataStore {
             date: mission.opensAt,
             memberCount: stored.detail.members.count,
             submissions: mission.submissions,
-            pending: stored.detail.members.filter { !done.contains($0.id) }.map(\.displayed)
+            pending: stored.detail.members.filter { !done.contains($0.id) }.map(\.displayed),
+            template: mission.template,
+            spec: mission.spec
         )
     }
 
@@ -317,6 +400,8 @@ final class DataStore {
         guard let record = calendarRecord(groupID: stored.id, missionID: missionID),
               let submissions = pastFeeds[missionID] else { return nil }
         let done = Set(submissions.compactMap(\.authorID))
+        // 틀은 미션 정보가 아직 없어도 제출물에서 알 수 있어요 (한 미션의 제출은 모두 같은 틀).
+        let known = pastSpecs[missionID] ?? (submissions.first?.template ?? "", MissionSpec())
         return MissionResult(
             id: missionID,
             groupName: stored.detail.name,
@@ -325,7 +410,9 @@ final class DataStore {
             date: record.date,
             memberCount: record.memberCount,
             submissions: submissions,
-            pending: stored.detail.members.filter { !done.contains($0.id) }.map(\.displayed)
+            pending: stored.detail.members.filter { !done.contains($0.id) }.map(\.displayed),
+            template: known.template,
+            spec: known.spec
         )
     }
 
@@ -376,7 +463,7 @@ final class DataStore {
             id: LocalID.next(),
             name: name,
             relationship: relationship,
-            createdAt: .now,
+            createdAt: AppClock.now(),
             missionCount: 0,
             inviteCode: "H4W3K2",
             topicTime: DateComponents(hour: 9, minute: 0),
@@ -399,11 +486,10 @@ final class DataStore {
                 group.missions[index].serverMembers[me.id] = true
                 let type = group.missions[index].type ?? .write
                 group.missions[index].submissions.append(Submission(
-                    id: LocalID.next(), author: me.displayed, isMine: true, type: type, createdAt: .now,
+                    id: LocalID.next(), author: me.displayed, isMine: true, type: type, createdAt: AppClock.now(),
                     text: type == .write ? "미리보기에서 올린 글이에요." : nil,
-                    duration: type == .voice ? 8 : nil,
-                    waveform: type == .voice ? Array(repeating: 0.5, count: 28) : [],
-                    authorID: me.id
+                    authorID: me.id,
+                    template: group.missions[index].template
                 ))
             }
         }
@@ -430,7 +516,17 @@ enum TopicPool {
         case .draw: ["요즘 제일 웃겼던 순간", "오늘 기분을 날씨로 그려줘", "내 방 책상 위", "지금 제일 먹고 싶은 것", "서로의 첫인상"]
         case .photo: ["지금 창밖으로 보이는 풍경", "오늘 먹은 것 중 최고", "지금 신고 있는 신발", "오늘의 하늘", "내 주변에서 가장 파란 것"]
         case .write: ["오늘 들은 가장 따뜻한 말", "너에게 해주고 싶은 말 한 줄", "요즘 빠져 있는 것", "오늘 하루를 세 단어로", "지금 가장 고마운 사람"]
-        case .voice: ["오늘 하루를 10초로 말해줘", "요즘 흥얼거리는 노래 한 소절", "지금 들리는 소리", "내일의 나에게 한마디", "아침 인사 한마디"]
+        case .slider: ["요즘 나의 에너지는 어느 정도?", "나는 계획형일까 즉흥형일까?", "주말의 나는 집콕일까 밖으로일까?"]
+        }
+    }
+
+    /// 목업 미션에 붙이는 대표 틀 (서버 미션은 늘 실제 틀을 가져와요)
+    static func template(for type: MissionType) -> String {
+        switch type {
+        case .draw: MissionTemplates.drawSketch
+        case .photo: MissionTemplates.photoNow
+        case .write: MissionTemplates.textFillBlank
+        case .slider: MissionTemplates.sliderPosition
         }
     }
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 미션 수행 화면 (06 그림 · 07 사진 · 08 글 · 09 음성) — 05 에서 전체 화면으로 띄워요.
+/// 미션 수행 화면 (06 그림 · 07 사진 · 08 글 · 새 틀 6종) — 05 에서 전체 화면으로 띄워요.
 /// 올리는 동안 버튼을 잠그고, 실패하면 입력을 그대로 두고 안내해서 다시 올릴 수 있어요.
 /// 제출 후에는 수정·삭제할 수 없어요 (CLAUDE.md §5-2).
 struct MissionPerformView: View {
@@ -24,10 +24,16 @@ struct MissionPerformView: View {
     var body: some View {
         Group {
             switch type {
-            case .draw: DrawMissionView(topic: topic, spec: spec, onSubmit: submit)
+            case .draw: DrawMissionView(topic: topic, template: template, spec: spec, onSubmit: submit)
             case .photo: PhotoMissionView(topic: topic, onSubmit: submit)
-            case .write: WriteMissionView(topic: topic, template: template, spec: spec, onSubmit: submit)
-            case .voice: VoiceMissionView(topic: topic, onSubmit: submit)
+            case .write:
+                switch template {
+                case MissionTemplates.textOneWord: OneWordMissionView(topic: topic, onSubmit: submit)
+                case MissionTemplates.textReview: ReviewMissionView(topic: topic, onSubmit: submit)
+                case MissionTemplates.textBalance: BalanceMissionView(topic: topic, spec: spec, onSubmit: submit)
+                default: WriteMissionView(topic: topic, template: template, spec: spec, onSubmit: submit)
+                }
+            case .slider: SliderMissionView(topic: topic, template: template, spec: spec, onSubmit: submit)
             }
         }
         .background(.bg)
@@ -47,7 +53,7 @@ struct MissionPerformView: View {
     }
 }
 
-/// 06~09 공통 위쪽 — "오늘의 ○○" 13 SemiBold + 주제 20 Bold (위 4)
+/// 수행 화면 공통 위쪽 — "오늘의 ○○" 13 SemiBold + 주제 20 Bold (위 4)
 struct MissionTitle: View {
     let type: MissionType
     let topic: String
@@ -67,7 +73,7 @@ struct MissionTitle: View {
     }
 }
 
-/// 06~09 공통 헤더 — 닫기 + 오른쪽 도구. 쓰던 내용이 있으면 닫기 전에 물어봐요.
+/// 수행 화면 공통 헤더 — 닫기 + 오른쪽 도구. 쓰던 내용이 있으면 닫기 전에 물어봐요.
 struct MissionHeader<Trailing: View>: View {
     var hasDraft: Bool
     @ViewBuilder var trailing: Trailing

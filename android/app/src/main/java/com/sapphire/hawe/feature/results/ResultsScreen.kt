@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
+import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.net.ApiException
 import com.sapphire.hawe.core.net.MissionRepository
@@ -100,7 +101,7 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
     LaunchedEffect(missionID) {
         delay(5_000)
         val submissions = store.result(groupID, missionID)?.submissions.orEmpty()
-        if (awaitsAiReview(submissions, Instant.now())) refresh++
+        if (awaitsAiReview(submissions, AppClock.now())) refresh++
     }
     DisposableEffect(owner, missionID) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }

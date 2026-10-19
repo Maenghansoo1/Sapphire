@@ -3023,6 +3023,24 @@
           ] } }]
         }
       ]
+    },
+    {
+      "name": "8. Monthly group insights",
+      "description": "After groupId and tokenA are set: first request may return 202; retry after three seconds for READY.",
+      "item": [
+        {
+          "name": "GET monthly insights (200 or 202)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenA}}" }],
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/insights"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('insights return READY or GENERATING', () => pm.expect([200, 202]).to.include(pm.response.code));",
+            "pm.test('group and month are present', () => { const body = pm.response.json(); pm.expect(body.groupId).to.exist; pm.expect(body.month).to.match(/^\\d{4}-\\d{2}$/); });"
+          ] } }]
+        }
+      ]
     }
   ]
 }

@@ -25,6 +25,14 @@ public interface WithdrawMapper {
     @Select("SELECT image_url FROM comments WHERE user_id = #{userId} AND image_url IS NOT NULL")
     List<String> findMyCommentImageKeys(@Param("userId") Long userId);
 
+    @Delete("DELETE FROM group_insights WHERE group_id IN ("
+            + "SELECT m.group_id FROM submissions s JOIN missions m ON m.id=s.mission_id WHERE s.user_id=#{userId} "
+            + "UNION SELECT m.group_id FROM reactions r JOIN submissions s ON s.id=r.submission_id "
+            + "JOIN missions m ON m.id=s.mission_id WHERE r.user_id=#{userId} "
+            + "UNION SELECT m.group_id FROM comments c JOIN submissions s ON s.id=c.submission_id "
+            + "JOIN missions m ON m.id=s.mission_id WHERE c.user_id=#{userId})")
+    void deleteInsightsInvolvingUser(@Param("userId") Long userId);
+
     @Delete("DELETE cm FROM comment_mentions cm JOIN comments c ON c.id = cm.comment_id "
             + "JOIN submissions s ON s.id = c.submission_id WHERE s.user_id = #{userId}")
     void deleteMentionsOnMySubmissions(@Param("userId") Long userId);
@@ -53,6 +61,10 @@ public interface WithdrawMapper {
 
     @Delete("DELETE FROM submission_guesses WHERE user_id = #{userId}")
     void deleteMyGuesses(@Param("userId") Long userId);
+
+    @Delete("DELETE ar FROM submission_ai_reviews ar JOIN submissions s ON s.id = ar.submission_id "
+            + "WHERE s.user_id = #{userId}")
+    void deleteAiReviewsOnMySubmissions(@Param("userId") Long userId);
 
     @Delete("DELETE FROM submissions WHERE user_id = #{userId}")
     void deleteMySubmissions(@Param("userId") Long userId);

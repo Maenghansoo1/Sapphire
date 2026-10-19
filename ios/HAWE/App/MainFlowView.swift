@@ -8,6 +8,9 @@ enum MainRoute: Hashable {
     case createGroup
     case joinGroup(code: String?)
     case groupInfo(groupID: Int)
+    case groupProfile(groupID: Int)
+    case successorPicker(groupID: Int)
+    case groupInsight(groupID: Int)
     case mission(groupID: Int)
     case results(groupID: Int, missionID: Int)
     case calendar(groupID: Int)
@@ -43,7 +46,20 @@ struct MainFlowView: View {
                             path.removeAll()
                         }
                     case .groupInfo(let groupID):
-                        GroupInfoView(groupID: groupID) {
+                        GroupInfoView(groupID: groupID, path: $path) {
+                            path.removeAll()
+                        }
+                    case .groupProfile(let groupID):
+                        GroupProfileView(groupID: groupID) {
+                            path.removeAll()
+                        }
+                    case .successorPicker(let groupID):
+                        SuccessorPickerView(groupID: groupID) {
+                            path.removeAll()
+                            groupsReload += 1
+                        }
+                    case .groupInsight(let groupID):
+                        GroupInsightView(groupID: groupID, path: $path) {
                             path.removeAll()
                         }
                     case .mission(let groupID):
@@ -106,7 +122,8 @@ struct MainFlowView: View {
         case .topic, .poke, .friendDone:
             path = [.mission(groupID: group.id)]
         case .comment:
-            if let mission = group.missions.last, mission.serverSubmittedByMe {
+            // 하루 여러 미션이면 내가 낸 마지막 미션의 결과로 가요 (Android `pushTarget`).
+            if let mission = group.missions.last(where: \.serverSubmittedByMe) ?? group.missions.last, mission.serverSubmittedByMe {
                 path = [.mission(groupID: group.id), .results(groupID: group.id, missionID: mission.id)]
             } else {
                 path = [.mission(groupID: group.id)]

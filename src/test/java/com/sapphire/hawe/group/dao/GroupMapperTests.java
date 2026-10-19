@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,6 +96,51 @@ class GroupMapperTests {
         assertEquals(null, groups.findByInviteCode(oldCode));
         assertEquals(first, groups.findByInviteCode("K7Q2PX").getId());
         assertThrows(DuplicateKeyException.class, () -> groups.updateInviteCode(first, secondCode));
+    }
+
+    @Test
+    void fileKeyQueriesStayWithinTheRequestedGroupAndIgnoreNulls() {
+        Long owner = insertUser();
+        Long second = insertUser();
+        Long target = insertGroup(owner);
+        Long other = insertGroup(second);
+        insertMember(target, owner);
+        insertMember(other, second);
+        jdbc.update("INSERT INTO group_members (group_id,user_id,role) VALUES (?,?,'member')", target, second);
+        jdbc.update("UPDATE group_members SET profile_image_url_override=? WHERE group_id=? AND user_id=?",
+                "target-profile.jpg", target, owner);
+        jdbc.update("UPDATE group_members SET profile_image_url_override=? WHERE group_id=? AND user_id=?",
+                "other-profile.jpg", other, second);
+        Long targetMission = insertMission(target);
+        Long otherMission = insertMission(other);
+        jdbc.update("INSERT INTO submissions (mission_id,user_id,media_url) VALUES (?,?,?), (?,?,NULL)",
+                targetMission, owner, "target-submission.jpg", targetMission, second);
+        jdbc.update("INSERT INTO submissions (mission_id,user_id,media_url) VALUES (?,?,?)",
+                otherMission, second, "other-submission.jpg");
+        Long targetSubmission = jdbc.queryForObject(
+                "SELECT id FROM submissions WHERE mission_id=? AND user_id=?", Long.class, targetMission, owner);
+        Long nullSubmission = jdbc.queryForObject(
+                "SELECT id FROM submissions WHERE mission_id=? AND user_id=?", Long.class, targetMission, second);
+        Long otherSubmission = jdbc.queryForObject(
+                "SELECT id FROM submissions WHERE mission_id=?", Long.class, otherMission);
+        jdbc.update("INSERT INTO comments (submission_id,user_id,content,image_url) VALUES (?,?,'yes',?)",
+                targetSubmission, owner, "target-comment.jpg");
+        jdbc.update("INSERT INTO comments (submission_id,user_id,content) VALUES (?,?,'no')", nullSubmission, second);
+        jdbc.update("INSERT INTO comments (submission_id,user_id,content,image_url) VALUES (?,?,'other',?)",
+                otherSubmission, second, "other-comment.jpg");
+
+        assertEquals(List.of("target-submission.jpg"), groups.findSubmissionMediaKeysByGroupId(target));
+        assertEquals(List.of("target-comment.jpg"), groups.findCommentImageKeysByGroupId(target));
+        assertEquals(List.of("target-profile.jpg"), groups.findGroupProfileImageKeysByGroupId(target));
+        assertEquals(List.of("other-submission.jpg"), groups.findSubmissionMediaKeysByGroupId(other));
+        assertEquals(List.of("other-comment.jpg"), groups.findCommentImageKeysByGroupId(other));
+        assertEquals(List.of("other-profile.jpg"), groups.findGroupProfileImageKeysByGroupId(other));
+    }
+
+    private Long insertMission(Long groupId) {
+        jdbc.update("INSERT INTO missions (group_id,content,category,mission_date,template,params,published_at,deadline_at) "
+                + "VALUES (?,'Test','TEST',CURDATE(),'PHOTO_NOW','{}',NOW(),NOW() + INTERVAL 1 HOUR)", groupId);
+        return jdbc.queryForObject("SELECT id FROM missions WHERE group_id=?", Long.class, groupId);
     }
 
     private Long insertUser() {

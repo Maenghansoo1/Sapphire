@@ -1,6 +1,7 @@
 package com.sapphire.hawe.submission.service;
 
 import com.sapphire.hawe.global.dto.PageResponse;
+import com.sapphire.hawe.global.config.VisionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
 import com.sapphire.hawe.global.storage.FileStorage;
@@ -20,6 +21,10 @@ import com.sapphire.hawe.reaction.service.ReactionService;
 import com.sapphire.hawe.submission.dao.SubmissionInsertRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
+import com.sapphire.hawe.submission.dao.AiReviewMapper;
+import com.sapphire.hawe.submission.dao.AiReviewRow;
+import com.sapphire.hawe.submission.domain.SubmissionCreatedEvent;
+import com.sapphire.hawe.submission.dto.AiReviewResponse;
 import com.sapphire.hawe.submission.dto.SubmissionResponse;
 import com.sapphire.hawe.submission.dto.ReactionSummary;
 import java.io.IOException;
@@ -32,6 +37,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -42,6 +50,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class SubmissionService {
+    private static final Logger log = LoggerFactory.getLogger(SubmissionService.class);
     private final MissionMapper missions;
     private final GroupMemberMapper members;
     private final SubmissionMapper submissions;
@@ -49,11 +58,16 @@ public class SubmissionService {
     private final ObjectMapper json;
     private final ReactionMapper reactions;
     private final CommentMapper comments;
+    private final AiReviewMapper aiReviews;
+    private final VisionProperties vision;
+    private final ApplicationEventPublisher events;
 
     public SubmissionService(MissionMapper missions, GroupMemberMapper members, SubmissionMapper submissions,
-            FileStorage storage, ObjectMapper json, ReactionMapper reactions, CommentMapper comments) {
+            FileStorage storage, ObjectMapper json, ReactionMapper reactions, CommentMapper comments,
+            AiReviewMapper aiReviews, VisionProperties vision, ApplicationEventPublisher events) {
         this.missions = missions; this.members = members; this.submissions = submissions;
         this.storage = storage; this.json = json; this.reactions = reactions; this.comments = comments;
+        this.aiReviews = aiReviews; this.vision = vision; this.events = events;
     }
 
     @Transactional
@@ -149,7 +163,11 @@ public class SubmissionService {
             if (key != null) storage.delete(key);
             throw new BusinessException(SubmissionErrorCode.ALREADY_SUBMITTED);
         }
-        return response(submissions.findDetailById(row.getId()), List.of(), 0);
+        if (key != null && ("PHOTO_NOW".equals(template) || "PHOTO_COLOR".equals(template))) {
+            try { events.publishEvent(new SubmissionCreatedEvent(row.getId(), template)); }
+            catch (RuntimeException e) { log.warn("Vision event failed for submission {}", row.getId(), e); }
+        }
+        return response(submissions.findDetailById(row.getId()), List.of(), 0, null);
     }
 
     @Transactional(readOnly = true)
@@ -189,9 +207,12 @@ public class SubmissionService {
         Map<Long, Integer> counts = new HashMap<>();
         for (CommentCountRow count : comments.countBySubmissionIds(ids))
             counts.put(count.getSubmissionId(), count.getCount());
+        Map<Long, AiReviewRow> reviewBySubmission = new HashMap<>();
+        if (vision.enabled()) for (AiReviewRow review : aiReviews.findBySubmissionIds(ids))
+            reviewBySubmission.put(review.getSubmissionId(), review);
         return rows.stream().map(row -> response(row,
                 ReactionService.summarize(bySubmission.getOrDefault(row.getId(), List.of()), userId),
-                counts.getOrDefault(row.getId(), 0))).toList();
+                counts.getOrDefault(row.getId(), 0), reviewResponse(reviewBySubmission.get(row.getId())))).toList();
     }
 
     private void requireMember(Long groupId, Long userId) {
@@ -269,7 +290,14 @@ public class SubmissionService {
         }
     }
 
-    private SubmissionResponse response(SubmissionRow row, List<ReactionSummary> reactions, int commentCount) {
+    private static AiReviewResponse reviewResponse(AiReviewRow review) {
+        if (review == null || !"DONE".equals(review.getStatus())
+                || (review.getBadge() == null && review.getComment() == null)) return null;
+        return new AiReviewResponse(review.getBadge(), review.getComment());
+    }
+
+    private SubmissionResponse response(SubmissionRow row, List<ReactionSummary> reactions, int commentCount,
+            AiReviewResponse aiReview) {
         if (row == null) throw new IllegalStateException("Inserted submission was not found");
         String text = null;
         Integer guess = null;
@@ -283,6 +311,6 @@ public class SubmissionService {
                         row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())),
                 row.getTemplate(), row.getMediaUrl() == null ? null : storage.publicUrl(row.getMediaUrl()),
                 row.getMediaType(), row.getCaption(), text, row.getNumberValue(), row.getChoiceValue(), guess,
-                reactions, commentCount, SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
+                reactions, commentCount, aiReview, SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
     }
 }

@@ -5,9 +5,10 @@ import kotlin.math.roundToInt
 
 /**
  * "잘 모르겠어요" 기준. 1등 확률이 이보다 낮으면 답하지 않아요.
- * M1 모델 설명서(`ml/quickdraw/export/model_card.md`)의 임시 값 0.35 — 팀원 그림 평가(M1 6단계)로 다시 정하면 같이 바꿔요.
+ * M1 6단계에서 팀원이 그림판으로 그린 249장(`ml/quickdraw/EVAL.md`)으로 정한 값 — 범주 밖 그림에 틀린 답을 하는 비율이
+ * 0.35 때 44% → 28% 로 줄어요. 모델 설명서(`export.json` 의 `unsure_threshold`)와 같아야 해요(다르면 단위 테스트 실패).
  */
-const val AI_GUESS_THRESHOLD = 0.35f
+const val AI_GUESS_THRESHOLD = 0.55f
 
 /** 주제가 2·3등이어도 확률이 이보다 낮으면 "아깝게"가 아니라 "못 맞혔어요"예요(0%짜리 3등을 아깝다고 하지 않게). */
 const val AI_CLOSE_MIN_PROBABILITY = 0.15f

@@ -6,6 +6,7 @@ import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
 import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.mission.dao.MissionInsertRow;
+import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.mission.dao.MissionMapper;
 import com.sapphire.hawe.mission.dao.RecentMissionRow;
 import com.sapphire.hawe.mission.domain.ExperimentArm;
@@ -40,6 +41,68 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class MissionPublisherTests {
+    @Test void rerollUpdatesCurrentRowWithDifferentTemplateAndNoInsert() {
+        MissionRow row = new MissionRow();
+        row.setId(55L); row.setGroupId(11L); row.setMissionDate(LocalDate.of(2026, 10, 12));
+        row.setSlotNo(1); row.setTemplate(MissionTemplate.TEXT_ONE_WORD.name());
+        when(missions.findById(55L, 0L)).thenReturn(row);
+        when(missions.isCurrent(55L)).thenReturn(true);
+        when(groups.findById(11L)).thenReturn(group(LocalDateTime.of(2026, 10, 10, 9, 0)));
+        when(generator.generate(any(), anyLong(), any(), anyBoolean()))
+                .thenReturn(new GeneratedMission("new", "daily", Map.of()));
+        when(missions.updateGenerated(eq(55L), any(), any(), any(), any(), any(), nullable(String.class))).thenReturn(1);
+        publisher.reroll(55L, LocalDateTime.of(2026, 10, 12, 12, 0), null);
+        ArgumentCaptor<String> template = ArgumentCaptor.forClass(String.class);
+        verify(missions).updateGenerated(eq(55L), eq("new"), eq("daily"), template.capture(), any(), any(), nullable(String.class));
+        assertNotEquals(MissionTemplate.TEXT_ONE_WORD.name(), template.getValue());
+        verify(missions, never()).insert(any());
+    }
+
+    @Test void rerollRejectsNonCurrentMissionBeforeGeneration() {
+        MissionRow row = new MissionRow();
+        when(missions.findById(55L, 0L)).thenReturn(row);
+        assertEquals(MissionErrorCode.MISSION_NOT_FOUND,
+                assertThrows(com.sapphire.hawe.global.exception.BusinessException.class,
+                        () -> publisher.reroll(55L, LocalDateTime.now(), null)).errorCode());
+        verifyNoInteractions(generator);
+    }
+    @Test void requestedFillBlankRerollReplacesParamsWithTarget() {
+        MissionRow row = new MissionRow();
+        row.setId(55L); row.setGroupId(11L); row.setMissionDate(LocalDate.of(2026, 10, 12));
+        row.setSlotNo(1); row.setTemplate(MissionTemplate.TEXT_ONE_WORD.name());
+        when(missions.findById(55L, 0L)).thenReturn(row);
+        when(missions.isCurrent(55L)).thenReturn(true);
+        when(groups.findById(11L)).thenReturn(group(LocalDateTime.of(2026, 10, 10, 9, 0)));
+        when(generator.generate(eq(MissionTemplate.TEXT_FILL_BLANK), anyLong(), any(), eq(true)))
+                .thenReturn(new GeneratedMission("fill", "daily", Map.of("word", "hi")));
+        when(missions.updateGenerated(eq(55L), any(), any(), any(), any(), any(), nullable(String.class))).thenReturn(1);
+        publisher.reroll(55L, LocalDateTime.of(2026, 10, 12, 12, 0), MissionTemplate.TEXT_FILL_BLANK);
+        ArgumentCaptor<String> params = ArgumentCaptor.forClass(String.class);
+        verify(missions).updateGenerated(eq(55L), eq("fill"), eq("daily"), eq("TEXT_FILL_BLANK"),
+                params.capture(), eq("PLACEHOLDER"), nullable(String.class));
+        assertTrue(params.getValue().contains("\"targetUserId\":7"));
+    }
+    @Test void forcePublishesBeforeScheduledTimeUsingRequestedTemplate() {
+        LocalDateTime now = LocalDateTime.of(2026, 10, 12, 7, 0);
+        Group group = group(now.minusDays(2));
+        group.setDailyMissionCount(2);
+        when(groups.findById(11L)).thenReturn(group);
+        when(generator.generate(eq(MissionTemplate.TEXT_ONE_WORD), anyLong(), any(), anyBoolean()))
+                .thenReturn(new GeneratedMission("한 단어", "일상", Map.of()));
+        doAnswer(call -> {
+            MissionInsertRow row = call.getArgument(0);
+            row.setId((long) row.getSlotNo() + 100);
+            return null;
+        }).when(missions).insert(any());
+        when(missions.existsByGroupIdAndDateAndSlot(eq(11L), eq(now.toLocalDate()), anyInt()))
+                .thenAnswer(call -> (int) call.getArgument(2) == 2);
+        assertEquals(List.of(101L), publisher.forcePublish(11L, now, MissionTemplate.TEXT_ONE_WORD));
+        ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
+        verify(missions).insert(inserted.capture());
+        assertEquals(now, inserted.getValue().getPublishedAt());
+        assertEquals(MissionTemplate.TEXT_ONE_WORD.name(), inserted.getValue().getTemplate());
+        assertEquals(now.toLocalDate().atTime(23, 0), inserted.getValue().getDeadlineAt());
+    }
     @Mock MissionMapper missions;
     @Mock GroupMapper groups;
     @Mock GroupMemberMapper members;

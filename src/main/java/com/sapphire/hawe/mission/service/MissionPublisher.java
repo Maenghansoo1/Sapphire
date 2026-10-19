@@ -1,6 +1,7 @@
 package com.sapphire.hawe.mission.service;
 
 import com.sapphire.hawe.global.config.MissionProperties;
+import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.group.dao.GroupMapper;
 import com.sapphire.hawe.group.dao.GroupMemberMapper;
 import com.sapphire.hawe.group.dao.GroupMissionSlotMapper;
@@ -8,6 +9,7 @@ import com.sapphire.hawe.group.domain.Group;
 import com.sapphire.hawe.group.domain.GroupMissionSlot;
 import com.sapphire.hawe.mission.dao.MissionInsertRow;
 import com.sapphire.hawe.mission.dao.MissionMapper;
+import com.sapphire.hawe.mission.dao.MissionRow;
 import com.sapphire.hawe.mission.dao.RecentMissionRow;
 import com.sapphire.hawe.mission.domain.GeneratedMission;
 import com.sapphire.hawe.mission.domain.GenerationContext;
@@ -25,10 +27,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class MissionPublisher {
@@ -62,8 +66,51 @@ public class MissionPublisher {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishIfDue(Long groupId, LocalDateTime now) {
+        publish(groupId, now, false, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<Long> forcePublish(Long groupId, LocalDateTime now, MissionTemplate template) {
+        return publish(groupId, now, true, template);
+    }
+
+    /** Joins the dev service transaction so its submission cleanup and this update commit together. */
+    @Transactional
+    public void reroll(Long missionId, LocalDateTime now, MissionTemplate requested) {
+        MissionRow current = missions.findById(missionId, 0L);
+        if (current == null || !missions.isCurrent(missionId))
+            throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
+        Group group = groups.findById(current.getGroupId());
+        if (group == null) throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
+        List<MissionTemplate> pool = properties.enabledTemplates().stream()
+                .filter(template -> !template.name().equals(current.getTemplate())).toList();
+        if (pool.isEmpty()) pool = properties.enabledTemplates();
+        MissionTemplate template = requested == null ? pool.get(ThreadLocalRandom.current().nextInt(pool.size())) : requested;
+        long seed = MissionTemplateSelector.seed(current.getGroupId(), current.getMissionDate(), current.getSlotNo())
+                ^ ThreadLocalRandom.current().nextLong();
+        boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
+        GenerationContext context = contexts.build(group, current.getMissionDate()).withExperimentArm(
+                experiments.assign(current.getGroupId(), current.getMissionDate()).orElse(null));
+        List<RecentMission> recent = missions.findRecentByGroupId(current.getGroupId(),
+                RECENT_CONTENTS + group.getDailyMissionCount() - 1).stream().map(RecentMissionRow::toDomain).toList();
+        GeneratedMission generated = generator.generate(template, seed, context.withRecentMissions(recent), withTarget);
+        Map<String, Object> params = new HashMap<>(generated.params());
+        if (withTarget) {
+            List<Long> userIds = members.findUserIdsByGroupId(current.getGroupId());
+            if (userIds.isEmpty()) throw new IllegalStateException("Group has no members");
+            params.put("targetUserId", userIds.get(new java.util.Random(seed ^ 0xBB67AE8584CAA73BL)
+                    .nextInt(userIds.size())));
+        }
+        if (missions.updateGenerated(missionId, generated.content(), generated.category(), template.name(),
+                objectMapper.writeValueAsString(params), generated.source().name(),
+                context.experimentArm() == null ? null : context.experimentArm().name()) == 0)
+            throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
+    }
+
+    private List<Long> publish(Long groupId, LocalDateTime now, boolean forced, MissionTemplate requestedTemplate) {
         Group group = groups.findById(groupId);
-        if (group == null) return;
+        if (group == null) return List.of();
+        List<Long> created = new ArrayList<>();
         LocalDate date = now.toLocalDate();
         Map<Integer, GroupMissionSlot> configured = new HashMap<>();
         for (GroupMissionSlot slot : slots.findByGroupId(groupId)) configured.put(slot.getSlotNo(), slot);
@@ -80,12 +127,13 @@ public class MissionPublisher {
             LocalTime deadlineTime = slot != null && slot.getDeadlineTime() != null
                     ? slot.getDeadlineTime() : properties.defaultDeadlineTime();
             LocalDateTime scheduled = MissionTiming.scheduledPublishAt(date, publishTime);
-            if (now.isBefore(scheduled) || missions.existsByGroupIdAndDateAndSlot(groupId, date, slotNo)) continue;
+            if ((!forced && now.isBefore(scheduled)) || missions.existsByGroupIdAndDateAndSlot(groupId, date, slotNo)) continue;
 
-            LocalDateTime publishedAt = scheduled.isBefore(group.getCreatedAt()) ? group.getCreatedAt() : scheduled;
+            LocalDateTime publishedAt = forced ? now :
+                    (scheduled.isBefore(group.getCreatedAt()) ? group.getCreatedAt() : scheduled);
             long seed = MissionTemplateSelector.seed(groupId, date, slotNo);
-            MissionTemplate template = MissionTemplateSelector.select(groupId, date, slotNo,
-                    group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates());
+            MissionTemplate template = requestedTemplate == null ? MissionTemplateSelector.select(groupId, date, slotNo,
+                    group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates()) : requestedTemplate;
             boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
             // 실험 군은 (그룹, 날짜) 단위라 같은 날 슬롯은 모두 같은 군이다. 위의 틀·대상 선택은 군과 무관하다
             if (groupContext == null)
@@ -115,8 +163,9 @@ public class MissionPublisher {
             mission.setDeadlineAt(MissionTiming.deadlineAfter(publishedAt, deadlineTime));
             mission.setGenerationSource(generated.source().name());
             mission.setExperimentArm(groupContext.experimentArm() == null ? null : groupContext.experimentArm().name());
-            try { missions.insert(mission); }
+            try { missions.insert(mission); if (mission.getId() != null) created.add(mission.getId()); }
             catch (DuplicateKeyException ignored) { /* Another publisher already committed this slot. */ }
         }
+        return created;
     }
 }

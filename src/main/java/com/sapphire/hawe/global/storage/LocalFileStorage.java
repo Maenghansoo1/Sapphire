@@ -5,11 +5,11 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@EnableConfigurationProperties(StorageProperties.class)
+@ConditionalOnProperty(name = "hawe.storage.type", havingValue = "local", matchIfMissing = true)
 public class LocalFileStorage implements FileStorage {
     private final Path root;
     private final String publicBaseUrl;
@@ -39,6 +39,13 @@ public class LocalFileStorage implements FileStorage {
         Path target = root.resolve(key).normalize();
         if (!target.startsWith(root)) throw new IllegalArgumentException("Invalid storage key");
         try { Files.deleteIfExists(target); }
+        catch (IOException e) { throw new UncheckedIOException(e); }
+    }
+
+    public byte[] load(String key) {
+        Path target = root.resolve(key).normalize();
+        if (!target.startsWith(root)) throw new IllegalArgumentException("Invalid storage key");
+        try { return Files.readAllBytes(target); }
         catch (IOException e) { throw new UncheckedIOException(e); }
     }
 

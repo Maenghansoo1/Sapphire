@@ -66,6 +66,19 @@ public interface GroupMapper {
             + "ORDER BY gm.group_id, gm.joined_at, gm.id</script>")
     List<GroupMemberPreviewRow> findMemberPreviewsByGroupIds(@Param("groupIds") List<Long> groupIds);
 
+    @Select("SELECT s.media_url FROM submissions s JOIN missions m ON m.id = s.mission_id "
+            + "WHERE m.group_id = #{groupId} AND s.media_url IS NOT NULL")
+    List<String> findSubmissionMediaKeysByGroupId(@Param("groupId") Long groupId);
+
+    @Select("SELECT c.image_url FROM comments c JOIN submissions s ON s.id = c.submission_id "
+            + "JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId} "
+            + "AND c.image_url IS NOT NULL")
+    List<String> findCommentImageKeysByGroupId(@Param("groupId") Long groupId);
+
+    @Select("SELECT profile_image_url_override FROM group_members WHERE group_id = #{groupId} "
+            + "AND profile_image_url_override IS NOT NULL")
+    List<String> findGroupProfileImageKeysByGroupId(@Param("groupId") Long groupId);
+
     @Delete("DELETE cm FROM comment_mentions cm JOIN comments c ON c.id = cm.comment_id "
             + "JOIN submissions s ON s.id = c.submission_id JOIN missions m ON m.id = s.mission_id "
             + "WHERE m.group_id = #{groupId}")
@@ -83,6 +96,10 @@ public interface GroupMapper {
             + "JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId}")
     void deleteSubmissionGuessesByGroupId(@Param("groupId") Long groupId);
 
+    @Delete("DELETE ar FROM submission_ai_reviews ar JOIN submissions s ON s.id = ar.submission_id "
+            + "JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId}")
+    void deleteAiReviewsByGroupId(@Param("groupId") Long groupId);
+
     @Delete("DELETE s FROM submissions s JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId}")
     void deleteSubmissionsByGroupId(@Param("groupId") Long groupId);
 
@@ -91,6 +108,9 @@ public interface GroupMapper {
 
     @Delete("DELETE FROM pokes WHERE group_id = #{groupId}")
     void deletePokesByGroupId(@Param("groupId") Long groupId);
+
+    @Delete("DELETE FROM group_insights WHERE group_id = #{groupId}")
+    void deleteInsightsByGroupId(@Param("groupId") Long groupId);
 
     @Delete("DELETE FROM `groups` WHERE id = #{groupId}")
     void deleteById(@Param("groupId") Long groupId);

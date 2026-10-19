@@ -12,7 +12,7 @@ class GroupProfileStateTest {
     private val member = GroupMember(1L, Profile.mockMine, isMe = true)
 
     @Test fun defaultProfileSavesNull() {
-        val state = GroupProfileState.from(member)
+        val state = GroupProfileState.from(member, Profile.mockMine)
         assertTrue(state.useDefault)
         assertTrue(state.canSave)
         assertNull(state.profileToSave)
@@ -21,7 +21,7 @@ class GroupProfileStateTest {
 
     @Test fun customProfileTrimsAndLimitsName() {
         val avatar = AvatarContent.Character(ProfileCharacter.GAMJA)
-        val state = GroupProfileState.from(member).copy(useDefault = false, avatar = avatar)
+        val state = GroupProfileState.from(member, Profile.mockMine).copy(useDefault = false, avatar = avatar)
         assertFalse(state.copy(nickname = " a ").canSave)
         assertTrue(state.copy(nickname = " ab ").canSave)
         assertTrue(state.copy(nickname = "1234567890").canSave)
@@ -33,8 +33,17 @@ class GroupProfileStateTest {
 
     @Test fun existingOverrideStartsCustom() {
         val override = Profile(AvatarContent.Character(ProfileCharacter.GOMDOL), "곰돌")
-        val state = GroupProfileState.from(member.copy(groupProfile = override))
+        val state = GroupProfileState.from(member.copy(groupProfile = override), Profile.mockMine)
         assertFalse(state.useDefault)
         assertEquals(override, state.preview)
+        assertEquals(Profile.mockMine, state.defaultProfile)
+    }
+
+    @Test fun existingRemotePhotoNeedsReselectionOnlyForNicknameChanges() {
+        assertTrue(needsPhotoReselect(false, "https", "새 별명", "원래 별명"))
+        assertFalse(needsPhotoReselect(false, "https", "원래 별명", "원래 별명"))
+        assertFalse(needsPhotoReselect(false, "file", "새 별명", "원래 별명"))
+        assertFalse(needsPhotoReselect(true, "https", "새 별명", "원래 별명"))
+        assertTrue(needsPhotoReselect(false, "https", "새 별명", null))
     }
 }

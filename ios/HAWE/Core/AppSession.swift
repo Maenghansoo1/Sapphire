@@ -23,6 +23,11 @@ final class AppSession {
         self.account = account
     }
 
+    /// 개발자 모드 유저 전환 — 새 토큰으로 내 정보를 받는 동안
+    func beginRestoring() {
+        state = .restoring
+    }
+
     func signIn(_ account: MyAccount) {
         self.account = account
         state = .signedIn
@@ -39,8 +44,7 @@ final class AppSession {
         state = .signedOut
     }
 
-    /// 회원 탈퇴 — 작품·댓글 삭제, 모든 그룹에서 나감(방장 이전), 복구 불가 (CLAUDE.md §5-5)
-    /// TODO: 서버 탈퇴 API 가 생기면 연결해요. 지금 화면에서는 준비 중이에요.
+    /// 회원 탈퇴 — 서버(`DELETE /api/me`)가 지운 뒤에 불러요. 토큰·앱 안 데이터를 지우고 로그인 화면으로 가요.
     func withdraw() {
         onCleared()
         account = .mock

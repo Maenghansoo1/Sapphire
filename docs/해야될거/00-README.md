@@ -8,15 +8,16 @@
 
 | 담당 | 폴더 | 영역 | 계획 |
 |---|---|---|---|
-| 1번 찬희 | `1번_찬희/` | 서버: 그룹·계정·인사이트 (V1 대부분) | B1 → B3 → B2 → B10 Spring 연동 → B4 → B11 |
+| 1번 찬희 | `1번_찬희/` | 서버: 그룹·계정·인사이트 (V1 대부분) + Android 그룹·프로필·인사이트 | B1 → B3 → B2 → B10 Spring 연동 → B4 → B11, A2 → A3 → A9 |
 | 2번 우준 | `2번_우준/` | AI 전담: 미션·LLM·그림 모델·사진 AI + Android 일부 | B0, M1, B10 비전 서비스(Python) → A0 → A1 → B5 → B7 → B8 → B9 → A4 → A7 → A8 → A6 |
-| 3번 경환 | `3번_경환/` | 앱: Android·iOS 이식·iOS 테스트 | A2 → A3 → A9, A5(iOS 전부, Mac 필요) |
+| 3번 경환 | `3번_경환/` | iOS 이식·iOS 테스트 (Android 는 맡지 않음) | A5(iOS 전부, Mac 필요) — Android 가 끝나는 대로 항목별로 이식 |
 
 - B10 은 한 파일(`2번_우준/B10-photo-topic-fit-ai.md`)이지만 우준이 비전 서비스(Python, Key Points 1~6)를, 찬희가 Spring 연동(Key Points 7~15)을 맡는다.
 - `SubmissionService` 를 고치는 순서: B0(우준) → B1(찬희) → B5(우준) → B10 연동(찬희) → B4(찬희). 앞 사람이 푸시하면 단톡에 알린다.
 - `B6-guess-templates.md` 는 폐기라 이 폴더에 그대로 둔다.
 - 2026-10-13: 경환의 Android 중 작거나 중간 크기이고 찬희 작업을 기다리지 않는 **A0·A1·A6·A8 을 우준으로** 옮겼다. iOS 이식·테스트는 전부 경환(팀에서 아이폰이 경환뿐). Android 는 같은 파일을 계속 고치므로 앞 사람이 푸시·알린 뒤 다음 사람이 시작한다: **우준 A0 → 우준 A1 → 경환 A2 → A3 → A4 → A7 → 우준 A8 → 경환 A9 → 우준 A6**.
 - 2026-10-13 (다시 조정): 경환이 iOS 를 전부 맡아 Android 가 밀리므로 **A4·A7 도 우준으로** 옮겼다(iOS 이식은 그대로 경환). 서버 쪽 선행(B0·B5)은 이미 끝나 A4 는 바로 시작할 수 있다. 새 Android 순서: **우준 A0 → 우준 A1 → [경환 A2 → A3] 와 [우준 A4 → A7 → A8] 를 나란히 → 경환 A9 → 우준 A6**. A3 와 A4 는 `SubmissionRepository`·`DataStore` 를 함께 고치므로 먼저 끝난 쪽이 바로 푸시하고, 다른 쪽은 pull 해서 합친 뒤 이어 간다.
+- 2026-10-15: 경환은 **구현된 Android 를 iOS 로 옮기는 일만** 하기로 해서 경환의 Android **A2·A3·A9 를 찬희로** 옮겼다(파일도 `1번_찬희/` 로 이동). A5(iOS 이식·테스트)는 그대로 경환. 새 Android 순서: **우준 A0 → 우준 A1 → [찬희 A2 → A3] 와 [우준 A4 → A7 → A8] 를 나란히 → 찬희 A9 → 우준 A6**. A3 와 A4 는 `SubmissionRepository`·`DataStore` 를 함께 고치므로 먼저 끝난 쪽이 바로 푸시한다.
 
 ## 이번 갱신에서 바뀐 것 (사용자 결정 반영)
 
@@ -69,7 +70,7 @@
 | 2 | `A1-android-5A-poke.md` | 콕/똥뿌리기 버튼 서버 연결 | Claude/Codex | A0 |
 | 3 | `A2-android-8A-profile-withdraw.md` | 프로필 편집·가입 사진·탈퇴 | Claude/Codex | A1, 8단계 |
 | 4 | `A3-android-group-2nd.md` | 그룹 내 프로필·후임자 선택·코드 재발급·주제 시각·비밀번호 변경 | Claude/Codex | A2, B1·B2·B3 |
-| 5 | `A4-android-new-templates.md` | 새 틀 6종 화면 + 집계 결과 (2026-10-13 우준) | Claude/Codex | A1, B0·B5 (경환 A3 와 같은 파일 — 먼저 끝난 쪽이 푸시) |
+| 5 | `A4-android-new-templates.md` | 새 틀 6종 화면 + 집계 결과 (2026-10-13 우준) | Claude/Codex | A1, B0·B5 (찬희 A3 와 같은 파일 — 먼저 끝난 쪽이 푸시) |
 | 6 | `A7-android-photo-fit-badge.md` | 찰떡상 배지·코멘트 표시 (2026-10-13 우준) | Claude/Codex | A4, B10 |
 | 7 | `A8-android-ai-draw-guess.md` | "AI가 맞혀볼게요" 온디바이스 추론 | Claude/Codex | A7, **M1 산출물** |
 | 8 | `A9-android-insights.md` | 그룹 인사이트 화면 | Claude/Codex | A3, B11 |

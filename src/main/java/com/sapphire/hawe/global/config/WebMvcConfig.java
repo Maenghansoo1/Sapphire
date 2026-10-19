@@ -2,11 +2,13 @@ package com.sapphire.hawe.global.config;
 
 import com.sapphire.hawe.global.storage.StorageProperties;
 import java.nio.file.Path;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@EnableConfigurationProperties(StorageProperties.class)
 public class WebMvcConfig implements WebMvcConfigurer {
     private final StorageProperties properties;
     public WebMvcConfig(StorageProperties properties) { this.properties = properties; }

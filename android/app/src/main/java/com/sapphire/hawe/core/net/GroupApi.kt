@@ -7,7 +7,8 @@ import kotlinx.serialization.Serializable
 @Serializable internal data class GroupSummaryDto(val id: Long, val name: String, val relationType: String,
     val memberCount: Int, val maxMembers: Int, val members: List<GroupMemberProfileDto>,
     val startDate: String? = null, val submittedToday: Boolean = false,
-    val todayMission: TodayMissionSummaryDto? = null)
+    val todayMission: TodayMissionSummaryDto? = null,
+    val todayMissions: List<TodayMissionSummaryDto> = emptyList())
 @Serializable internal data class MissionSlotDto(val slotNo: Int, val publishTime: String,
     val deadlineTime: String, val custom: Boolean)
 @Serializable internal data class GroupDetailDto(val id: Long, val name: String, val ownerId: Long,
@@ -16,6 +17,7 @@ import kotlinx.serialization.Serializable
     val dailyMissionCount: Int, val missionSlots: List<MissionSlotDto>, val missionCount: Long)
 @Serializable internal data class GroupMemberDto(val userId: Long, val nickname: String,
     val characterKey: String? = null, val profileImageUrl: String? = null, val role: String,
+    val hasGroupProfile: Boolean = false,
     val submissionCountThisMonth: Int = 0, val stampedToday: Boolean = false)
 @Serializable internal data class CreateGroupRequestDto(val name: String, val relationType: String,
     val startDate: String? = null)
@@ -24,3 +26,9 @@ import kotlinx.serialization.Serializable
     val members: List<GroupMemberProfileDto>)
 @Serializable internal data class JoinRequestDto(val code: String)
 @Serializable internal data class JoinResponseDto(val groupId: Long, val name: String)
+@Serializable internal data class GroupProfileRequestDto(val nickname: String, val characterId: Long)
+@Serializable data class InviteCodeDto(val inviteCode: String, val inviteUrl: String)
+@Serializable internal class EmptyBodyDto
+@Serializable internal data class MissionSlotRequestDto(val slotNo: Int, val publishTime: String? = null,
+    val deadlineTime: String? = null)
+@Serializable internal data class GroupSettingsRequestDto(val missionSlots: List<MissionSlotRequestDto>)

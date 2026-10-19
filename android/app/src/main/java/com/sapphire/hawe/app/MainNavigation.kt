@@ -30,7 +30,11 @@ import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.data.GroupsState
 import com.sapphire.hawe.core.net.CalendarRepository
+import com.sapphire.hawe.core.net.DevRepository
+import com.sapphire.hawe.core.dev.DevMode
+import com.sapphire.hawe.core.net.AuthRepository
 import com.sapphire.hawe.core.net.GroupRepository
+import com.sapphire.hawe.core.net.InsightRepository
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.PokeRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
@@ -41,6 +45,8 @@ import com.sapphire.hawe.core.push.PushGroupSnapshot
 import com.sapphire.hawe.core.push.PushTarget
 import com.sapphire.hawe.core.push.pushTarget
 import com.sapphire.hawe.feature.groups.*
+import com.sapphire.hawe.feature.dev.DevToolsScreen
+import com.sapphire.hawe.feature.insight.GroupInsightScreen
 import com.sapphire.hawe.feature.mission.MissionScreen
 import com.sapphire.hawe.feature.mission.MissionPerformScreen
 import com.sapphire.hawe.feature.mission.PerformEntryDecision
@@ -61,10 +67,13 @@ sealed interface MainRoute {
     @Serializable data object CreateGroup : MainRoute
     @Serializable data class JoinGroup(val code: String? = null) : MainRoute
     @Serializable data class GroupInfo(val groupId: Long) : MainRoute
+    @Serializable data class GroupInsight(val groupId: Long) : MainRoute
     @Serializable data class GroupProfile(val groupId: Long) : MainRoute
+    @Serializable data class SuccessorPicker(val groupId: Long) : MainRoute
     @Serializable data class Mission(val groupId: Long) : MainRoute
     @Serializable data class Calendar(val groupId: Long) : MainRoute
-    @Serializable data class MissionPerform(val groupId: Long, val type: String? = null) : MainRoute
+    @Serializable data class MissionPerform(val groupId: Long, val type: String? = null,
+        val missionId: Long? = null) : MainRoute
     @Serializable data class Results(val groupId: Long, val missionId: Long) : MainRoute
     @Serializable data class SubmissionDetail(val groupId: Long, val missionId: Long,
         val submissionId: Long) : MainRoute
@@ -74,13 +83,17 @@ sealed interface MainRoute {
     @Serializable data object UserInfo : MainRoute
     @Serializable data object ChangePassword : MainRoute
     @Serializable data object AppInfo : MainRoute
+    @Serializable data object DevTools : MainRoute
     @Serializable data object Licenses : MainRoute
     @Serializable data object Withdraw : MainRoute
 }
 
 @Composable
-fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups: GroupRepository,
-    missions: MissionRepository, pokes: PokeRepository, submissions: SubmissionRepository, calendar: CalendarRepository) {
+fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, push: PushCenter, groups: GroupRepository,
+    missions: MissionRepository, pokes: PokeRepository, submissions: SubmissionRepository, calendar: CalendarRepository,
+    insights: InsightRepository, dev: DevRepository? = null,
+    onSwitchUser: (Long) -> Unit = {}, switchBusy: Boolean = false,
+    switchMessage: String? = null, onSwitchMessageShown: () -> Unit = {}) {
     val nav = rememberNavController()
     val context = LocalContext.current
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
@@ -96,7 +109,8 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
     LaunchedEffect(destination) {
         if (destination != null) {
             val groups = store.groups.map { group ->
-                val last = group.missions.lastOrNull()
+                val last = group.missions.lastOrNull { it.serverSubmittedByMe }
+                    ?: group.missions.lastOrNull()
                 PushGroupSnapshot(group.id, last?.id, last?.serverSubmittedByMe == true)
             }
             val target = pushTarget(destination, groups)
@@ -169,19 +183,37 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             }
             GroupInfoScreen(id, store, groups, session, onBack = { nav.popBackStack() },
                 onProfile = { nav.navigate(MainRoute.GroupProfile(id)) },
-                onLeft = { nav.popBackStack<MainRoute.Home>(inclusive = false) })
+                onPickSuccessor = { nav.navigate(MainRoute.SuccessorPicker(id)) },
+                onLeft = { nav.popBackStack<MainRoute.Home>(inclusive = false) },
+                onInsight = { nav.navigate(MainRoute.GroupInsight(id)) })
         }
         composable<MainRoute.GroupProfile> { entry ->
             val id = entry.toRoute<MainRoute.GroupProfile>().groupId
             LaunchedEffect(entry) {
                 if (store.group(id)?.me == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
             }
-            GroupProfileScreen(id, store, onBack = { nav.popBackStack() })
+            GroupProfileScreen(id, store, groups, session, onBack = { nav.popBackStack() })
+        }
+        composable<MainRoute.SuccessorPicker> { entry ->
+            val id = entry.toRoute<MainRoute.SuccessorPicker>().groupId
+            SuccessorPickerScreen(id, store, groups, session, onBack = { nav.popBackStack() },
+                onLeft = { nav.popBackStack<MainRoute.Home>(inclusive = false) })
+        }
+        composable<MainRoute.GroupInsight> { entry ->
+            val id = entry.toRoute<MainRoute.GroupInsight>().groupId
+            LaunchedEffect(entry) {
+                if (store.group(id) == null) nav.popBackStack<MainRoute.Home>(inclusive = false)
+            }
+            GroupInsightScreen(id, store, insights, calendar,
+                onBack = { nav.popBackStack() },
+                onLeft = { nav.popBackStack<MainRoute.Home>(inclusive = false) },
+                onResults = { missionId -> nav.navigate(MainRoute.Results(id, missionId)) { launchSingleTop = true } })
         }
         composable<MainRoute.Mission> { entry ->
             val id = entry.toRoute<MainRoute.Mission>().groupId
             val submitted by entry.savedStateHandle.getStateFlow("submitted", false).collectAsState()
             val submittedLate by entry.savedStateHandle.getStateFlow("submittedLate", false).collectAsState()
+            val submittedMissionId by entry.savedStateHandle.getStateFlow<Long?>("submittedMissionId", null).collectAsState()
             val refreshMission by entry.savedStateHandle.getStateFlow("refresh", false).collectAsState()
             val notice by entry.savedStateHandle.getStateFlow<String?>("notice", null).collectAsState()
             LaunchedEffect(entry) {
@@ -190,19 +222,24 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             MissionScreen(id, store, missions, pokes, session, onBack = { nav.popBackStack() },
                 submittedSignal = submitted,
                 submittedLate = submittedLate,
-                onSubmittedHandled = { entry.savedStateHandle["submitted"] = false; entry.savedStateHandle["submittedLate"] = false },
+                submittedMissionId = submittedMissionId,
+                onSubmittedHandled = {
+                    entry.savedStateHandle["submitted"] = false
+                    entry.savedStateHandle["submittedLate"] = false
+                    entry.savedStateHandle["submittedMissionId"] = null
+                },
                 refreshSignal = refreshMission, onRefreshHandled = { entry.savedStateHandle["refresh"] = false },
                 notice = notice, onNoticeHandled = { entry.savedStateHandle["notice"] = null },
-                onPerform = { type -> nav.navigate(MainRoute.MissionPerform(id, type?.name)) { launchSingleTop = true } },
+                onPerform = { missionId, type ->
+                    nav.navigate(MainRoute.MissionPerform(id, type?.name, missionId)) { launchSingleTop = true }
+                },
                 onGroupInfo = {
                     nav.navigate(MainRoute.GroupInfo(id)) { launchSingleTop = true }
-                }, onResults = {
-                    store.todayMission(id)?.let { mission ->
-                        nav.navigate(MainRoute.Results(id, mission.id)) { launchSingleTop = true }
-                    }
+                }, onResults = { missionId ->
+                    nav.navigate(MainRoute.Results(id, missionId)) { launchSingleTop = true }
                 }, onCalendar = {
                     nav.navigate(MainRoute.Calendar(id)) { launchSingleTop = true }
-                })
+                }, dev = if (DevMode.enabled) dev else null)
         }
         composable<MainRoute.Calendar> { entry ->
             val route = entry.toRoute<MainRoute.Calendar>()
@@ -222,7 +259,8 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             val route = entry.toRoute<MainRoute.MissionPerform>()
             val id = route.groupId
             val requestedType = route.type?.let { runCatching { MissionType.valueOf(it) }.getOrNull() }
-            val mission = store.todayMission(id)
+            val mission = if (route.missionId != null) store.todayMission(id, route.missionId)
+                else store.todayMission(id)
             var submitMessage by remember(entry) { mutableStateOf<String?>(null) }
             var uploading by remember(entry) { mutableStateOf(false) }
             val decision = remember(entry) {
@@ -242,6 +280,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
                             try {
                                 val submitted = submissions.submit(mission.id, content, session.account.userId)
                                 if (session.state == AppSession.State.SIGNED_IN) store.applySubmitted(id, mission.id, submitted)
+                                nav.previousBackStackEntry?.savedStateHandle?.set("submittedMissionId", mission.id)
                                 nav.previousBackStackEntry?.savedStateHandle?.set("submittedLate", submitted.isLate)
                                 nav.previousBackStackEntry?.savedStateHandle?.set("submitted", true)
                                 nav.popBackStack()
@@ -276,8 +315,8 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             val missionID = route.missionId
             LaunchedEffect(entry) {
                 // 현재 미션이면 내가 냈는지, 달력에서 연 지난 미션이면 그날 내가 냈는지 확인해요.
-                val current = store.todayMission(groupID)
-                val canOpen = if (current?.id == missionID) current.didSubmit
+                val current = store.todayMission(groupID, missionID)
+                val canOpen = if (current != null) current.didSubmit
                     else store.calendarRecord(groupID, missionID)?.didSubmit == true
                 if (!canOpen) nav.popBackStack()
             }
@@ -313,10 +352,20 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
                 onNotifications = { nav.navigate(MainRoute.NotificationSettings) { launchSingleTop = true } },
                 onUserInfo = { nav.navigate(MainRoute.UserInfo) { launchSingleTop = true } },
                 onAppInfo = { nav.navigate(MainRoute.AppInfo) { launchSingleTop = true } },
-                onWithdraw = { nav.navigate(MainRoute.Withdraw) { launchSingleTop = true } })
+                onWithdraw = { nav.navigate(MainRoute.Withdraw) { launchSingleTop = true } },
+                dev = dev, onDevTools = { nav.navigate(MainRoute.DevTools) { launchSingleTop = true } },
+                onSwitchUser = onSwitchUser, switchBusy = switchBusy,
+                switchMessage = switchMessage, onSwitchMessageShown = onSwitchMessageShown)
+        }
+        composable<MainRoute.DevTools> {
+            if (DevMode.enabled && dev != null) DevToolsScreen(session, store, dev, groups, missions,
+                onBack = { nav.popBackStack() },
+                onInsight = { nav.navigate(MainRoute.GroupInsight(it)) },
+                onLogout = { session.signOut() })
+            else LaunchedEffect(Unit) { nav.popBackStack() }
         }
         composable<MainRoute.ProfileEdit> {
-            ProfileEditScreen(session, store, onBack = { nav.popBackStack() })
+            ProfileEditScreen(session, store, auth, onBack = { nav.popBackStack() })
         }
         composable<MainRoute.NotificationSettings> {
             NotificationSettingsScreen(session, onBack = { nav.popBackStack() })
@@ -327,7 +376,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
                 onChangePassword = { nav.navigate(MainRoute.ChangePassword) { launchSingleTop = true } })
         }
         composable<MainRoute.ChangePassword> {
-            ChangePasswordScreen(onBack = { nav.popBackStack() })
+            ChangePasswordScreen(auth, onBack = { nav.popBackStack() })
         }
         composable<MainRoute.AppInfo> {
             AppInfoScreen(onBack = { nav.popBackStack() },
@@ -337,7 +386,7 @@ fun MainNavHost(session: AppSession, store: DataStore, push: PushCenter, groups:
             LicensesScreen(onBack = { nav.popBackStack() })
         }
         composable<MainRoute.Withdraw> {
-            WithdrawScreen(session, store, onBack = { nav.popBackStack() })
+            WithdrawScreen(session, store, auth, onBack = { nav.popBackStack() })
         }
     }
 }

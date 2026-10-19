@@ -135,13 +135,13 @@ class SubmissionRepository(private val api: ApiClient) {
     }
 
     private fun CommentDto.toModel() = SubmissionComment(id,
-        Profile(AvatarContent.Character(ProfileCharacter.fromKey(author.characterKey)), author.nickname),
+        Profile(api.avatarOf(author.characterKey, author.profileImageUrl), author.nickname),
         author.userId, content, imageUrl?.let { URI(api.absoluteUrl(it)) }, mentionedUserIds,
         OffsetDateTime.parse(createdAt).toInstant(), mine)
 
     private fun SubmissionDto.toModel(myUserId: Long): Submission? {
         val type = templateType(template) ?: return null
-        return Submission(id, Profile(AvatarContent.Character(ProfileCharacter.fromKey(author.characterKey)),
+        return Submission(id, Profile(api.avatarOf(author.characterKey, author.profileImageUrl),
             author.nickname), author.userId == myUserId, type,
             OffsetDateTime.parse(submittedAt).toInstant(),
             mediaUrl?.let { URI(api.absoluteUrl(it)) }, text, isLate,

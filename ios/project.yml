@@ -33,7 +33,6 @@ targets:
         UILaunchScreen: {}
         UIUserInterfaceStyle: Light
         NSCameraUsageDescription: "오늘의 미션 사진을 찍으려면 카메라 권한이 필요해요."
-        NSMicrophoneUsageDescription: "오늘의 미션 음성을 녹음하려면 마이크 권한이 필요해요."
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIAppFonts:
@@ -54,3 +53,20 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_PREVIEWS: YES
+    scheme:
+      testTargets:
+        - HAWETests
+
+  # 단위 테스트 — Android 단위 테스트(app/src/test)를 옮긴 것. 그림 모델 골든은 앱 번들의 Core ML 모델로 확인해요.
+  HAWETests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: HAWETests
+    dependencies:
+      - target: HAWE
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.sapphire.hawe.tests
+        TARGETED_DEVICE_FAMILY: "1"

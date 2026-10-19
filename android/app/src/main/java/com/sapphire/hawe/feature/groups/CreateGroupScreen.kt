@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sapphire.hawe.core.HaweTime
+import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.net.GroupRepository
@@ -47,7 +48,7 @@ fun CreateGroupScreen(groups: GroupRepository, store: DataStore, session: AppSes
     onBack: () -> Unit, onCreated: (Long) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var relationship by rememberSaveable { mutableStateOf(Relationship.FRIEND) }
-    var selectedDate by rememberSaveable { mutableStateOf(Instant.now().atZone(HaweTime.SEOUL).toLocalDate()) }
+    var selectedDate by rememberSaveable { mutableStateOf(AppClock.today()) }
     var showDate by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -139,7 +140,7 @@ fun CreateGroupScreen(groups: GroupRepository, store: DataStore, session: AppSes
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StartDateSheet(date: LocalDate, onDismiss: () -> Unit, onConfirm: (LocalDate) -> Unit) {
-    val today = remember { Instant.now().atZone(HaweTime.SEOUL).toLocalDate() }
+    val today = AppClock.today()
     val picker = rememberDatePickerState(initialSelectedDateMillis = datePickerMillis(date),
         selectableDates = remember(today) { object : SelectableDates {
             override fun isSelectableDate(utcTimeMillis: Long): Boolean = isSelectableDate(utcTimeMillis, today)

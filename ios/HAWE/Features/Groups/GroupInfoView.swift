@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// 16 그룹 정보 · 설정 (Figma 1:1454)
-/// 초대 코드 복사·링크 공유, 멤버 목록, 그룹 나가기.
-/// 그룹 내 프로필·주제 도착 시간·그룹 알림은 서버 API 가 생기기 전까지 '준비 중'이에요.
+/// 초대 코드 복사·링크 공유·다시 만들기(그룹장), 멤버 목록·내 그룹 내 프로필, 우리 그룹 이야기(인사이트),
+/// 주제 도착 시간(그룹장), 그룹 나가기(다른 멤버가 있는 그룹장은 그룹장을 넘기고 나가요). 그룹 알림은 준비 중이에요.
 struct GroupInfoView: View {
     let groupID: Int
+    @Binding var path: [MainRoute]
     var onLeft: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
@@ -13,6 +14,10 @@ struct GroupInfoView: View {
     @Environment(Services.self) private var services
     @State private var showsLeaveAlert = false
     @State private var isLeaving = false
+    @State private var showsReissueAlert = false
+    @State private var isReissuing = false
+    @State private var showsTimeSheet = false
+    @State private var isChangingTime = false
     @State private var toast: String?
 
     /// 나간 직후처럼 그룹이 사라졌을 때는 빈 값으로 그려요.
@@ -42,11 +47,30 @@ struct GroupInfoView: View {
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
-        .alert("그룹에서 나갈까요?", isPresented: $showsLeaveAlert) {
-            Button("취소", role: .cancel) {}
-            Button("나가기", role: .destructive, action: leave)
-        } message: {
-            Text(leaveMessage)
+        .overlay {
+            if showsLeaveAlert {
+                HAlert(title: "그룹에서 나갈까요?", message: leaveMessage, confirmTitle: "나가기",
+                       onCancel: { showsLeaveAlert = false },
+                       onConfirm: {
+                           showsLeaveAlert = false
+                           leave()
+                       })
+            } else if showsReissueAlert {
+                HAlert(title: "초대 코드를 다시 만들까요?", message: "이전 코드는 바로 쓸 수 없게 돼요.",
+                       confirmTitle: "다시 만들기", confirmKind: .primary,
+                       onCancel: { showsReissueAlert = false },
+                       onConfirm: {
+                           showsReissueAlert = false
+                           reissue()
+                       })
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: showsLeaveAlert || showsReissueAlert)
+        .sheet(isPresented: $showsTimeSheet) {
+            TopicTimeSheet(initial: group.topicTime) { time in
+                showsTimeSheet = false
+                changeTopicTime(time)
+            }
         }
         .hToast($toast)
         // 들어올 때마다 멤버·초대 코드를 서버에서 다시 받아요.
@@ -101,6 +125,19 @@ struct GroupInfoView: View {
                 Text("초대 링크 공유하기")
             }
             .buttonStyle(HButtonStyle(kind: .primary))
+
+            if group.amIOwner {
+                Button { showsReissueAlert = true } label: {
+                    Text("코드 다시 만들기")
+                        .font(.plex(14, .semibold))
+                        .foregroundStyle(.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isReissuing)
+            }
         }
         .padding(18)
         .background(.surface, in: RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
@@ -141,8 +178,7 @@ struct GroupInfoView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     if member.isMe {
-                        // 그룹 내 프로필 API 가 생기면 16-1 GroupProfileView 로 보내요.
-                        Button { toast = ComingSoon.message } label: {
+                        Button { path.append(.groupProfile(groupID: groupID)) } label: {
                             Text("내 프로필 편집")
                                 .font(.plex(13, .semibold))
                                 .foregroundStyle(.ink)
@@ -168,9 +204,29 @@ struct GroupInfoView: View {
     /// 위 구분선 + 위 12 · 목록 줄 52
     private var settings: some View {
         VStack(spacing: 0) {
-            // 주제 도착 시간 변경·그룹 알림은 서버 API 가 생기면 TopicTimeSheet·토글로 다시 열어요.
-            HListRow("주제 도착 시간", value: Self.timeText(group.topicTime), showsChevron: false) {
-                toast = ComingSoon.message
+            Button { path.append(.groupInsight(groupID: groupID)) } label: {
+                HStack(spacing: 8) {
+                    HIconView(icon: .insightTemp, size: 20, color: .accent)
+                    Text("우리 그룹 이야기")
+                        .font(.body15)
+                        .foregroundStyle(.ink)
+                    Spacer()
+                    HIconView(icon: .chevronRight, size: 16, color: .textTertiary)
+                }
+                .frame(height: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(.line).frame(height: 1)
+            }
+
+            HListRow("주제 도착 시간", value: Self.timeText(group.topicTime), showsChevron: group.amIOwner) {
+                if group.amIOwner {
+                    if !isChangingTime { showsTimeSheet = true }
+                } else {
+                    toast = "그룹장만 바꿀 수 있어요"
+                }
             }
 
             HListRow("알림", value: "준비 중") {
@@ -178,9 +234,8 @@ struct GroupInfoView: View {
             }
 
             Button {
-                // 그룹장 넘기기(후임자 선택)는 아직 준비 중이에요.
                 if group.amIOwner && group.members.count > 1 {
-                    toast = "그룹장은 다른 멤버에게 그룹장을 넘긴 뒤 나갈 수 있어요. 지금은 준비 중이에요"
+                    path.append(.successorPicker(groupID: groupID))
                 } else {
                     showsLeaveAlert = true
                 }
@@ -244,6 +299,44 @@ struct GroupInfoView: View {
         }
     }
 
+    private func reissue() {
+        guard !isReissuing else { return }
+        isReissuing = true
+        Task {
+            defer { isReissuing = false }
+            do {
+                let result = try await services.groups.reissueInviteCode(groupID: groupID)
+                var updated = group
+                updated.inviteCode = result.inviteCode
+                store.applyServerGroup(updated)
+                // POST 응답에 새 코드가 이미 있어서 상세를 못 받아도 괜찮아요.
+                if let detail = try? await services.groups.detail(groupID: groupID, myUserID: session.account.userID) {
+                    store.applyServerGroup(detail)
+                }
+                toast = "새 초대 코드를 만들었어요"
+            } catch is CancellationError {
+            } catch {
+                toast = error.userMessage
+            }
+        }
+    }
+
+    private func changeTopicTime(_ time: DateComponents) {
+        guard !isChangingTime else { return }
+        isChangingTime = true
+        Task {
+            defer { isChangingTime = false }
+            do {
+                let saved = try await services.groups.updateTopicTime(groupID: groupID, time: time)
+                store.setTopicTime(saved, groupID: groupID)
+                toast = "주제 도착 시간을 바꿨어요. 오늘 미션이 이미 열렸다면 내일부터 적용돼요"
+            } catch is CancellationError {
+            } catch {
+                toast = error.userMessage
+            }
+        }
+    }
+
     private func copyCode() {
         UIPasteboard.general.string = group.inviteCode
         toast = "초대 코드를 복사했어요"
@@ -255,25 +348,28 @@ struct GroupInfoView: View {
         date.formatted(.dateTime.year().month(.defaultDigits).day().locale(korean))
     }
 
+    /// "오전 9:00"
     static func timeText(_ time: DateComponents) -> String {
-        let date = Calendar.current.date(from: time) ?? .now
-        return date.formatted(.dateTime.hour().minute().locale(korean))
+        let hour24 = time.hour ?? 9
+        let hour = hour24 % 12 == 0 ? 12 : hour24 % 12
+        return "\(hour24 < 12 ? "오전" : "오후") \(hour):" + String(format: "%02d", time.minute ?? 0)
     }
 }
 
-/// 주제 도착 시간 고르기 — 서버에 변경 API 가 생기면 다시 연결해요.
+/// 주제 도착 시간 고르기 (그룹장) — 1번 미션이 매일 이 시간에 열려요.
 struct TopicTimeSheet: View {
-    @Binding var time: DateComponents
-    @Environment(\.dismiss) private var dismiss
+    let initial: DateComponents
+    let onConfirm: (DateComponents) -> Void
 
     @State private var date = Date.now
+
+    private static var calendar: Calendar { DataStore.calendar }
 
     var body: some View {
         VStack(spacing: 0) {
             HNavBar("주제 도착 시간") {
                 Button("완료") {
-                    time = Calendar.current.dateComponents([.hour, .minute], from: date)
-                    dismiss()
+                    onConfirm(Self.calendar.dateComponents([.hour, .minute], from: date))
                 }
                 .font(.plex(16, .semibold))
                 .foregroundStyle(.ink)
@@ -285,20 +381,24 @@ struct TopicTimeSheet: View {
                 .font(.caption13)
                 .foregroundStyle(.textSecondary)
                 .padding(.top, 4)
+            Text("오늘 미션이 이미 열렸다면 내일부터 적용돼요.")
+                .font(.caption13)
+                .foregroundStyle(.textSecondary)
 
             DatePicker("주제 도착 시간", selection: $date, displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .environment(\.locale, Locale(identifier: "ko_KR"))
+                .environment(\.timeZone, TodayMission.seoul)
 
             Spacer(minLength: 0)
         }
         .padding(.top, 8)
         .background(.bg)
-        .presentationDetents([.height(340)])
+        .presentationDetents([.height(360)])
         .presentationDragIndicator(.visible)
         .onAppear {
-            date = Calendar.current.date(from: time) ?? .now
+            date = Self.calendar.date(bySettingHour: initial.hour ?? 9, minute: initial.minute ?? 0, second: 0, of: .now) ?? .now
         }
     }
 }
@@ -306,7 +406,7 @@ struct TopicTimeSheet: View {
 #Preview("체험 그룹") {
     let store = DataStore.preview()
     NavigationStack {
-        GroupInfoView(groupID: store.groups[0].id)
+        GroupInfoView(groupID: store.groups[0].id, path: .constant([]))
     }
     .environment(store)
     .environment(AppSession(state: .signedIn))
@@ -317,7 +417,7 @@ struct TopicTimeSheet: View {
     let store = DataStore()
     let id = store.createGroup(name: "우리 둘", relationship: .lover, startDate: .now)
     NavigationStack {
-        GroupInfoView(groupID: id)
+        GroupInfoView(groupID: id, path: .constant([]))
     }
     .environment(store)
     .environment(AppSession(state: .signedIn))

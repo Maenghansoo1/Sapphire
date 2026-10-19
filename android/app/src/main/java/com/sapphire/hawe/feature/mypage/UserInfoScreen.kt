@@ -39,7 +39,7 @@ fun UserInfoScreen(session: AppSession, onBack: () -> Unit, onProfileEdit: () ->
         HNavBar("유저 정보", leading = HNavLeading.BACK, onLeading = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             SectionTitle("기본 정보", 14.dp)
-            HListRow("닉네임", value = account.profile.nickname, height = 56.dp, onClick = { toast.show(COMING_SOON) })
+            HListRow("닉네임", value = account.profile.nickname, height = 56.dp, onClick = onProfileEdit)
             InfoRow("이메일", account.email?.takeIf { it.isNotBlank() } ?: "없음")
             InfoRow("가입일", dotDate(account.joinedAt))
             SectionTitle("로그인 연결", 26.dp)
@@ -53,7 +53,7 @@ fun UserInfoScreen(session: AppSession, onBack: () -> Unit, onProfileEdit: () ->
             }
             SectionTitle("보안", 26.dp)
             Row(Modifier.fillMaxWidth().height(60.dp)
-                .clickable(enabled = account.canChangePassword) { toast.show(COMING_SOON) },
+                .clickable(enabled = account.canChangePassword, onClick = onChangePassword),
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("비밀번호 변경", style = HType.plex(15),

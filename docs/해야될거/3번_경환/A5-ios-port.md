@@ -4,6 +4,28 @@
 >
 > 이 문서는 **개별 구현 계획이 아니라 이식 작업의 묶음 계획**이다. 실행 시에는 Android 쪽 해당 계획이 끝나 커밋된 뒤, 항목마다 `.agent/plan.md` 로 올려 하나씩 진행하는 것을 권장한다(항목별 Findings 는 그때 Android diff 를 보고 채운다).
 
+## 진행 상황 (2026-10-18)
+
+항목 0~10 을 한 번에 옮겼어요 (Mac 에서 `xcodebuild` 빌드·`HAWETests` 단위 테스트로 확인). 서버를 켠 시뮬레이터 수동 확인은 아직이에요.
+
+| # | 상태 | 메모 |
+|---|---|---|
+| 0 | 완료 | 음성 화면·재생·파형·마이크 권한 삭제. `rg -i "voice\|audio\|waveform\|AVAudio\|NSMicrophone"` 잔여 0건(VoiceOver 주석만) |
+| 1 | 완료 | 달력·활동 요약은 이미 있던 코드. 앱 시계(`AppClock`)로 바꿈 |
+| 2 | 완료 | `PokeRepository`, 05 멤버 줄 콕·똥 버튼(임시 아이콘 `icon-poke-temp`·`icon-fling-temp`) |
+| 3 | 완료 | 14 상세의 스티커(이모지 임시)·댓글(멘션·사진 첨부·삭제) |
+| 4 | 완료 | 프로필 편집(닉네임→캐릭터/사진→`GET /me`), 가입 사진, 탈퇴(그룹장 막기) |
+| 5 | 완료 | 그룹 내 프로필, 그룹장 넘기기(`SuccessorPickerView`), 코드 다시 만들기, 주제 도착 시간, 비밀번호 변경 |
+| 6 | 완료 | 새 틀 6종 수행 화면(`TemplateMissionViews.swift`) + 결과 카드·그룹 결과(`ResultSummary.swift`) |
+| 7 | 완료 | 하루 여러 미션 — 05 위 슬롯 칩(임시), 홈 카드 "외 N개 · 내 제출 수" |
+| 8 | 완료 | 찰떡상 배지·코멘트(`AiReviewLine`), 방금 올린 사진은 5초 뒤 한 번 더 불러옴 |
+| 9 | 완료 | Core ML: int8 TFLite → `QuickDrawCNN.mlpackage`(`ios/Tools/quickdraw_coreml.py`, 층마다 int8 양자화 흉내). 골든 8개 최대 차이 0.0000. 라이선스 화면에 Quick, Draw!(CC BY 4.0) |
+| 10 | 완료 | `GroupInsightView`(16 그룹 정보 → 우리 그룹 이야기) |
+| + | 완료 | 개발자 모드(버전 10번 누르기): 개발자 도구·서버 시계·오류 주입·유저 전환·05 미션 생성/리롤 (Android `feature/dev`) |
+
+- 테스트 타깃 `HAWETests` 를 `project.yml` 에 추가했어요(Android `app/src/test` 를 옮김). 그림 골든은 `ios/HAWETests/Resources/quickdraw/` 에 복사해 두고 `ml/` 원본과 같은지 테스트로 확인해요.
+- `docs/테스트_문제점_발견/문제점.md` 1번(갤러리 미션 버튼)은 Android 도 아직 그대로라 iOS 도 같게 뒀어요.
+
 ## Goal
 
 Android 에 반영된 변경(음성 제거 포함)을 iOS 에도 같은 계약·같은 동작으로 반영한다. iOS 는 현재 **인증·그룹·미션·제출·피드 연결(3A·4A·6A)** 까지 되어 있고, 달력(10단계)은 서버 연결 계층이 없어 보류, 콕·반응·댓글·프로필/탈퇴·그룹 2차·새 AI 기능은 미연결(로컬 `DataStore` 목업 또는 미구현)이다.

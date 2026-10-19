@@ -4,14 +4,17 @@ import SwiftUI
 /// 06 미션 수행 · 그림 (Figma 1:594)
 /// PencilKit. 펜/지우개, 굵기 3단계, 7색, 되돌리기/다시 실행. 올리기 → PNG
 /// 30초 스케치(`spec.seconds`)는 첫 획부터 시간을 재고, 시간이 끝나면 더 그릴 수 없어요.
+/// "AI에게 보여주기"는 기기 안 모델로 그림을 맞혀 봐요 (재미용 — 올리기·도장과 무관, 그림은 밖으로 나가지 않아요, A8).
 struct DrawMissionView: View {
     let topic: String
+    var template = MissionTemplates.drawSketch
     var spec = MissionSpec()
     var onSubmit: (SubmissionContent) async -> Bool = { _ in true }
 
     @State private var canvas = DrawingCanvasModel()
     @State private var isSubmitting = false
     @State private var toast: String?
+    @State private var aiGuess = AiGuessRunner()
 
     var body: some View {
         VStack(spacing: 16) {
@@ -54,8 +57,13 @@ struct DrawMissionView: View {
 
             Spacer(minLength: 0)
 
-            HButton(isSubmitting ? "올리는 중..." : "올리기", action: submit)
-                .disabled(canvas.isEmpty || isSubmitting)
+            HStack(spacing: 10) {
+                if aiGuess.isAvailable {
+                    AiShowButton(enabled: !canvas.isEmpty, action: showAI)
+                }
+                HButton(isSubmitting ? "올리는 중..." : "올리기", action: submit)
+                    .disabled(canvas.isEmpty || isSubmitting)
+            }
         }
         .padding(.horizontal, HLayout.screenPaddingCompact)
         // 올리기 버튼은 화면 아래 끝에서 32 위 (Figma pb 32)
@@ -63,6 +71,7 @@ struct DrawMissionView: View {
         .ignoresSafeArea(.container, edges: .bottom)
         .background(.bg)
         .hToast($toast)
+        .aiGuessCard(aiGuess)
         // 첫 획을 그으면 시간을 재기 시작해요.
         .task(id: canvas.startedAt) {
             guard let seconds = spec.seconds, canvas.startedAt != nil else { return }
@@ -80,6 +89,14 @@ struct DrawMissionView: View {
         isSubmitting = true
         Task {
             if await !onSubmit(.image(png, fileExtension: "png")) { isSubmitting = false }
+        }
+    }
+
+    private func showAI() {
+        let ink = canvas.inkImage()
+        let topic = topic, template = template, spec = spec
+        aiGuess.guess(mine: true, load: { ink }) {
+            DrawSubjectMatcher.match(template: template, topic: topic, spec: spec, categories: $0)
         }
     }
 
@@ -251,6 +268,12 @@ final class DrawingCanvasModel {
         canRedo = canvasView.undoManager?.canRedo ?? false
     }
 
+    /// AI 추측용 잉크 — 검정 잉크 + 투명 배경 (명세 (1))
+    func inkImage() -> InkImage? {
+        guard let canvasView else { return nil }
+        return InkSource.ink(drawing: canvasView.drawing, bounds: canvasView.bounds)
+    }
+
     /// 흰 바탕 PNG (올리기용)
     func pngData(scale: CGFloat = 2) -> Data? {
         guard let canvasView else { return nil }
@@ -308,5 +331,5 @@ struct PencilCanvas: UIViewRepresentable {
 }
 
 #Preview("30초 스케치") {
-    DrawMissionView(topic: "30초 안에 그려 보세요", spec: MissionSpec(seconds: 30))
+    DrawMissionView(topic: "30초 안에 그려 보세요", spec: MissionSpec(seconds: 30, subject: "고양이"))
 }

@@ -20,6 +20,7 @@ import com.sapphire.hawe.designsystem.assets.ProfileCharacter
 import com.sapphire.hawe.designsystem.components.*
 import com.sapphire.hawe.designsystem.layout.HCtaScaffold
 import com.sapphire.hawe.designsystem.tokens.*
+import com.sapphire.hawe.feature.mypage.avatarUploadBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -30,6 +31,7 @@ fun SignupProfileScreen(provider: LoginProvider, email: String?, session: AppSes
     var avatar by remember { mutableStateOf<AvatarContent>(AvatarContent.Character(ProfileCharacter.MONGSIL)) }
     var nickname by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val toast = rememberHToastState()
     var loading by remember { mutableStateOf(false) }
@@ -44,28 +46,29 @@ fun SignupProfileScreen(provider: LoginProvider, email: String?, session: AppSes
             Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("어떻게 불러드릴까요?", style = HType.screenTitle, color = HColors.ink)
-                    Text("캐릭터를 고르고 이름을 정해주세요.", style = HType.body15, color = HColors.textSecondary)
+                    Text("캐릭터나 사진을 고르고 이름을 정해주세요.", style = HType.body15, color = HColors.textSecondary)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     HAvatar(avatar, size = 88.dp, characterScale = 0.8f)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("선택한 캐릭터", style = HType.caption13, color = HColors.textSecondary)
+                        Text("선택한 프로필", style = HType.caption13, color = HColors.textSecondary)
                         Text(avatar.choiceName, style = HType.plex(20, FontWeight.Bold), color = HColors.ink)
                     }
                 }
-                CharacterPicker(avatar, { avatar = it }, showPhotoCell = false)
+                CharacterPicker(avatar, { avatar = it })
                 HTextField(nickname, { nickname = it }, "닉네임을 입력해 주세요", label = "닉네임",
                     helper = "캐릭터와 이름은 나중에 바꿀 수 있어요", maxLength = 10, imeAction = ImeAction.Done)
             }
         }, cta = {
             HButton("시작하기", enabled = !loading && nickname.trim().length in 2..10) {
-                val character = (avatar as? AvatarContent.Character)?.character ?: return@HButton
                 if (loading) return@HButton
                 loading = true
                 scope.launch {
                     try {
-                        val account = auth.signUp(email.orEmpty(), password, nickname, character,
-                            agreeTerms, agreePrivacy, registered, { registered = true })
+                        val account = auth.signUp(email.orEmpty(), password, nickname, avatar,
+                            agreeTerms, agreePrivacy, registered, { registered = true }) {
+                            avatarUploadBytes(context, it)
+                        }
                         store.reset()
                         store.setMyProfile(account.profile)
                         focus.clearFocus()

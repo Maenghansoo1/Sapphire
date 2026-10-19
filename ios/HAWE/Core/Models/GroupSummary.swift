@@ -12,10 +12,14 @@ struct GroupSummary: Identifiable, Hashable {
     var missionType: MissionType?
     var topic: String?
     var submittedCount: Int
+    /// 오늘 열린 미션을 모두 냈는지
     var didSubmit: Bool
+    /// 오늘 열린 미션 수와 그중 내가 낸 수 (하루 여러 미션, A6)
+    var missionCount = 0
+    var mySubmittedCount = 0
 
-    /// 우리의 1일을 1일째로 세요.
-    func daysTogether(on today: Date = .now, calendar: Calendar = .current) -> Int? {
+    /// 우리의 1일을 1일째로 세요 (서울 날짜 기준).
+    func daysTogether(on today: Date = AppClock.now(), calendar: Calendar = DataStore.calendar) -> Int? {
         guard let startDate else { return nil }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: startDate), to: calendar.startOfDay(for: today)).day ?? 0
         return days + 1
@@ -51,8 +55,8 @@ extension GroupSummary {
             name: "조별과제 B팀",
             relationship: .rival,
             members: [.character(.pilleum), .character(.gomdol), .character(.ipsagwi), .character(.mongsil)],
-            missionType: .voice,
-            topic: "오늘 하루를 10초로 말해줘",
+            missionType: .write,
+            topic: "오늘 하루를 세 단어로",
             submittedCount: 1,
             didSubmit: false
         ),

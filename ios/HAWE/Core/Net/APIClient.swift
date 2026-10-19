@@ -20,15 +20,20 @@ actor APIClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(baseURL: URL, tokens: TokenStore, onSessionExpired: @escaping @Sendable () -> Void = {}) {
+    /// `protocolClasses` 는 테스트에서 서버 대신 응답할 URLProtocol 을 넣을 때만 써요.
+    init(baseURL: URL, tokens: TokenStore, onSessionExpired: @escaping @Sendable () -> Void = {}, protocolClasses: [AnyClass]? = nil) {
         self.baseURL = baseURL
         self.tokens = tokens
         self.onSessionExpired = onSessionExpired
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 20
-        session = URLSession(configuration: config)
         let upload = URLSessionConfiguration.default
         upload.timeoutIntervalForRequest = 60
+        if let protocolClasses {
+            config.protocolClasses = protocolClasses
+            upload.protocolClasses = protocolClasses
+        }
+        session = URLSession(configuration: config)
         uploadSession = URLSession(configuration: upload)
     }
 
@@ -38,6 +43,14 @@ actor APIClient {
         let base = baseURL.absoluteString.hasSuffix("/") ? String(baseURL.absoluteString.dropLast()) : baseURL.absoluteString
         let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
         return URL(string: "\(base)/\(trimmed)") ?? baseURL
+    }
+
+    /// 서버 사진 주소가 있으면 사진, 없으면 캐릭터 (Android `avatarOf`)
+    nonisolated func avatar(characterKey: String?, profileImageURL: String?) -> AvatarContent {
+        if let path = profileImageURL?.trimmingCharacters(in: .whitespaces), !path.isEmpty {
+            return .photo(absoluteURL(path))
+        }
+        return .character(ProfileCharacter.fromKey(characterKey))
     }
 
     // MARK: - 요청
@@ -51,6 +64,11 @@ actor APIClient {
         return try decode(await execute("POST", path, auth: auth, upload: false) { (data, "application/json; charset=utf-8") })
     }
 
+    func put<B: Encodable, T: Decodable>(_ path: String, body: B, auth: Bool = true) async throws -> T {
+        let data = try encoder.encode(body)
+        return try decode(await execute("PUT", path, auth: auth, upload: false) { (data, "application/json; charset=utf-8") })
+    }
+
     func patch<B: Encodable, T: Decodable>(_ path: String, body: B, auth: Bool = true) async throws -> T {
         let data = try encoder.encode(body)
         return try decode(await execute("PATCH", path, auth: auth, upload: false) { (data, "application/json; charset=utf-8") })
@@ -60,8 +78,21 @@ actor APIClient {
         _ = try await execute("DELETE", path, auth: auth, upload: false) { (nil, nil) }
     }
 
+    /// 응답 본문이 있는 DELETE (개발자 시계 초기화)
+    func deleteReturning<T: Decodable>(_ path: String, auth: Bool = true) async throws -> T {
+        try decode(await execute("DELETE", path, auth: auth, upload: false) { (nil, nil) })
+    }
+
     func postMultipart<T: Decodable>(_ path: String, parts: [Part]) async throws -> T {
-        try decode(await execute("POST", path, auth: true, upload: true) {
+        try await multipart("POST", path, parts: parts)
+    }
+
+    func putMultipart<T: Decodable>(_ path: String, parts: [Part]) async throws -> T {
+        try await multipart("PUT", path, parts: parts)
+    }
+
+    private func multipart<T: Decodable>(_ method: String, _ path: String, parts: [Part]) async throws -> T {
+        try decode(await execute(method, path, auth: true, upload: true) {
             // 재시도할 때도 같은 본문을 보낼 수 있게 요청마다 새로 만들어요.
             let boundary = "HAWE-\(UUID().uuidString)"
             return (Self.multipartBody(parts, boundary: boundary), "multipart/form-data; boundary=\(boundary)")
@@ -133,7 +164,15 @@ actor APIClient {
     private func send(
         _ method: String, _ path: String, body: (Data?, String?), access: String?, upload: Bool
     ) async throws -> (Int, Data) {
-        var request = URLRequest(url: absoluteURL(path))
+        let url = absoluteURL(path)
+        // 개발자 도구의 오류 주입 — 서버에 보내지 않고 가짜 응답을 돌려줘요.
+        if let fault = DevFaults.take(path: url.path, method: method) {
+            guard let response = DevFaults.response(for: fault, path: url.path, query: url.query) else {
+                throw NetworkError(underlying: URLError(.notConnectedToInternet))
+            }
+            return response
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body.0
         if let contentType = body.1 { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }

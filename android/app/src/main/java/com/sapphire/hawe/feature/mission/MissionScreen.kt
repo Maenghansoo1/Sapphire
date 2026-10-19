@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -29,6 +30,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.data.MissionState
 import com.sapphire.hawe.core.AppSession
+import com.sapphire.hawe.core.dev.AppClock
+import com.sapphire.hawe.core.net.DevRepository
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.PokeFollowUp
 import com.sapphire.hawe.core.net.PokeRepository
@@ -53,11 +56,19 @@ import kotlinx.coroutines.launch
 fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes: PokeRepository, session: AppSession,
     onBack: () -> Unit, onGroupInfo: () -> Unit,
     submittedSignal: Boolean = false, onSubmittedHandled: () -> Unit = {},
-    submittedLate: Boolean = false, refreshSignal: Boolean = false, onRefreshHandled: () -> Unit = {},
+    submittedLate: Boolean = false, submittedMissionId: Long? = null,
+    refreshSignal: Boolean = false, onRefreshHandled: () -> Unit = {},
     notice: String? = null, onNoticeHandled: () -> Unit = {},
-    onPerform: (MissionType?) -> Unit = {}, onResults: () -> Unit = {}, onCalendar: () -> Unit = {}) {
+    onPerform: (Long, MissionType?) -> Unit = { _, _ -> }, onResults: (Long) -> Unit = {},
+    onCalendar: () -> Unit = {}, dev: DevRepository? = null) {
     val group = store.groups.firstOrNull { it.id == id } ?: return
-    val mission = store.todayMission(id)
+    val currentMissions = store.todayMissions(id)
+    var selectedId by rememberSaveable(id) { mutableStateOf<Long?>(null) }
+    val mission = selectedMission(currentMissions, selectedId)
+    LaunchedEffect(currentMissions.map { it.id }, selectedId) {
+        if (selectedId != null && currentMissions.none { it.id == selectedId })
+            selectedId = currentMissions.firstOrNull()?.id
+    }
     val toast = rememberHToastState()
     var refresh by remember(id) { mutableIntStateOf(0) }
     LaunchedEffect(id, refresh) {
@@ -81,27 +92,63 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
     val nextPublishAt = group.nextPublishAt
     LaunchedEffect(id, nextPublishAt) {
         if (nextPublishAt != null) {
-            delay(Duration.between(Instant.now(), nextPublishAt).toMillis().coerceAtLeast(0))
+            delay(Duration.between(AppClock.now(), nextPublishAt).toMillis().coerceAtLeast(0))
             repeat(3) { attempt ->
                 refresh++
                 if (attempt < 2) delay(30_000)
             }
         }
     }
-    LaunchedEffect(submittedSignal) {
-        if (submittedSignal) { toast.show(if (submittedLate) "지각으로 올렸어요" else "오늘의 미션을 올렸어요"); onSubmittedHandled() }
+    LaunchedEffect(submittedSignal, submittedMissionId) {
+        if (submittedSignal) {
+            val index = currentMissions.indexOfFirst { it.id == submittedMissionId }.coerceAtLeast(0)
+            if (submittedMissionId != null) selectedId = submittedMissionId
+            toast.show(submittedToastText(index, currentMissions.size, submittedLate))
+            onSubmittedHandled()
+        }
     }
     LaunchedEffect(refreshSignal) { if (refreshSignal) { refresh++; onRefreshHandled() } }
     LaunchedEffect(notice) { if (notice != null) { toast.show(notice); onNoticeHandled() } }
     val scope = rememberCoroutineScope()
-    var sending by remember(id) { mutableStateOf(emptySet<Pair<Long, PokeKind>>()) }
+    var creating by remember(id) { mutableStateOf(false) }
+    var rerollConfirmation by remember(id) { mutableStateOf<Long?>(null) }
+    fun createMission() {
+        if (dev == null || creating) return
+        creating = true
+        scope.launch {
+            try {
+                val result = dev.publish(id)
+                refresh++
+                toast.show(result.message ?: "미션 ${result.created.size}개를 생성했어요")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                toast.show("미션 생성 실패: ${error.message}")
+            } finally { creating = false }
+        }
+    }
+    fun rerollMission(missionId: Long) {
+        if (dev == null || creating) return
+        creating = true
+        scope.launch {
+            try {
+                val result = dev.reroll(missionId)
+                store.clearMissionForReroll(id, missionId)
+                refresh++
+                toast.show("미션을 새로 뽑았어요 (${result.template})")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                toast.show("미션 리롤 실패: ${error.message}")
+            } finally { creating = false }
+        }
+    }
+    var sending by remember(id) { mutableStateOf(emptySet<Triple<Long, Long, PokeKind>>()) }
     fun sendPoke(missionID: Long, member: MissionMember, kind: PokeKind) {
-        val key = member.id to kind
+        val key = Triple(missionID, member.id, kind)
         if (key in sending) return
         sending = sending + key
         scope.launch {
             try {
-                val sent = pokes.send(id, member.id, kind)
+                val sent = pokes.send(id, member.id, kind, missionID)
                 sending = sending - key
                 if (session.state != AppSession.State.SIGNED_IN) return@launch
                 store.markPoked(id, sent.missionId, member.id, sent.kind)
@@ -130,6 +177,22 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                     MissionHeaderIcon(HIcon.MORE, "그룹 정보", onGroupInfo)
                 }
             })
+            if (currentMissions.size >= 2) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 임시 UI: 슬롯별 선택 칩
+                currentMissions.forEachIndexed { index, item ->
+                    val selected = item.id == mission?.id
+                    Row(Modifier.background(if (selected) HColors.ink else HColors.surface, CircleShape)
+                        .clickable { selectedId = item.id }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${index + 1}", style = HType.plex(14, FontWeight.SemiBold),
+                            color = if (selected) HColors.bg else HColors.ink)
+                        if (item.didSubmit) HIconView(HIcon.CHECK_SMALL, size = 14.dp,
+                            color = if (selected) HColors.bg else HColors.ink)
+                    }
+                }
+            }
             when {
                 group.missionState == MissionState.NOT_LOADED -> Unit
                 group.missionState == MissionState.FAILED && mission == null -> MissionLoadFailed { refresh++ }
@@ -137,9 +200,16 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("아직 오늘의 미션이 열리지 않았어요", style = HType.sectionTitle, color = HColors.ink)
                     nextPublishAt?.let { MissionCountdown(it) }
+                    if (dev != null) HButton("[개발자] 미션 생성", Modifier.padding(top = 20.dp),
+                        enabled = !creating, onClick = ::createMission)
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = bottom + 8.dp)) {
-                MissionCard(mission, onPerform = { onPerform(null) }, onResults = onResults)
+                MissionCard(mission, currentMissions.indexOfFirst { it.id == mission.id }, currentMissions.size,
+                    onPerform = { onPerform(mission.id, null) }, onResults = { onResults(mission.id) })
+                if (dev != null) HButton("[개발자] 미션 생성", Modifier.padding(top = 12.dp),
+                    enabled = !creating, onClick = ::createMission)
+                if (dev != null) HButton("[개발자] 미션 리롤", Modifier.padding(top = 8.dp),
+                    enabled = !creating, onClick = { rerollConfirmation = mission.id })
                 Row(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("참여 현황", style = HType.sectionTitle, color = HColors.ink)
@@ -148,7 +218,8 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                         style = HType.caption13, color = HColors.textSecondary)
                 }
                 mission.members.forEach { member ->
-                    MissionMemberRow(member, sending.filter { it.first == member.id }.map { it.second }.toSet()) { kind ->
+                    MissionMemberRow(member, sending.filter { it.first == mission.id && it.second == member.id }
+                        .map { it.third }.toSet()) { kind ->
                         sendPoke(mission.id, member, kind)
                     }
                 }
@@ -163,6 +234,13 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
         }
         HToastHost(toast)
     }
+    rerollConfirmation?.let { missionId ->
+        HAlert("이 미션을 새로 뽑을까요?", "이미 낸 제출·반응·댓글·콕이 모두 삭제돼요.", "리롤",
+            onCancel = { rerollConfirmation = null }, onConfirm = {
+                rerollConfirmation = null
+                rerollMission(missionId)
+            })
+    }
 }
 
 @Composable
@@ -174,7 +252,8 @@ private fun MissionHeaderIcon(icon: HIcon, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun MissionCard(mission: TodayMission, onPerform: () -> Unit, onResults: () -> Unit) {
+private fun MissionCard(mission: TodayMission, index: Int, total: Int,
+    onPerform: () -> Unit, onResults: () -> Unit) {
     Column(Modifier.fillMaxWidth().border(1.dp, HColors.line, RoundedCornerShape(HRadius.largeCard))
         .padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -184,7 +263,8 @@ private fun MissionCard(mission: TodayMission, onPerform: () -> Unit, onResults:
                 Text("오늘은 ${mission.type?.displayName ?: "미션"}", style = HType.plex(13, FontWeight.SemiBold), color = HColors.ink)
             }
             Spacer(Modifier.width(8.dp))
-            Text("${missionDateText(mission.opensAt)} · #${mission.number}", Modifier.weight(1f),
+            Text((if (total >= 2) "${index + 1}번째 · " else "") +
+                "${missionDateText(mission.opensAt)} · #${mission.number}", Modifier.weight(1f),
                 style = HType.caption13, color = HColors.textSecondary, textAlign = TextAlign.End,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -214,9 +294,9 @@ private fun MissionCountdown(closesAt: Instant, deadlineAt: Instant? = null) {
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    var now by remember(closesAt) { mutableStateOf(Instant.now()) }
+    var now by remember(closesAt) { mutableStateOf(AppClock.now()) }
     LaunchedEffect(closesAt, started) {
-        if (started) while (true) { now = Instant.now(); delay(1000) }
+        if (started) while (true) { now = AppClock.now(); delay(1000) }
     }
     Text(if (now.isBefore(closesAt)) "다음 미션까지 ${countdownText(closesAt, now)}" else "곧 열려요",
         style = HType.caption13.copy(fontFeatureSettings = "tnum"), color = HColors.textSecondary)

@@ -68,6 +68,7 @@ fun JoinGroupScreen(groups: GroupRepository, store: DataStore, session: AppSessi
                         "INVITE_NOT_FOUND" -> InviteLookupError.NOT_FOUND
                         "GROUP_FULL" -> InviteLookupError.FULL
                         "ALREADY_MEMBER" -> InviteLookupError.ALREADY_MEMBER
+                        "TOO_MANY_REQUESTS" -> InviteLookupError.TOO_MANY
                         else -> InviteLookupError.UNAVAILABLE
                     }
                     else -> InviteLookupError.UNAVAILABLE

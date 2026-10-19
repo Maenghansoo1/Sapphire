@@ -9,6 +9,9 @@ struct AppInfoView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.requestReview) private var requestReview
+    @Environment(DevMode.self) private var devMode
+    @State private var unlock = DevUnlock()
+    @State private var toast: String?
 
     /// TODO: 서버 연결 시 App Store 최신 버전을 받아와요. 지금은 현재 버전을 최신으로 봐요.
     private let latestVersion = AppInfo.version
@@ -38,6 +41,14 @@ struct AppInfoView: View {
         .padding(.horizontal, HLayout.screenPaddingCompact)
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
+        .hToast($toast)
+    }
+
+    /// 버전을 3초 안에 10번 이어서 누르면 개발자 모드가 켜져요.
+    private func tapVersion() {
+        let result = unlock.registerTap(now: ProcessInfo.processInfo.systemUptime, alreadyEnabled: devMode.enabled)
+        if result.unlocked { devMode.changeEnabled(true) }
+        if let message = result.message { toast = message }
     }
 
     /// 앱 아이콘 88(흰 바탕 · 테두리 · 모서리 20, 심볼 62) + 워드마크 26 + 한 줄 소개 13 + 버전 14
@@ -58,6 +69,8 @@ struct AppInfoView: View {
             Text("버전 \(AppInfo.version)")
                 .font(.plex(14))
                 .foregroundStyle(.textSecondary)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: tapVersion)
         }
         .frame(maxWidth: .infinity)
     }
@@ -100,7 +113,7 @@ extension AppInfo {
     static let teamName = "Sapphire Developers"
 }
 
-/// 오픈소스 라이선스 — 앱에 넣은 글꼴
+/// 오픈소스 라이선스 — 앱에 넣은 글꼴, 그림 인식 학습 데이터(CC BY 4.0 은 출처 표기가 조건)
 struct LicensesView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var openedLink: WebLink?
@@ -108,6 +121,7 @@ struct LicensesView: View {
     private let items: [(name: String, license: String, url: String)] = [
         ("IBM Plex Sans KR", "SIL Open Font License 1.1", "https://github.com/IBM/plex"),
         ("Fredoka", "SIL Open Font License 1.1", "https://github.com/hafontia-zz/Fredoka"),
+        ("Quick, Draw! 데이터셋", "Google · CC BY 4.0", "https://github.com/googlecreativelab/quickdraw-dataset"),
     ]
 
     var body: some View {
@@ -125,6 +139,12 @@ struct LicensesView: View {
                         .foregroundStyle(.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 16)
+                    Text("그림 인식 모델은 Quick, Draw! 데이터셋(creativecommons.org/licenses/by/4.0)으로 HA'WE 팀이 직접 학습했어요. AI 추측은 재미용이며, 그림은 휴대폰 안에서만 분석하고 서버로 보내지 않아요.")
+                        .font(.caption12)
+                        .foregroundStyle(.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
                 }
             }
         }
@@ -139,4 +159,5 @@ struct LicensesView: View {
     NavigationStack {
         AppInfoView(path: .constant([]))
     }
+    .environment(DevMode.shared)
 }

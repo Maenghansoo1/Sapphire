@@ -19,8 +19,8 @@ fun classifyPokeFailure(error: Throwable): PokeFailure = when ((error as? ApiExc
 }
 
 class PokeRepository(private val api: ApiClient) {
-    suspend fun send(groupId: Long, toUserId: Long, kind: PokeKind): SentPoke {
-        val dto: PokeResponseDto = api.post("/api/groups/$groupId/pokes", PokeRequestDto(toUserId, kind.wire))
+    suspend fun send(groupId: Long, toUserId: Long, kind: PokeKind, missionId: Long? = null): SentPoke {
+        val dto: PokeResponseDto = api.post("/api/groups/$groupId/pokes", PokeRequestDto(toUserId, kind.wire, missionId))
         return SentPoke(dto.toUserId, PokeKind.fromWire(dto.type) ?: kind, dto.missionId)
     }
 }

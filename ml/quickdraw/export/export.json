@@ -99,7 +99,7 @@
       "accuracy": 0.9667315712230634
     }
   ],
-  "unsure_threshold": 0.35,
+  "unsure_threshold": 0.55,
   "worst_classes": [
     {
       "en": "dog",

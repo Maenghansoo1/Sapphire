@@ -14,6 +14,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MissionRepositoryTest {
+    @Test fun mapsAllOpenMissionsInServerOrder() = runBlocking {
+        MockWebServer().use { server ->
+            fun mission(id: Int, slot: Int) = """{"missionId":$id,"groupId":7,"slotNo":$slot,
+                "number":$id,"content":"같은 주제","template":"TEXT_ACROSTIC","media":"TEXT",
+                "publishedAt":"2026-10-12T09:00:00+09:00","deadlineAt":"2026-10-12T23:00:00+09:00",
+                "closesAt":"2026-10-13T09:00:00+09:00","submittedByMe":false,"members":[]}"""
+            server.enqueue(MockResponse().setBody("""{"date":"2026-10-12","dailyMissionCount":2,
+                "missions":[${mission(10, 1)},${mission(11, 2)}]}"""))
+            val state = MissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore())).current(7, 8)
+            assertEquals(listOf(10L, 11L), state.missions.map { it.id })
+            assertEquals(listOf("같은 주제", "같은 주제"), state.missions.map { it.topic })
+        }
+    }
     @Test fun mapsCurrentMissionAndParams() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"date":"2026-10-12","dailyMissionCount":1,
