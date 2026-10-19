@@ -2,7 +2,7 @@
   "info": {
     "name": "HA'WE - POKE API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "그룹 멤버 토큰과 groupId, 미제출 대상의 toUserId를 입력하세요. 현재 미션이 발행된 그룹에서 조회 → 콕 → 중복 콕 → 똥 → 재조회 순서로 실행합니다. missionId 를 빼면 첫 슬롯 미션에 보냅니다. 6은 하루 미션이 2개 이상인 그룹에서만 201입니다(B7). 알림 발송은 9단계에서 연결합니다."
+    "description": "그룹 멤버 토큰과 groupId, 미제출 대상의 toUserId를 입력하세요. 현재 미션이 발행된 그룹에서 조회 → 콕 → 중복 콕 → 똥(거절) → 재조회 순서로 실행합니다. missionId 를 빼면 첫 슬롯 미션에 보냅니다. 6은 하루 미션이 2개 이상인 그룹에서만 201입니다(B7). 알림 발송은 9단계에서 연결합니다."
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
@@ -50,7 +50,7 @@
       }
     },
     {
-      "name": "4. 똥 뿌리기 (201)",
+      "name": "4. 똥 뿌리기는 삭제됨 (400 VALIDATION_ERROR)",
       "request": {
         "method": "POST",
         "header": [
@@ -62,7 +62,7 @@
       }
     },
     {
-      "name": "5. 현재 미션 재조회 (pokedByMe: poke, fling)",
+      "name": "5. 현재 미션 재조회 (pokedByMe: poke)",
       "request": {
         "method": "GET",
         "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
@@ -89,7 +89,7 @@
           { "key": "Authorization", "value": "Bearer {{token}}" },
           { "key": "Content-Type", "value": "application/json" }
         ],
-        "body": { "mode": "raw", "raw": "{\"toUserId\":{{toUserId}},\"type\":\"fling\",\"missionId\":0}" },
+        "body": { "mode": "raw", "raw": "{\"toUserId\":{{toUserId}},\"type\":\"poke\",\"missionId\":0}" },
         "url": "{{baseUrl}}/api/groups/{{groupId}}/pokes"
       }
     }

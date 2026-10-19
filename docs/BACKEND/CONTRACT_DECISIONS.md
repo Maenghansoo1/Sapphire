@@ -369,10 +369,10 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 | 항목 | 결정 | 이유 |
 |---|---|---|
 | 횟수 제한 | **현재 미션마다, 받는 사람별로, 종류별 1회.** (보낸 사람, 받는 사람, 미션, 종류) 기준 — 콕 1번과 똥뿌리기 1번까지 보낼 수 있다. 같은 종류 두 번째는 409 `ALREADY_POKED` | 사용자 결정. 콕 뒤에도 안 내면 똥을 뿌리는 단계적 재촉. MVP(하루 1개)에서는 앱의 "하루 1회"와 같고, 자정을 넘는 미션에서도 기준이 흔들리지 않음 |
-| 똥뿌리기(`fling`) | **앱에 추가한다.** 서버의 `type: "poke" \| "fling"`은 유지 | 사용자 결정. 기획(`PROJECT_OVERVIEW` 재촉 규칙)에 두 종류가 있음 |
+| 똥뿌리기(`fling`) | ~~앱에 추가한다.~~ **2026-10-19 삭제.** 서버는 `type: "poke"`만 받고 `fling`은 400 `VALIDATION_ERROR`. 예전 `fling` 행은 `pokedByMe`에서 빠진다 | 사용자 결정 (기능 없애기로 함) |
 | 대상 조건 | 받는 사람은 같은 그룹 멤버이고 나 자신이 아니며 **현재 미션**에 아직 제출하지 않았어야 한다 | `CURDATE()` 기준(어떤 미션이든 오늘 제출)을 현재 미션 기준으로 바꿈 (§3-2) |
 | 콕 상태 조회 | 현재 미션 응답의 `members[]`에 내가 그 멤버에게 보낸 재촉을 넣는다 | 앱 05 화면이 "찔렀어요" 상태를 다시 그릴 수 있어야 함 |
-| 알림 | `poke`·`fling` 푸시를 받는 사람에게 보낸다. 알림 설정에서는 둘 다 "콕 찌르기" 항목을 따른다 (§8) | 사용자 결정 |
+| 알림 | `poke` 푸시를 받는 사람에게 보낸다. 알림 설정의 "콕 찌르기" 항목을 따른다 (§8) | 사용자 결정 |
 | 미션 고르기 (B7, 2026-10-13) | 요청에 **선택** 필드 `missionId`. 없으면 첫 슬롯(현재 미션 중 가장 작은 `slotNo`)의 미션, 있으면 그 그룹의 현재 미션이어야 한다(아니면 409 `NO_OPEN_MISSION`). 횟수 제한은 미션마다라 슬롯이 다르면 같은 종류도 따로 보낼 수 있다 | 하루 여러 개일 때 05 화면이 미션별로 재촉. 지금 앱은 보내지 않아 하루 1개와 같음 |
 
 ### 4-2. 최종 계약 (현재까지)
@@ -386,7 +386,7 @@ DELETE /api/groups/{groupId}/members/me/profile         그룹 내 프로필 해
 ```
 - `missionId`가 없으면 서버가 그 그룹의 현재 미션(하루 여러 개면 첫 슬롯)을 찾아 `pokes.mission_id`에 저장한다. 현재 미션이 없거나, 보낸 `missionId`가 그 그룹의 현재 미션이 아니면(닫힌 미션·남의 그룹·없는 미션) 409 `NO_OPEN_MISSION`.
 - 에러: 404 `GROUP_NOT_FOUND`, 403 `NOT_GROUP_MEMBER`, 400 `CANNOT_POKE_SELF`, 404 `TARGET_NOT_GROUP_MEMBER`, 409 `TARGET_ALREADY_SUBMITTED`, 409 `ALREADY_POKED`, 400 `VALIDATION_ERROR`(`type`).
-- 현재 미션 응답(§3-3)의 `members[]` 항목: `{ "userId": 7, "submitted": false, "pokedByMe": ["poke"] }` — 내가 이 미션에서 그 멤버에게 보낸 종류 목록(`"poke"`, `"fling"`), 안 보냈으면 빈 배열. 앱은 종류별로 버튼을 "보냈어요" 상태로 바꾼다.
+- 현재 미션 응답(§3-3)의 `members[]` 항목: `{ "userId": 7, "submitted": false, "pokedByMe": ["poke"] }` — 내가 이 미션에서 그 멤버에게 보낸 종류 목록(`"poke"`), 안 보냈으면 빈 배열. 앱은 종류별로 버튼을 "보냈어요" 상태로 바꾼다.
 
 ### 4-3. 수정 대상
 
@@ -592,8 +592,8 @@ POST /api/submissions/{id}/comments   multipart/form-data
 | 항목 | 결정 | 이유 |
 |---|---|---|
 | MVP 범위 | **서버 푸시 발송(FCM·APNs) + 기기 토큰 등록, 알림 설정 저장, 그룹별 알림, 앱 안 알림 목록** 모두 포함 | 사용자 결정 |
-| 알림 종류 | `topic`(주제 도착), `poke`(콕), `fling`(똥뿌리기), `friend_done`(친구 완료), `comment`(내 작품에 댓글), `mention`(댓글 멘션) — 6종 | 사용자 결정. 앞의 4종은 앱 푸시 처리(`PushKind`)에 이미 있는 값 그대로 |
-| 알림 설정 항목 | 앱 17-1 항목 그대로: 전체, 주제 도착, 콕 찌르기(**똥뿌리기 포함**), 친구 완료(기본 OFF), 댓글(**멘션 포함**) | 사용자 결정 (기존 항목에 묶기). 앱 화면·채널을 늘리지 않음 |
+| 알림 종류 | `topic`(주제 도착), `poke`(콕), `friend_done`(친구 완료), `comment`(내 작품에 댓글), `mention`(댓글 멘션) — 5종 (`fling` 똥뿌리기는 2026-10-19 삭제) | 사용자 결정. 앞의 4종은 앱 푸시 처리(`PushKind`)에 이미 있는 값 그대로 |
+| 알림 설정 항목 | 앱 17-1 항목 그대로: 전체, 주제 도착, 콕 찌르기, 친구 완료(기본 OFF), 댓글(**멘션 포함**) | 사용자 결정 (기존 항목에 묶기). 앱 화면·채널을 늘리지 않음 |
 | 설정·그룹 알림 적용 대상 | 설정과 그룹별 알림은 **푸시 발송만** 거른다. 앱 안 알림 목록에는 모두 쌓인다 | 목록은 받은편지함 역할, 푸시는 방해 여부 — 역할 분리 (제안, 이견 있으면 변경) |
 | 그룹별 알림 | 멤버마다 저장. 끄면 그 그룹에서 오는 모든 종류의 푸시를 보내지 않는다 | 앱 주석의 서버 필터 규칙(`notification_prefs` + `group_members.notify`)과 같음 |
 | 자기 자신 | 내 행동으로 나에게 알림을 보내지 않는다 (내 작품에 내가 댓글 등) | — |
@@ -604,7 +604,7 @@ POST /api/submissions/{id}/comments   multipart/form-data
 | 종류 | 받는 사람 | 시점 | 설정 항목 |
 |---|---|---|---|
 | `topic` | 그룹 멤버 전원 | 미션 발행 | 주제 도착 |
-| `poke` / `fling` | 받는 사람 | 전송 즉시 | 콕 찌르기 |
+| `poke` | 받는 사람 | 전송 즉시 | 콕 찌르기 |
 | `friend_done` | 제출자를 뺀 멤버 | 제출 즉시 | 친구 완료 (기본 OFF) |
 | `comment` | 작품 작성자 | 댓글 작성 | 댓글 |
 | `mention` | 멘션된 멤버 | 댓글 작성 | 댓글 |
@@ -643,8 +643,8 @@ DELETE /api/me/devices/{token}    로그아웃 시 해제, 204 (없는 토큰도
 // 알림 표시: title = 그룹 이름, body = 서버가 만든 문장 (예: "서연님이 내 작품에 댓글을 남겼어요")
 ```
 - 키 이름은 앱이 이미 처리하는 snake_case(`type`, `group_id`, `submission_id`)를 유지하고 `mission_id`를 더한다. 값은 문자열.
-- 종류별 포함 키: `topic`·`poke`·`fling`·`friend_done` → `group_id`, `mission_id` / `comment`·`mention` → + `submission_id`.
-- 앱 이동 규칙: `topic`·`poke`·`fling`·`friend_done` → 그 그룹 05 화면, `comment`·`mention` → 그 미션 결과 화면(내가 제출했을 때, 아니면 05). 앱의 "그룹을 못 찾으면 첫 그룹" 임시 규칙은 서버 연결 뒤 "못 찾으면 이동하지 않음"으로 바꾼다.
+- 종류별 포함 키: `topic`·`poke`·`friend_done` → `group_id`, `mission_id` / `comment`·`mention` → + `submission_id`.
+- 앱 이동 규칙: `topic`·`poke`·`friend_done` → 그 그룹 05 화면, `comment`·`mention` → 그 미션 결과 화면(내가 제출했을 때, 아니면 05). 앱의 "그룹을 못 찾으면 첫 그룹" 임시 규칙은 서버 연결 뒤 "못 찾으면 이동하지 않음"으로 바꾼다.
 
 ```json
 // GET /api/notifications — 앱 안 알림 목록 (최신순, 페이지네이션)
@@ -666,7 +666,7 @@ PATCH /api/notifications/read-all      204
 | 대상 | 내용 |
 |---|---|
 | 백엔드 | FCM·APNs 발송 모듈(새 의존성·자격 증명), 새 테이블: `device_tokens`, `notification_prefs`(또는 users 컬럼), `group_members.notify`. 알림 생성·발송을 미션 발행·콕·제출·댓글에 연결. 알림 목록·읽음 API |
-| Android | FCM 연결(`google-services.json`, `FirebaseMessagingService`) → 기존 `PushNotifier.show` 재사용, 토큰 등록/해제. 채널은 4개 유지 — `fling`은 `poke` 채널, `mention`은 `comment` 채널로. `PushKind`에 `fling`·`mention` 추가. `pushTarget`이 payload의 `group_id`/`mission_id`를 쓰도록. 17-1 설정·16 그룹 알림 → API(문구에 "똥뿌리기 포함", "멘션 포함" 반영). **알림 목록 화면 신설**과 진입점 |
+| Android | FCM 연결(`google-services.json`, `FirebaseMessagingService`) → 기존 `PushNotifier.show` 재사용, 토큰 등록/해제. 채널은 4개 유지 — `mention`은 `comment` 채널로. `PushKind`에 `mention` 추가. `pushTarget`이 payload의 `group_id`/`mission_id`를 쓰도록. 17-1 설정·16 그룹 알림 → API(문구에 "멘션 포함" 반영). **알림 목록 화면 신설**과 진입점 |
 | iOS | Android와 같음 (`PushNotifications.swift`의 `PushKind`·`PushCenter`, APNs 토큰 등록, `NotificationSettingsView`, `GroupInfoView`, 알림 목록 화면 신설) |
 | 설계 문서 | `API_DESIGN.md` §6 Notification 전면 수정(종류·응답·기기 토큰·설정·그룹 알림). `BACKEND_DB.md` 새 테이블·컬럼. `PROJECT_OVERVIEW.md` §3 알림 |
 

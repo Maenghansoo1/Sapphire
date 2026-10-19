@@ -130,7 +130,7 @@
 - `date`: 현재 미션의 `mission_date`. 없으면 서울 기준 오늘 날짜다.
 - `dailyMissionCount`: 그룹 설정의 하루 미션 수(1~5, 기본 1). 하루 미션 수를 줄인 날에는 이미 열린 미션이 남아 `missions`가 이 수보다 많을 수 있다.
 - `nextPublishAt`: 슬롯별 다음 발행 예정 시각 중 가장 이른 값. 현재 미션이 있으면 해당 미션의 `closesAt`을 사용한다.
-- `number`: 해당 그룹의 누적 미션 번호. `members`: 참여 순서의 멤버별 해당 미션 제출 여부와 요청자가 이 미션에서 보낸 재촉 종류 `pokedByMe` (`poke`, `fling` 순서, 없으면 `[]`). 그룹 목록의 `todayMission` 요약에는 재촉 정보가 없다.
+- `number`: 해당 그룹의 누적 미션 번호. `members`: 참여 순서의 멤버별 해당 미션 제출 여부와 요청자가 이 미션에서 보낸 재촉 종류 `pokedByMe` (`poke`, 없으면 `[]`). 그룹 목록의 `todayMission` 요약에는 재촉 정보가 없다.
 - 마감 이후에도 다음 미션 발행 전까지 현재 미션으로 보인다. 6단계 1차에서 지각 제출과 종료 판정을 구현했다.
 - 에러: `GROUP_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403). (이전의 `MISSION_NOT_PUBLISHED_YET`는 폐지 — 빈 배열로 표현)
 

@@ -53,11 +53,11 @@ class PokeServiceTests {
             return null;
         }).when(pokeMapper).insert(any(Poke.class));
 
-        var response = service.sendPoke(7L, 11L, new PokeRequest(8L, "fling", null));
+        var response = service.sendPoke(7L, 11L, new PokeRequest(8L, "poke", null));
 
         assertEquals(1L, response.id());
         assertEquals(8L, response.toUserId());
-        assertEquals("fling", response.type());
+        assertEquals("poke", response.type());
         assertEquals(10L, response.missionId());
         assertNotNull(response.sentAt());
         ArgumentCaptor<Poke> saved = ArgumentCaptor.forClass(Poke.class);

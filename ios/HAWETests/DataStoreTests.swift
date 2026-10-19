@@ -60,10 +60,10 @@ final class DataStoreTests: XCTestCase {
         store.applyFeed([submission(100, author: 8)], missionID: 10, groupID: 3)
         store.markPoked(7, kind: .poke, missionID: 10, groupID: 3)
         // 늦게 온 새로고침에 재촉이 없어도 지우지 않아요.
-        store.applyCurrentMission(CurrentMissionState(missions: [mission(10, members: [7: false], poked: [7: [.fling]]), mission(11)],
+        store.applyCurrentMission(CurrentMissionState(missions: [mission(10, members: [7: false]), mission(11)],
                                                       nextPublishAt: nil), groupID: 3)
         let first = try! XCTUnwrap(store.todayMission(3, missionID: 10))
-        XCTAssertEqual(first.members.first { $0.id == 7 }?.poked, [.poke, .fling])
+        XCTAssertEqual(first.members.first { $0.id == 7 }?.poked, [.poke])
         XCTAssertNotNil(store.result(groupID: 3, missionID: 10), "같은 미션이면 받아 둔 피드를 유지해요")
         // 리롤로 주제가 바뀌면 같은 id 여도 새 미션으로 봐요.
         store.applyCurrentMission(CurrentMissionState(missions: [mission(10, topic: "새 주제"), mission(11)], nextPublishAt: nil), groupID: 3)

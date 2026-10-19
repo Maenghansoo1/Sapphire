@@ -95,7 +95,7 @@ class MissionRepositoryTest {
                   {"userId":4,"submitted":true,"pokedByMe":[]},
                   {"userId":5,"submitted":false}]}]}"""))
             val mission = MissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore())).current(7L, 9L).mission!!
-            assertEquals(mapOf(1L to setOf(PokeKind.POKE), 2L to setOf(PokeKind.POKE, PokeKind.FLING)), mission.pokedByMe)
+            assertEquals(mapOf(1L to setOf(PokeKind.POKE), 2L to setOf(PokeKind.POKE)), mission.pokedByMe)
             assertEquals(mapOf(1L to false, 2L to false, 3L to false, 4L to true, 5L to false), mission.members)
         }
     }

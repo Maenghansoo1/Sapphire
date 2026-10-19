@@ -38,7 +38,7 @@ struct PokeFailure: Equatable {
     }
 }
 
-/// 콕 찌르기·똥뿌리기 (`POST /api/groups/{id}/pokes`)
+/// 콕 찌르기 (`POST /api/groups/{id}/pokes`)
 final class PokeRepository: Sendable {
     private let api: APIClient
 

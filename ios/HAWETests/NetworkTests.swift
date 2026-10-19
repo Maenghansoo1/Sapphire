@@ -15,16 +15,16 @@ final class NetworkTests: XCTestCase {
     }
 
     func testPokeSendsKindAndMissionAndMapsResponse() async throws {
-        StubProtocol.respond(201, #"{"id":1,"toUserId":7,"type":"fling","missionId":10,"sentAt":"2026-10-13T15:41:48+09:00"}"#)
-        let sent = try await PokeRepository(api: api).send(groupID: 3, toUserID: 7, kind: .fling, missionID: 10)
-        XCTAssertEqual(sent, SentPoke(toUserID: 7, kind: .fling, missionID: 10))
+        StubProtocol.respond(201, #"{"id":1,"toUserId":7,"type":"poke","missionId":10,"sentAt":"2026-10-13T15:41:48+09:00"}"#)
+        let sent = try await PokeRepository(api: api).send(groupID: 3, toUserID: 7, kind: .poke, missionID: 10)
+        XCTAssertEqual(sent, SentPoke(toUserID: 7, kind: .poke, missionID: 10))
         let request = try XCTUnwrap(StubProtocol.requests.first)
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.url?.path, "/api/groups/3/pokes")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: StubProtocol.bodies.first ?? Data()) as? [String: Any])
         XCTAssertEqual(body["toUserId"] as? Int, 7)
-        XCTAssertEqual(body["type"] as? String, "fling")
+        XCTAssertEqual(body["type"] as? String, "poke")
         XCTAssertEqual(body["missionId"] as? Int, 10)
     }
 

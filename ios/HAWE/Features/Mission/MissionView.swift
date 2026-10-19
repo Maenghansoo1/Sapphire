@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 05 그룹 · 오늘의 미션 (Figma 1:542)
 /// 서버의 지금 미션들(`/missions/today`) — 하루에 여러 개면 위에서 고르고(임시 칩), 유형·주제·카운트다운·마감,
-/// 틀별 CTA, 멤버별 완료 여부와 콕 찌르기·똥뿌리기. 발행 전이면 빈 상태와 다음 발행까지 남은 시간을 보여요.
+/// 틀별 CTA, 멤버별 완료 여부와 콕 찌르기. 발행 전이면 빈 상태와 다음 발행까지 남은 시간을 보여요.
 struct MissionView: View {
     let groupID: Int
     @Binding var path: [MainRoute]
@@ -454,7 +454,7 @@ struct MissionView: View {
     }
 }
 
-/// 콕·똥 버튼. 보낸 종류는 체크와 강조색으로 바뀌고 다시 누를 수 없어요 (미션마다 종류별 1번).
+/// 콕 버튼. 보내면 체크와 강조색으로 바뀌고 다시 누를 수 없어요 (미션마다 1번).
 private struct PokeButton: View {
     let kind: PokeKind
     let nickname: String
@@ -466,7 +466,7 @@ private struct PokeButton: View {
         let color: Color = sent ? .accentPressed : .ink
         Button(action: action) {
             HStack(spacing: 4) {
-                HIconView(icon: sent ? .checkSmall : (kind == .poke ? .pokeTemp : .flingTemp), size: 16, color: color)
+                HIconView(icon: sent ? .checkSmall : .pokeTemp, size: 16, color: color)
                 Text(MissionFormat.pokeButtonLabel(kind))
                     .font(.plex(13, .semibold))
                     .foregroundStyle(color)

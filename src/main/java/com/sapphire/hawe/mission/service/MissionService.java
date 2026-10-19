@@ -138,7 +138,7 @@ public class MissionService {
                 .map(member -> {
                     Set<String> types = member.getUserId().equals(viewerId)
                             ? Set.of() : sent.getOrDefault(member.getUserId(), Set.of());
-                    List<String> pokedByMe = List.of("poke", "fling").stream()
+                    List<String> pokedByMe = List.of("poke").stream()
                             .filter(types::contains).toList();
                     return new MissionMemberStatus(member.getUserId(), member.isSubmitted(), pokedByMe);
                 }).toList();

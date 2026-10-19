@@ -157,7 +157,7 @@ class MissionServiceTests {
     }
 
     @Test
-    void memberStatusesShowOnlyMySentTypesInFixedOrder() {
+    void memberStatusesShowOnlyMySentPokes() {
         when(missions.findById(10L, 7L)).thenReturn(row(10L, 11L, 1, "{}"));
         when(members.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
         MissionMemberRow me = new MissionMemberRow();
@@ -171,7 +171,7 @@ class MissionServiceTests {
         var response = service.getMission(7L, 10L);
 
         assertEquals(List.of(), response.members().get(0).pokedByMe());
-        assertEquals(List.of("poke", "fling"), response.members().get(1).pokedByMe());
+        assertEquals(List.of("poke"), response.members().get(1).pokedByMe());
         verify(pokes).findSentTypes(10L, 7L);
     }
 

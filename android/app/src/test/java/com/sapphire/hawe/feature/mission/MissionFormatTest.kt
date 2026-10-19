@@ -66,14 +66,10 @@ class MissionFormatTest {
             lockNoticeText(MissionType.SLIDER, MissionTemplates.SLIDER_TASTE))
         assertEquals("내 미션을 올리면 친구들의 슬라이더가 열려요.", lockNoticeText(MissionType.SLIDER))
         assertEquals("민준님을 콕 찔렀어요", pokeToastText("민준"))
-        assertEquals("민준님에게 똥을 뿌렸어요", flingToastText("민준"))
         assertEquals("민준님을 콕 찔렀어요", pokeSentText(PokeKind.POKE, "민준"))
-        assertEquals("민준님에게 똥을 뿌렸어요", pokeSentText(PokeKind.FLING, "민준"))
-        assertEquals(listOf("콕", "똥"), PokeKind.entries.map(::pokeButtonLabel))
+        assertEquals(listOf("콕"), PokeKind.entries.map(::pokeButtonLabel))
         assertEquals("민준님 콕 찌르기", pokeButtonDescription(PokeKind.POKE, "민준", sent = false))
-        assertEquals("민준님에게 똥 뿌리기", pokeButtonDescription(PokeKind.FLING, "민준", sent = false))
         assertEquals("민준님을 콕 찔렀어요", pokeButtonDescription(PokeKind.POKE, "민준", sent = true))
-        assertEquals("민준님에게 똥을 뿌렸어요", pokeButtonDescription(PokeKind.FLING, "민준", sent = true))
     }
 
     @Test fun deadlineShowsNormalLateAndClosedStates() {

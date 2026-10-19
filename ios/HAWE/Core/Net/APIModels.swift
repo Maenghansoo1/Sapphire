@@ -221,7 +221,7 @@ struct MissionDTO: Decodable {
 struct MissionMemberDTO: Decodable {
     let userId: Int
     let submitted: Bool
-    /// 이 미션에서 내가 이 멤버에게 보낸 재촉 (poke · fling)
+    /// 이 미션에서 내가 이 멤버에게 보낸 재촉 (poke)
     let pokedByMe: [String]?
 }
 

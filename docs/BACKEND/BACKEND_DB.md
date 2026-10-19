@@ -158,7 +158,7 @@ erDiagram
 - `USERS.token_version` — `INT NOT NULL DEFAULT 0`. 비밀번호 변경 시 1 증가하며, 액세스·리프레시 JWT의 `tv`와 비교한다. 클레임이 없는 기존 토큰은 0으로 읽는다.
 - `GROUP_MEMBERS.nickname_override`(`VARCHAR(50)`), `character_id_override`(`BIGINT`, `CHARACTERS.id` FK), `profile_image_url_override`(`VARCHAR(500)`) — 그룹별 닉네임과 캐릭터 또는 사진 파일 key. 모두 NULL이면 기본 프로필을 표시한다. 설정 시 닉네임과 아바타 값 중 정확히 하나를 서비스가 함께 저장한다. 그룹을 나간 작성자의 피드·댓글은 기본 프로필로 표시한다.
 - `USERS` 인증 방식 — 소셜 로그인 대신 **이메일/비밀번호 자체 로그인**(`email` + `password_hash`) 사용. 필수 약관 동의 시각을 저장
-- `POKES.type` — `poke`(콕찌르기) / `fling`(똥뿌리기)
+- `POKES.type` — `poke`(콕찌르기). 예전 `fling`(똥뿌리기) 행이 남아 있어도 조회에서 무시한다 (2026-10-19 삭제)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
 - `submission_ai_reviews` — 사진 주제 적합도 비동기 결과. `(submission_id, kind)` UNIQUE, `submissions.id` FK. `fit_score`는 DB에만 저장하고 API에는 배지·칭찬 문구만 보낸다. 그룹 삭제·탈퇴 시 제출물보다 먼저 삭제한다 (`VISION_TOPIC_FIT.md`).
 - `SUBMISSIONS.media_url` — 이미지 파일 위치(음성은 2026-10-12 제거). 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
@@ -297,7 +297,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | `FeedService` | 그룹 피드 조회 (제출자만 열람 가능하도록 필터링) |
 | `CommentService` | 댓글 작성, @멘션 파싱, 사진 첨부 |
 | `ReactionService` | 스티커 반응 등록/집계 |
-| `PokeService` | 콕찌르기/똥뿌리기 전송 → 알림 트리거 |
+| `PokeService` | 콕찌르기 전송 → 알림 트리거 |
 | `NotificationService` | 알림 생성·조회·읽음 처리, SNS 푸시 발송 |
 | `CalendarService` | 마이페이지 달력/기록 집계 (사용자 기준 전체 그룹 통합) |
 | `CharacterService` | 캐릭터 목록 조회, 프로필 캐릭터 선택 |
@@ -340,7 +340,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - `POST /api/submissions/{id}/reactions` — 스티커 반응
 
 ### 재촉 기능
-- `POST /api/groups/{groupId}/pokes` — 콕찌르기/똥뿌리기 (`toUserId`, `type`, 선택 `missionId` — 없으면 첫 슬롯의 현재 미션). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별한다. `pokes.mission_id`는 현재 미션 FK이며 `(from_user_id, to_user_id, mission_id, type)`에 UNIQUE 제약을 둔다. 응답은 `missionId`를 포함하고 현재 미션의 `members[].pokedByMe`는 요청자가 보낸 종류를 표시한다. 알림 발송은 9단계에서 연결한다.
+- `POST /api/groups/{groupId}/pokes` — 콕찌르기 (`toUserId`, `type`, 선택 `missionId` — 없으면 첫 슬롯의 현재 미션). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별한다. `pokes.mission_id`는 현재 미션 FK이며 `(from_user_id, to_user_id, mission_id, type)`에 UNIQUE 제약을 둔다. 응답은 `missionId`를 포함하고 현재 미션의 `members[].pokedByMe`는 요청자가 보낸 종류를 표시한다. 알림 발송은 9단계에서 연결한다.
 
 ### 마이페이지
 - `GET /api/me/calendar?month=2026-09` — 이번 달 도장 현황 (그룹 통합)

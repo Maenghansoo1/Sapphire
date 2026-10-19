@@ -94,14 +94,12 @@ enum MissionFormat {
     static func pokeSentText(_ kind: PokeKind, nickname: String) -> String {
         switch kind {
         case .poke: "\(nickname)님을 콕 찔렀어요"
-        case .fling: "\(nickname)님에게 똥을 뿌렸어요"
         }
     }
 
     static func pokeButtonLabel(_ kind: PokeKind) -> String {
         switch kind {
         case .poke: "콕"
-        case .fling: "똥"
         }
     }
 
@@ -110,7 +108,6 @@ enum MissionFormat {
         if sent { return pokeSentText(kind, nickname: nickname) }
         switch kind {
         case .poke: return "\(nickname)님 콕 찌르기"
-        case .fling: return "\(nickname)님에게 똥 뿌리기"
         }
     }
 }
