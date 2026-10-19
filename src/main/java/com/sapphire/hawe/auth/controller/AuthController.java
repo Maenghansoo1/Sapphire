@@ -1,5 +1,7 @@
 package com.sapphire.hawe.auth.controller;
 
+import com.sapphire.hawe.auth.dto.EmailCheckRequest;
+import com.sapphire.hawe.auth.dto.EmailCheckResponse;
 import com.sapphire.hawe.auth.dto.LoginRequest;
 import com.sapphire.hawe.auth.dto.RefreshRequest;
 import com.sapphire.hawe.auth.dto.RegisterRequest;
@@ -28,6 +30,11 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     public RegisterResponse register(@Valid @RequestBody RegisterRequest request) {
         return authService.register(request);
+    }
+
+    @PostMapping("/email-check")
+    public EmailCheckResponse checkEmail(@Valid @RequestBody EmailCheckRequest request) {
+        return authService.checkEmail(request);
     }
 
     @PostMapping("/login")

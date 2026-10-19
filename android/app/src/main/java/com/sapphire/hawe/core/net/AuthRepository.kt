@@ -21,6 +21,9 @@ class AuthRepository(private val api: ApiClient, private val tokens: TokenStore)
         return restore()
     }
 
+    /** 가입 전에 이메일을 쓸 수 있는지(이미 가입된 이메일이면 false). */
+    suspend fun isEmailAvailable(email: String): Boolean = api.checkEmail(EmailCheckRequestDto(email.trim())).available
+
     suspend fun signUp(email: String, password: String, nickname: String, avatar: AvatarContent,
         agreeTerms: Boolean, agreePrivacy: Boolean, skipRegister: Boolean, onRegistered: () -> Unit,
         readPhoto: (Uri) -> ByteArray): MyAccount {

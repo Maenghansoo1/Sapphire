@@ -1,5 +1,7 @@
 package com.sapphire.hawe.auth.service;
 
+import com.sapphire.hawe.auth.dto.EmailCheckRequest;
+
 import com.sapphire.hawe.auth.dao.UserMapper;
 import com.sapphire.hawe.auth.domain.User;
 import com.sapphire.hawe.auth.dto.LoginRequest;
@@ -26,6 +28,7 @@ import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -66,6 +69,13 @@ class AuthServiceTests {
         assertNotNull(saved.getValue().getPrivacyAgreedAt());
         assertEquals(saved.getValue().getTermsAgreedAt(), saved.getValue().getPrivacyAgreedAt());
         assertEquals("sky@email.com", response.email());
+    }
+
+    @Test
+    void checkEmailNormalizesAndReportsAvailability() {
+        when(users.existsByEmail("sky@email.com")).thenReturn(false, true);
+        assertTrue(service.checkEmail(new EmailCheckRequest("  Sky@Email.com ")).available());
+        assertFalse(service.checkEmail(new EmailCheckRequest("sky@email.com")).available());
     }
 
     @Test

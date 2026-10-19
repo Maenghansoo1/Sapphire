@@ -5,6 +5,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class RegisterRequestDto(val email: String, val password: String, val nickname: String,
     val agreeTerms: Boolean, val agreePrivacy: Boolean)
 @Serializable data class RegisterResponseDto(val id: Long, val email: String, val nickname: String)
+@Serializable internal data class EmailCheckRequestDto(val email: String)
+@Serializable data class EmailCheckResponseDto(val available: Boolean)
 @Serializable data class LoginRequestDto(val email: String, val password: String)
 @Serializable data class RefreshRequestDto(val refreshToken: String)
 @Serializable data class TokenResponseDto(val accessToken: String, val refreshToken: String)
@@ -21,6 +23,8 @@ import kotlinx.serialization.Serializable
 
 internal suspend fun ApiClient.register(request: RegisterRequestDto): RegisterResponseDto =
     post("/api/auth/register", request, auth = false)
+internal suspend fun ApiClient.checkEmail(request: EmailCheckRequestDto): EmailCheckResponseDto =
+    post("/api/auth/email-check", request, auth = false)
 internal suspend fun ApiClient.login(request: LoginRequestDto): TokenResponseDto =
     post("/api/auth/login", request, auth = false)
 internal suspend fun ApiClient.me(): MeDto = get("/api/me")
