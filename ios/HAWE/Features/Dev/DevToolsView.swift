@@ -43,8 +43,7 @@ struct DevToolsView: View {
     }
 
     private static let templates = ["PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "TEXT_ACROSTIC", "TEXT_ONE_WORD",
-                                    "TEXT_REVIEW", "TEXT_BALANCE", "TEXT_FILL_BLANK", "DRAW_SKETCH", "DRAW_A_TO_B",
-                                    "SLIDER_POSITION", "SLIDER_TASTE", "SLIDER_CONSENSUS"]
+                                    "TEXT_REVIEW", "TEXT_BALANCE", "TEXT_FILL_BLANK", "DRAW_SKETCH", "DRAW_A_TO_B"]
     private static let stickers = Sticker.allCases.map(\.rawValue)
 
     private var group: StoredGroup? { groupID.flatMap(store.storedGroup) }

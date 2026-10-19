@@ -57,19 +57,20 @@ final class NetworkTests: XCTestCase {
     func testFeedParsesNewTemplatesReactionsAndAiReview() async throws {
         StubProtocol.respond(200, """
         {"content":[{"id":5,"missionId":9,"author":{"userId":2,"nickname":"지우","characterKey":"kkotnim",
-          "profileImageUrl":"/files/p.jpg"},"template":"SLIDER_CONSENSUS","number":70,"guess":55,
+          "profileImageUrl":"/files/p.jpg"},"template":"TEXT_REVIEW","number":4,"text":"맛있어요",
           "submittedAt":"2026-10-12T21:00:00.123456+09:00","isLate":true,"commentCount":3,
           "reactions":[{"stickerType":"heart","count":2,"reactedByMe":true,"userIds":[1,2]},{"stickerType":"unknown","count":1}],
           "aiReview":{"badge":"PERFECT_FIT","comment":" 멋져요 "}},
-         {"id":6,"missionId":9,"author":{"userId":1,"nickname":"나"},"template":"VOICE_CLIP","submittedAt":"2026-10-12T21:00:00+09:00"}],
-         "page":0,"size":100,"totalPages":1,"totalElements":2}
+         {"id":6,"missionId":9,"author":{"userId":1,"nickname":"나"},"template":"VOICE_CLIP","submittedAt":"2026-10-12T21:00:00+09:00"},
+         {"id":7,"missionId":9,"author":{"userId":1,"nickname":"나"},"template":"SLIDER_CONSENSUS","number":70,"guess":55,"submittedAt":"2026-10-12T21:00:00+09:00"}],
+         "page":0,"size":100,"totalPages":1,"totalElements":3}
         """)
         let feed = try await SubmissionRepository(api: api).feed(missionID: 9, myUserID: 1)
-        XCTAssertEqual(feed.count, 1, "앱이 모르는 틀(음성)은 빼요")
+        XCTAssertEqual(feed.count, 1, "앱이 모르는 틀(없앤 음성·슬라이더)은 빼요")
         let submission = try XCTUnwrap(feed.first)
-        XCTAssertEqual(submission.type, .slider)
-        XCTAssertEqual(submission.number, 70)
-        XCTAssertEqual(submission.guess, 55)
+        XCTAssertEqual(submission.type, .write)
+        XCTAssertEqual(submission.number, 4)
+        XCTAssertEqual(submission.text, "맛있어요")
         XCTAssertTrue(submission.isLate)
         XCTAssertFalse(submission.isMine)
         XCTAssertEqual(submission.commentCount, 3)
@@ -84,11 +85,9 @@ final class NetworkTests: XCTestCase {
         let balance = try await SubmissionRepository(api: api).result(missionID: 9)
         XCTAssertEqual(balance, .balance(.init(totalCount: 4, countA: 3, countB: 1, myChoice: "A")))
 
-        StubProtocol.respond(200, #"{"template":"SLIDER_CONSENSUS","totalCount":2,"average":62.5,"ranking":[{"userId":2,"nickname":"지우","guess":60,"diff":2.5}],"winnerUserIds":[2]}"#)
-        let consensus = try await SubmissionRepository(api: api).result(missionID: 9)
-        XCTAssertEqual(consensus, .consensus(.init(totalCount: 2, average: 62.5,
-                                                   ranking: [ConsensusRank(userID: 2, nickname: "지우", guess: 60, diff: 2.5)],
-                                                   winnerUserIDs: [2])))
+        StubProtocol.respond(200, #"{"template":"SLIDER_CONSENSUS","totalCount":2,"average":62.5}"#)
+        let removed = try await SubmissionRepository(api: api).result(missionID: 9)
+        XCTAssertNil(removed, "없앤 슬라이더 틀의 결과는 보여 주지 않아요")
 
         StubProtocol.respond(200, #"{"template":"PHOTO_NOW","totalCount":1}"#)
         let unknown = try await SubmissionRepository(api: api).result(missionID: 9)
@@ -123,8 +122,8 @@ final class NetworkTests: XCTestCase {
           "params":{"optionA":"짜장면","optionB":"짬뽕","target":null},"publishedAt":"2026-10-12T09:00:00+09:00",
           "deadlineAt":"2026-10-12T23:00:00+09:00","closesAt":"2026-10-13T09:00:00+09:00","submittedByMe":false,
           "members":[{"userId":7,"submitted":false,"pokedByMe":["poke","boom"]},{"userId":8,"submitted":true}]},
-         {"missionId":2,"groupId":3,"slotNo":2,"number":5,"content":"내 위치","template":"SLIDER_POSITION","media":"SLIDER",
-          "params":{"left":"집콕","right":"밖으로","seconds":"30"},"publishedAt":"2026-10-12T15:00:00+09:00",
+         {"missionId":2,"groupId":3,"slotNo":2,"number":5,"content":"고양이 그리기","template":"DRAW_SKETCH","media":"DRAW",
+          "params":{"subject":"고양이","seconds":"30"},"publishedAt":"2026-10-12T15:00:00+09:00",
           "deadlineAt":"2026-10-12T23:00:00+09:00","closesAt":"2026-10-13T15:00:00+09:00","submittedByMe":true,"members":[]}]}
         """)
         let state = try await MissionRepository(api: api).current(groupID: 3)
@@ -134,8 +133,8 @@ final class NetworkTests: XCTestCase {
         XCTAssertTrue(balance.spec.hasTarget, "target 이 null 이어도 키가 있으면 사람을 지목한 미션이에요")
         XCTAssertEqual(balance.pokedByMe, [7: [.poke]])
         XCTAssertEqual(balance.members, [7: false, 8: true])
-        XCTAssertEqual(state.missions[1].type, .slider)
-        XCTAssertEqual(state.missions[1].spec.left, "집콕")
+        XCTAssertEqual(state.missions[1].type, .draw)
+        XCTAssertEqual(state.missions[1].spec.subject, "고양이")
         XCTAssertEqual(state.missions[1].spec.seconds, 30)
     }
 

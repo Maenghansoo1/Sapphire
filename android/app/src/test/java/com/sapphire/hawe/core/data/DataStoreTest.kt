@@ -237,17 +237,17 @@ class DataStoreTest {
         val store = store()
         val detail = GroupDetail.mock.copy(id = 11L)
         store.applyServerGroups(listOf(LoadedGroup(detail, null)))
-        store.applyCurrentMission(11L, CurrentMissionState(serverMission(200L).copy(type = MissionType.SLIDER,
-            template = "SLIDER_POSITION", spec = MissionSpec(question = "컨디션", left = "방전", right = "풀충전")),
+        store.applyCurrentMission(11L, CurrentMissionState(serverMission(200L).copy(type = MissionType.WRITE,
+            template = "TEXT_BALANCE", spec = MissionSpec(optionA = "산", optionB = "바다")),
             now.plusSeconds(86400)))
         // 현재 미션은 틀·빈칸을 이미 알아서 다시 받을 필요가 없어요
         assertFalse(store.needsMissionSpec(11L, 200L))
         val me = detail.me!!
-        store.applyFeed(11L, 200L, listOf(Submission(1L, me.displayed, true, MissionType.SLIDER, now,
-            authorID = me.id, template = "SLIDER_POSITION", number = 70)))
+        store.applyFeed(11L, 200L, listOf(Submission(1L, me.displayed, true, MissionType.WRITE, now,
+            authorID = me.id, template = "TEXT_BALANCE", choice = "B")))
         val current = store.result(11L, 200L)!!
-        assertEquals("SLIDER_POSITION", current.template)
-        assertEquals("풀충전", current.spec.right)
+        assertEquals("TEXT_BALANCE", current.template)
+        assertEquals("바다", current.spec.optionB)
 
         // 달력에서 연 지난 밸런스 미션: 틀은 제출물에서, 선택지는 미션 정보를 받은 뒤에 알아요
         val pastDay = now.minusSeconds(2L * 86400)

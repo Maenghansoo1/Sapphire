@@ -269,7 +269,6 @@ struct SubmissionDTO: Decodable {
     let text: String?
     let number: Int?
     let choice: String?
-    let guess: Int?
     let submittedAt: String
     let isLate: Bool?
     let reactions: [ReactionDTO]?
@@ -316,30 +315,11 @@ struct MissionResultDTO: Decodable {
     let totalCount: Int?
     let choices: [ChoiceCountDTO]?
     let myChoice: String?
-    let average: Double?
-    let distribution: [NumberEntryDTO]?
-    let myNumber: Int?
-    let diffFromAverage: Double?
-    let ranking: [RankingEntryDTO]?
-    let winnerUserIds: [Int]?
 }
 
 struct ChoiceCountDTO: Decodable {
     let choice: String
     let count: Int?
-}
-
-struct NumberEntryDTO: Decodable {
-    let userId: Int
-    let nickname: String?
-    let number: Int
-}
-
-struct RankingEntryDTO: Decodable {
-    let userId: Int
-    let nickname: String?
-    let guess: Int
-    let diff: Double
 }
 
 // MARK: - 달력 · 활동 요약

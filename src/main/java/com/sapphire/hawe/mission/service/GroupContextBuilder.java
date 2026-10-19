@@ -28,7 +28,7 @@ public class GroupContextBuilder {
     static final int SIGNAL_MISSIONS = 10;
     // 30일 × 하루 최대 5개
     static final int MAX_STAT_ROWS = 150;
-    private static final List<String> MEDIA_ORDER = List.of("PHOTO", "TEXT", "DRAW", "SLIDER");
+    private static final List<String> MEDIA_ORDER = List.of("PHOTO", "TEXT", "DRAW");
 
     private final MissionMapper missions;
     private final GroupMemberMapper members;

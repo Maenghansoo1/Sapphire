@@ -226,19 +226,19 @@ class MissionPublisherTests {
     @Test
     void publishesOnlyFromTheConfiguredPool() {
         publisher = new MissionPublisher(missions, groups, members, slots,
-                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, List.of(MissionTemplate.SLIDER_TASTE)),
+                new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, List.of(MissionTemplate.TEXT_BALANCE)),
                 generator, contexts, experiments, new ObjectMapper(), events);
         LocalDateTime now = LocalDateTime.of(2026, 10, 13, 10, 0);
         when(groups.findById(11L)).thenReturn(group(now.minusDays(2)));
-        when(generator.generate(eq(MissionTemplate.SLIDER_TASTE), anyLong(), any(), eq(false)))
-                .thenReturn(new GeneratedMission("민트초코, 내 취향은 어디쯤?", "일상",
-                        Map.of("topic", "민트초코", "left", "별로", "right", "최고")));
+        when(generator.generate(eq(MissionTemplate.TEXT_BALANCE), anyLong(), any(), eq(false)))
+                .thenReturn(new GeneratedMission("짜장면 vs 짬뽕, 하나만 고른다면?", "유머",
+                        Map.of("optionA", "짜장면", "optionB", "짬뽕")));
 
         publisher.publishIfDue(11L, now);
 
         ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
         verify(missions).insert(inserted.capture());
-        assertEquals("SLIDER_TASTE", inserted.getValue().getTemplate());
+        assertEquals("TEXT_BALANCE", inserted.getValue().getTemplate());
     }
 
     @Test

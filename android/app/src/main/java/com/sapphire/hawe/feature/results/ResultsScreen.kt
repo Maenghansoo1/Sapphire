@@ -66,7 +66,7 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
             else failed = true
             return@LaunchedEffect
         }
-        // 달력에서 연 지난 미션은 밸런스 선택지·슬라이더 라벨·그림 대상을 모르니 미션 정보를 한 번 받아 와요
+        // 달력에서 연 지난 미션은 밸런스 선택지·그림 대상을 모르니 미션 정보를 한 번 받아 와요
         // (실패하면 라벨 없이, AI 추측은 판정 없이 보여요).
         val template = store.result(groupID, missionID)?.template ?: return@LaunchedEffect
         if ((isAggregateTemplate(template) || template.startsWith("DRAW_")) && store.needsMissionSpec(groupID, missionID)) {
@@ -132,12 +132,11 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
                     style = HType.caption13, color = HColors.textSecondary)
             }
             if (isAggregateTemplate(result.template)) AggregateCard(aggregate, result.spec,
-                store.group(groupID)?.members.orEmpty(), session.account.userId,
                 onRetry = { aggregateRetry++ }, modifier = Modifier.padding(bottom = 20.dp))
             when (result.type) {
                 MissionType.PHOTO -> PhotoFeed(result, onDetail)
                 MissionType.DRAW -> DrawingGrid(result, onDetail, aiAvailable, aiGuess)
-                MissionType.WRITE, MissionType.SLIDER -> AnswerCards(result, onDetail)
+                MissionType.WRITE -> AnswerCards(result, onDetail)
             }
             if (result.pending.isNotEmpty()) {
                 Spacer(Modifier.height(28.dp))

@@ -7,7 +7,6 @@ extension MissionType {
         case .draw: "그림 그리기"
         case .photo: "사진 찍기"
         case .write: "글 쓰기"
-        case .slider: "슬라이더 정하기"
         }
     }
 }
@@ -21,17 +20,10 @@ struct MissionSpec: Hashable {
     /// 밸런스 게임(TEXT_BALANCE)의 두 선택지
     var optionA: String?
     var optionB: String?
-    /// 슬라이더: 질문(SLIDER_POSITION·SLIDER_CONSENSUS) 또는 주제(SLIDER_TASTE)와 양 끝 라벨
-    var question: String?
-    var topic: String?
-    var left: String?
-    var right: String?
     /// 그림·사진 틀이 그릴(찍을) 대상
     var subject: String?
     /// 사람을 지목한 미션인지 (서버가 닉네임으로 풀어 줘요)
     var hasTarget = false
-
-    var sliderQuestion: String? { question ?? topic }
 }
 
 /// 서버 틀 코드(`MISSIONS_API.md` §1-2) 중 이 앱이 쓰는 것
@@ -46,20 +38,17 @@ enum MissionTemplates {
     static let textBalance = "TEXT_BALANCE"
     static let drawSketch = "DRAW_SKETCH"
     static let drawAToB = "DRAW_A_TO_B"
-    static let sliderPosition = "SLIDER_POSITION"
-    static let sliderTaste = "SLIDER_TASTE"
-    static let sliderConsensus = "SLIDER_CONSENSUS"
 
     static let supported: Set<String> = [
         photoNow, photoGallery, photoColor, textAcrostic, textFillBlank, textOneWord, textReview, textBalance,
-        drawSketch, drawAToB, sliderPosition, sliderTaste, sliderConsensus,
+        drawSketch, drawAToB,
     ]
-    static let aggregate: Set<String> = [textBalance, sliderPosition, sliderTaste, sliderConsensus]
+    static let aggregate: Set<String> = [textBalance]
 
     /// 이 앱에 수행 화면이 있는 틀인지. 서버가 나중에 새 틀을 켜면 05 화면은 "앱 업데이트" 안내만 보여요.
     static func isSupported(_ template: String) -> Bool { supported.contains(template) }
 
-    /// 그룹 결과(`GET /missions/{id}/result`)가 있는 집계 틀(밸런스·슬라이더 3종)인지
+    /// 그룹 결과(`GET /missions/{id}/result`)가 있는 집계 틀(밸런스 게임)인지
     static func isAggregate(_ template: String) -> Bool { aggregate.contains(template) }
 }
 

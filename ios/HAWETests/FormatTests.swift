@@ -46,8 +46,6 @@ final class MissionFormatTests: XCTestCase {
         XCTAssertEqual(MissionFormat.lockNoticeText(.write), "내 미션을 올리면 친구들의 글이 열려요.")
         XCTAssertEqual(MissionFormat.lockNoticeText(.write, template: MissionTemplates.textOneWord), "내 미션을 올리면 친구들의 글이 열려요.")
         XCTAssertEqual(MissionFormat.lockNoticeText(.write, template: MissionTemplates.textBalance), "내 답을 올리면 친구들의 답과 그룹 결과가 열려요.")
-        XCTAssertEqual(MissionFormat.lockNoticeText(.slider, template: MissionTemplates.sliderTaste), "내 답을 올리면 친구들의 답과 그룹 결과가 열려요.")
-        XCTAssertEqual(MissionFormat.lockNoticeText(.slider), "내 미션을 올리면 친구들의 슬라이더가 열려요.")
         XCTAssertEqual(MissionFormat.pokeSentText(.poke, nickname: "민준"), "민준님을 콕 찔렀어요")
         XCTAssertEqual(PokeKind.allCases.map(MissionFormat.pokeButtonLabel), ["콕"])
         XCTAssertEqual(MissionFormat.pokeButtonDescription(.poke, nickname: "민준", sent: false), "민준님 콕 찌르기")
@@ -66,24 +64,18 @@ final class MissionFormatTests: XCTestCase {
 
     func testTemplateGuideAndButtonCopy() {
         let balance = MissionSpec(optionA: "짜장면", optionB: "짬뽕")
-        let slider = MissionSpec(question: "오늘 컨디션", left: "방전", right: "풀충전")
         XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.textOneWord, spec: MissionSpec()), "띄어쓰기 없이 한 단어로 남겨요")
         XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.textReview, spec: MissionSpec()), "별점 1~5개와 한 줄 후기를 남겨요")
         XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.textBalance, spec: balance), "‘짜장면’ vs ‘짬뽕’ 둘 중 하나를 골라요")
         XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.textBalance, spec: MissionSpec(optionA: "짜장면")), "둘 중 하나를 골라요")
-        XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.sliderPosition, spec: slider), "‘방전’ ↔ ‘풀충전’ 사이에서 내 위치를 골라요")
-        XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.sliderTaste, spec: slider), "‘방전’ ↔ ‘풀충전’ 사이에서 내 위치를 골라요")
-        XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.sliderTaste, spec: MissionSpec(left: " ", right: "최고")), "내 위치를 골라요")
-        XCTAssertEqual(MissionFormat.templateGuideText(MissionTemplates.sliderConsensus, spec: slider), "내 위치와 우리 그룹 평균을 함께 예측해요")
         XCTAssertNil(MissionFormat.templateGuideText(MissionTemplates.textAcrostic, spec: MissionSpec(word: "퇴근길")))
         XCTAssertNil(MissionFormat.templateGuideText(MissionTemplates.photoNow, spec: MissionSpec()))
 
         XCTAssertEqual(MissionFormat.actionTitle(.write, template: MissionTemplates.textBalance), "하나 고르기")
         XCTAssertEqual(MissionFormat.actionTitle(.write, template: MissionTemplates.textReview), "글 쓰기")
-        XCTAssertEqual(MissionFormat.actionTitle(.slider, template: MissionTemplates.sliderPosition), "슬라이더 정하기")
         XCTAssertEqual(MissionFormat.actionTitle(.photo, template: MissionTemplates.photoNow), "사진 찍기")
         XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textBalance), "결과 보기")
-        XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.sliderConsensus), "결과 보기")
+        XCTAssertEqual(MissionFormat.resultsActionTitle(template: "SLIDER_CONSENSUS"), "작품 보기", "없앤 슬라이더는 결과 카드가 없어요")
         XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.textOneWord), "작품 보기")
         XCTAssertEqual(MissionFormat.resultsActionTitle(template: MissionTemplates.drawSketch), "작품 보기")
         XCTAssertEqual(MissionFormat.unsupportedText, "앱을 업데이트하면 이 미션을 할 수 있어요")
@@ -149,25 +141,13 @@ final class TemplateInputRulesTests: XCTestCase {
         XCTAssertEqual(BalanceState().counter, "0 / 200")
     }
 
-    func testSliderAlwaysHasIntegerValues() {
-        XCTAssertEqual(SliderState().number, 50)
-        XCTAssertFalse(SliderState().touched)
-        XCTAssertEqual(SliderState().content, ScalarAnswer(number: 50))
-        XCTAssertEqual(SliderState(number: 80, guess: 60, consensus: true).content, ScalarAnswer(number: 80, guess: 60))
-        XCTAssertEqual(SliderState(number: 80, guess: 60, consensus: false).content, ScalarAnswer(number: 80))
-        XCTAssertEqual(TemplateInput.sliderValue(-3), 0)
-        XCTAssertEqual(TemplateInput.sliderValue(100.4), 100)
-        XCTAssertEqual(TemplateInput.sliderValue(62.5), 63)
-        XCTAssertEqual(TemplateInput.sliderValue(62.49), 62)
-    }
-
     func testScalarPartsSkipEmptyFields() {
-        let parts = SubmissionRepository.scalarParts(ScalarAnswer(number: 80, guess: 60, text: "몰입", caption: "이유"))
+        let parts = SubmissionRepository.scalarParts(ScalarAnswer(number: 4, text: "몰입", caption: "이유"))
         let names = parts.map { part -> String in
             if case .text(let name, let value) = part { return "\(name)=\(value)" }
             return ""
         }
-        XCTAssertEqual(names, ["text=몰입", "caption=이유", "number=80", "guess=60"])
+        XCTAssertEqual(names, ["text=몰입", "caption=이유", "number=4"])
         XCTAssertTrue(SubmissionRepository.scalarParts(ScalarAnswer()).isEmpty)
     }
 }
@@ -192,7 +172,6 @@ final class ResultsFormatTests: XCTestCase {
         XCTAssertEqual(ResultsFormat.hintText(.photo), "사진을 눌러서 자세히 보기")
         XCTAssertEqual(ResultsFormat.hintText(.draw), "그림을 눌러서 자세히 보기")
         XCTAssertEqual(ResultsFormat.hintText(.write), "글을 눌러서 자세히 보기")
-        XCTAssertEqual(ResultsFormat.hintText(.slider), "슬라이더를 눌러서 자세히 보기")
         XCTAssertFalse(ResultsFormat.commentSendEnabled(""))
         XCTAssertFalse(ResultsFormat.commentSendEnabled("  "))
         XCTAssertFalse(ResultsFormat.commentSendEnabled("\n"))
@@ -212,7 +191,7 @@ final class ResultsFormatTests: XCTestCase {
         XCTAssertNil(ResultsFormat.balanceChoiceText(nil, spec: spec))
         XCTAssertNil(ResultsFormat.balanceChoiceText("C", spec: spec))
         XCTAssertEqual(Set(MissionTemplates.supported.filter(ResultsFormat.hasTemplateAnswer)),
-                       ["TEXT_ONE_WORD", "TEXT_REVIEW", "TEXT_BALANCE", "SLIDER_POSITION", "SLIDER_TASTE", "SLIDER_CONSENSUS"])
+                       ["TEXT_ONE_WORD", "TEXT_REVIEW", "TEXT_BALANCE"])
     }
 
     func testBalancePercentsAlwaysAddUpTo100() {
@@ -228,34 +207,6 @@ final class ResultsFormatTests: XCTestCase {
                 XCTAssertEqual(result.a + result.b, 100)
             }
         }
-    }
-
-    func testAverageAndDiffCopyKeepServerRounding() {
-        XCTAssertEqual(ResultsFormat.decimalText(62.5), "62.5")
-        XCTAssertEqual(ResultsFormat.decimalText(60), "60")
-        XCTAssertEqual(ResultsFormat.decimalText(0), "0")
-        XCTAssertEqual(ResultsFormat.decimalText(32.8), "32.8")
-        let spec = MissionSpec(left: "방전", right: "풀충전")
-        XCTAssertEqual(ResultsFormat.diffFromAverageText(7.5, spec: spec), "내 위치는 평균보다 ‘풀충전’ 쪽으로 7.5")
-        XCTAssertEqual(ResultsFormat.diffFromAverageText(-32.8, spec: spec), "내 위치는 평균보다 ‘방전’ 쪽으로 32.8")
-        XCTAssertEqual(ResultsFormat.diffFromAverageText(0, spec: spec), "내 위치가 딱 평균이에요")
-        XCTAssertEqual(ResultsFormat.diffFromAverageText(10, spec: MissionSpec()), "내 위치는 평균보다 오른쪽으로 10")
-        XCTAssertEqual(ResultsFormat.diffFromAverageText(-2.5, spec: MissionSpec(left: "")), "내 위치는 평균보다 왼쪽으로 2.5")
-        XCTAssertNil(ResultsFormat.diffFromAverageText(nil, spec: spec))
-    }
-
-    func testConsensusRanksAndWinners() {
-        let ranking = [ConsensusRank(userID: 2, nickname: "잎사귀", guess: 60, diff: 2.5),
-                       ConsensusRank(userID: 3, nickname: "서연", guess: 65, diff: 2.5),
-                       ConsensusRank(userID: 1, nickname: "몽실이", guess: 80, diff: 17.5),
-                       ConsensusRank(userID: 4, nickname: "지우", guess: 40, diff: 22.5)]
-        XCTAssertEqual(ResultsFormat.competitionRanks(ranking), [1, 1, 3, 4])
-        XCTAssertEqual(ResultsFormat.competitionRanks([]), [])
-        XCTAssertEqual(ResultsFormat.consensusWinnerText(ranking, winnerUserIDs: [2, 3], myUserID: 1), "잎사귀님, 서연님이 공동으로 가장 가깝게 맞혔어요")
-        XCTAssertEqual(ResultsFormat.consensusWinnerText(ranking, winnerUserIDs: [2, 3], myUserID: 2), "나와 서연님이 공동으로 가장 가깝게 맞혔어요")
-        XCTAssertEqual(ResultsFormat.consensusWinnerText(Array(ranking.prefix(1)), winnerUserIDs: [2], myUserID: 1), "잎사귀님이 가장 가깝게 맞혔어요")
-        XCTAssertEqual(ResultsFormat.consensusWinnerText(Array(ranking.prefix(1)), winnerUserIDs: [2], myUserID: 2), "내가 가장 가깝게 맞혔어요")
-        XCTAssertNil(ResultsFormat.consensusWinnerText(ranking, winnerUserIDs: [], myUserID: 1))
     }
 
     func testAiReviewCopyAndPendingCheck() {
@@ -359,9 +310,9 @@ final class InsightAndDevTests: XCTestCase {
 
     func testKoreanParticles() {
         XCTAssertEqual(MissionType.draw.subjectForm, "그림이")
-        XCTAssertEqual(MissionType.slider.subjectForm, "슬라이더가")
+        XCTAssertEqual(MissionType.write.subjectForm, "글이")
         XCTAssertEqual(MissionType.photo.objectForm, "사진을")
-        XCTAssertEqual(MissionType.slider.objectForm, "슬라이더를")
+        XCTAssertEqual(MissionType.write.objectForm, "글을")
         XCTAssertEqual(KoreanText.josa("달", "이라고", "라고"), "이라고")
         XCTAssertEqual(KoreanText.josa("해", "이라고", "라고"), "라고")
         XCTAssertEqual(KoreanText.josa("cat", "이", "가"), "가")

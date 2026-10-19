@@ -164,11 +164,11 @@ erDiagram
 - `POKES.type` — `poke`(콕찌르기). 예전 `fling`(똥뿌리기) 행이 남아 있어도 조회에서 무시한다 (2026-10-19 삭제)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
 - `submission_ai_reviews` — 사진 주제 적합도 비동기 결과. `(submission_id, kind)` UNIQUE, `submissions.id` FK. `fit_score`는 DB에만 저장하고 API에는 배지·칭찬 문구만 보낸다. 그룹 삭제·탈퇴 시 제출물보다 먼저 삭제한다 (`VISION_TOPIC_FIT.md`).
-- `SUBMISSIONS.media_url` — 이미지 파일 위치(음성은 2026-10-12 제거). 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글/슬라이더)에서는 NULL
+- `SUBMISSIONS.media_url` — 이미지 파일 위치(음성은 2026-10-12 제거). 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글)에서는 NULL
 - `COMMENTS.image_url` — 첨부 이미지의 저장 키. API에는 공개 파일 URL을 내려준다. 이미지만 있는 댓글은 `content = ''`로 저장한다.
 - `REACTIONS` — `(submission_id, user_id, sticker_type)` 유니크 키로 같은 멤버의 같은 스티커 중복을 막는다. 서로 다른 스티커는 각각 누를 수 있다.
 - `MISSIONS.template` / `MISSIONS.params` — 미션 틀(예: `TEXT_ACROSTIC`)과 그 빈칸 값(JSON). 틀 목록과 `params` 모양은 `docs/BACKEND/MISSIONS_API.md` §1이 기준
-- 제출 답은 **하이브리드 방식**으로 저장한다 (아래 "제출 답 저장 방식"). 집계하는 값은 컬럼(`number_value`, `choice_value`), 그 밖의 답은 JSON(`answer_data`)이다. 사진·그림=`media_*`, 슬라이더·별점=`number_value`, 밸런스 게임=`choice_value`, 글=`answer_data.text`, 다수결 예측의 예측값=`answer_data.guess`. 쓰지 않는 컬럼은 NULL이며, 틀별 필수 여부는 DB가 아니라 서비스가 검증한다
+- 제출 답은 **하이브리드 방식**으로 저장한다 (아래 "제출 답 저장 방식"). 집계하는 값은 컬럼(`number_value`, `choice_value`), 그 밖의 답은 JSON(`answer_data`)이다. 사진·그림=`media_*`, 별점=`number_value`, 밸런스 게임=`choice_value`, 글=`answer_data.text`. (2026-10-19 삭제한 슬라이더의 예전 제출은 위치가 `number_value`, 다수결 예측값이 `answer_data.guess`에 남아 있다.) 쓰지 않는 컬럼은 NULL이며, 틀별 필수 여부는 DB가 아니라 서비스가 검증한다
 - `SUBMISSIONS.answer_text` / `answer_aliases`, `SUBMISSION_GUESSES` — **미사용(잔재).** 정답 맞히기(G 유형) 용도였으나 2026-10-12 음성 제거로 G 유형 틀이 없어졌다. 스키마는 지우지 않고 유지한다(나중에 서버 기반 맞히기 게임이 생기면 재사용, 탈퇴·그룹 삭제 쿼리가 아직 참조)
 - 하루 미션 수 — `GROUPS.daily_mission_count`(1~5, 기본 1)만큼 슬롯(`MISSIONS.slot_no` 1, 2, …)이 열린다. 슬롯별 발행·마감 시각은 `GROUP_MISSION_SLOTS`가 전담하며, **행이 없거나 값이 NULL이면 설정 파일의 기본 시각**(발행 09:00, 마감 23:00 — 초안)을 쓴다. `GROUPS`에는 시각 컬럼이 없다
 - 미션 문장 출처·실험 군 — `MISSIONS.generation_source`(`AI`/`AI_FALLBACK`/`PLACEHOLDER`)와 `MISSIONS.experiment_arm`(`AI`/`RANDOM`, 실험 밖이면 NULL). 앱 응답에는 내보내지 않고 비교 리포트에만 쓴다 (B9, `EXPERIMENT_TOPIC.md`)
@@ -225,9 +225,9 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 | 컬럼 | 변경 | 타입 | NULL | 설명 |
 |---|---|---|---|---|
-| `image_url` | `media_url`로 이름 변경, NULL 허용 | `VARCHAR(500)` | NULL | 글/슬라이더 제출은 파일이 없음 |
+| `image_url` | `media_url`로 이름 변경, NULL 허용 | `VARCHAR(500)` | NULL | 글 제출은 파일이 없음 |
 | `media_type` | 추가 | `VARCHAR(10)` | NULL | `IMAGE` (음성 제거로 `AUDIO`는 더 이상 저장하지 않음). `media_url`이 있을 때만 값이 있음 |
-| `number_value` | 추가 | `TINYINT UNSIGNED` | NULL | 별점(1~5) 또는 슬라이더 위치(0~100). 평균·분포를 집계하므로 컬럼으로 둔다 |
+| `number_value` | 추가 | `TINYINT UNSIGNED` | NULL | 별점(1~5). 집계할 수 있게 컬럼으로 둔다 (슬라이더 위치 0~100은 2026-10-19 슬라이더 삭제로 새로 쓰지 않음) |
 | `choice_value` | 추가 | `CHAR(1)` | NULL | 밸런스 게임 선택 `A` / `B`. 비율을 집계하므로 컬럼으로 둔다 |
 | `answer_data` | 추가 | `JSON` | NULL | 집계하지 않는 나머지 답. 글 본문(`{"text":"..."}`: 삼행시 3줄, 한 단어, 한 줄 후기, 빈칸 채우기), 다수결 예측의 예측값(`{"guess":70}`), 2차 틀의 구조적인 답. 모양은 틀마다 `MISSIONS_API.md`에서 정의하고 서비스가 검증한다 |
 | `answer_text` | 추가 | `VARCHAR(100)` | NULL | **미사용(잔재).** 정답 맞히기의 대표 정답 용도였으나 음성 제거로 쓰는 틀이 없음 |
@@ -245,7 +245,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | 보여주기만 하는 값, 틀마다 모양이 다른 값 | JSON (`answer_data`) | 새 틀이 생겨도 마이그레이션이 필요 없음 |
 
 - **`answer_data` 예시:** 글 틀 `{"text":"퇴근길
-..."}`, 다수결 예측 `{"guess":70}` (내 슬라이더 위치는 `number_value`). 키 이름과 필수 여부는 틀별로 정하고 서비스(`MissionTemplateValidator`)가 검증한다. DB는 JSON 유효성만 보장한다.
+..."}` (예전 다수결 예측 `{"guess":70}` 행이 남아 있을 수 있다 — 슬라이더는 2026-10-19 삭제). 키 이름과 필수 여부는 틀별로 정하고 서비스(`MissionTemplateValidator`)가 검증한다. DB는 JSON 유효성만 보장한다.
 - **글 길이 제한(500자)** 은 컬럼 길이가 아니라 서비스 검증으로 한다.
 - **승격 규칙:** `answer_data` 안의 키를 집계하거나 검색해야 하게 되면 그 키를 컬럼으로 승격하는 마이그레이션을 새로 만든다. 처음부터 집계 대상인 값은 JSON에 넣지 않는다.
 - **MyBatis:** JSON 컬럼은 문자열로 읽고 쓰며(`missions.params`, `answer_aliases`와 같은 방식), 서비스에서 Jackson으로 변환하거나 공용 `JsonTypeHandler`를 쓴다.
@@ -294,7 +294,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | `MissionTemplateValidator` | 틀별 `params` 검증(미션 생성 시)과 제출 필드 검증(제출 시). 틀마다 검증기 1개 |
 | `MissionTemplateSelector` | 슬롯별 틀 선택(하루 내 매체 중복 방지, 하루 1개일 때 어제와 매체 중복 방지, 후보 부족 시 예외 허용, 관계별 선호 없음)과 대상 멤버 지정(빈칸 채우기는 항상, 그림 틀은 설정된 확률). 어제 미션만 조회하고 시드 기반으로 계산 (`MISSIONS_API.md` §6-1) |
 | `SubmissionService` | 제출 처리(지각 판정, 중복 제출 차단), 잠금 해제 여부 판단 |
-| `MissionResultService` | 집계 틀(밸런스 게임, 슬라이더 3종)의 그룹 결과 계산 |
+| `MissionResultService` | 집계 틀(밸런스 게임)의 그룹 결과 계산 (슬라이더 3종은 2026-10-19 삭제) |
 | ~~`GuessService`~~ | 폐기됨 (음성 제거로 정답 맞히기 없음, `MISSIONS_API.md` §4-1) |
 | `FileStorageService` | 이미지 파일 저장/조회 (개발=로컬, 운영=S3로 전환), 형식·크기 검증 |
 | `FeedService` | 그룹 피드 조회 (제출자만 열람 가능하도록 필터링) |

@@ -98,7 +98,7 @@ struct SubmissionDetailView: View {
             PhotoArtwork(submission: submission, height: 300)
         case .draw:
             DrawingArtwork(submission: submission, height: 300, drawingSize: 240)
-        case .write, .slider:
+        case .write:
             if ResultsFormat.hasTemplateAnswer(submission.template) {
                 TemplateAnswer(submission: submission, spec: feed.result.spec, large: true)
                     .frame(maxWidth: .infinity, alignment: .leading)

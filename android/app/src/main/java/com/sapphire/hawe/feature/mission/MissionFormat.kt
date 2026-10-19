@@ -79,17 +79,8 @@ fun templateGuideText(template: String, spec: MissionSpec): String? = when (temp
         val b = spec.optionB?.takeIf { it.isNotBlank() }
         if (a != null && b != null) "‘$a’ vs ‘$b’ 둘 중 하나를 골라요" else "둘 중 하나를 골라요"
     }
-    MissionTemplates.SLIDER_POSITION, MissionTemplates.SLIDER_TASTE -> sliderEnds(spec)
-        ?.let { "$it 사이에서 내 위치를 골라요" } ?: "내 위치를 골라요"
-    MissionTemplates.SLIDER_CONSENSUS -> "내 위치와 우리 그룹 평균을 함께 예측해요"
     MissionTemplates.DRAW_A_TO_B -> drawToGuide(spec)
     else -> null
-}
-
-private fun sliderEnds(spec: MissionSpec): String? {
-    val left = spec.left?.takeIf { it.isNotBlank() } ?: return null
-    val right = spec.right?.takeIf { it.isNotBlank() } ?: return null
-    return "‘$left’ ↔ ‘$right’"
 }
 
 /** A를 B로: A 를 B 처럼 보이게 바꿔 그리기. A 가 사람([대상])이면 이름을 빼고 B 만 말해요. */

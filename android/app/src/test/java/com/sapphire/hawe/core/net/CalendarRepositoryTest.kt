@@ -56,25 +56,23 @@ class CalendarRepositoryTest {
             val records = CalendarRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
                 .month(7L, YearMonth.of(2026, 10))
 
-            // 슬라이더(A4)는 보이고, 예전 음성·모르는 매체는 건너뛴다
-            assertEquals(listOf(101L, 102L), records.map { it.missionID })
-            assertEquals(MissionType.SLIDER, records[0].type)
-            assertNull(records[1].stamp)
+            // 없앤 슬라이더·예전 음성·모르는 매체는 건너뛴다
+            assertEquals(listOf(102L), records.map { it.missionID })
+            assertNull(records[0].stamp)
         }
     }
 
     @Test fun mapsStatsByMedia() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"completedMissions":42,"streakDays":5,"groupCount":3,
-                "byMedia":{"DRAW":10,"PHOTO":15,"TEXT":9,"VOICE":8,"SLIDER":1}}"""))  // 예전 음성 기록은 건너뛴다
+                "byMedia":{"DRAW":10,"PHOTO":15,"TEXT":9,"VOICE":8,"SLIDER":1}}"""))  // 예전 음성·슬라이더 기록은 건너뛴다
             val stats = CalendarRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore())).stats()
 
             assertEquals("/api/me/stats", server.takeRequest().path)
             assertEquals(42, stats.completedMissions)
             assertEquals(5, stats.streakDays)
             assertEquals(3, stats.groupCount)
-            assertEquals(mapOf(MissionType.DRAW to 10, MissionType.PHOTO to 15, MissionType.WRITE to 9,
-                MissionType.SLIDER to 1), stats.byType)
+            assertEquals(mapOf(MissionType.DRAW to 10, MissionType.PHOTO to 15, MissionType.WRITE to 9), stats.byType)
         }
     }
 

@@ -81,7 +81,7 @@ fun MissionHeader(hasDraft: Boolean, onClose: () -> Unit, trailing: @Composable 
         onCancel = { confirming = false }, onConfirm = { confirming = false; onClose() })
 }
 
-/** 새 틀 수행 화면(한 단어·후기·밸런스·슬라이더)의 공통 뼈대: 닫기 헤더, 제목·안내, 입력, 올리기 버튼. */
+/** 새 틀 수행 화면(한 단어·후기·밸런스)의 공통 뼈대: 닫기 헤더, 제목·안내, 입력, 올리기 버튼. */
 @Composable
 internal fun TemplateMissionScaffold(type: MissionType, topic: String, guide: String?, hasDraft: Boolean,
     canSubmit: Boolean, onClose: () -> Unit, onSubmit: suspend () -> Boolean, content: @Composable () -> Unit) {

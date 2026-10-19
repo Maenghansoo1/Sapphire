@@ -27,23 +27,21 @@ struct ServerMission {
 }
 
 extension MissionType {
-    /// 서버 `media` (PHOTO · TEXT · DRAW · SLIDER)
+    /// 서버 `media` (PHOTO · TEXT · DRAW)
     init?(media: String) {
         switch media {
         case "PHOTO": self = .photo
         case "TEXT": self = .write
         case "DRAW": self = .draw
-        case "SLIDER": self = .slider
         default: return nil
         }
     }
 
-    /// 서버 `template` 접두어 (PHOTO_* · DRAW_* · TEXT_* · SLIDER_*)
+    /// 서버 `template` 접두어 (PHOTO_* · DRAW_* · TEXT_*)
     init?(template: String) {
         if template.hasPrefix("PHOTO_") { self = .photo }
         else if template.hasPrefix("DRAW_") { self = .draw }
         else if template.hasPrefix("TEXT_") { self = .write }
-        else if template.hasPrefix("SLIDER_") { self = .slider }
         else { return nil }
     }
 }
@@ -105,10 +103,6 @@ extension MissionSpec {
             drawTo: params["b"]?.string,
             optionA: params["optionA"]?.string,
             optionB: params["optionB"]?.string,
-            question: params["question"]?.string,
-            topic: params["topic"]?.string,
-            left: params["left"]?.string,
-            right: params["right"]?.string,
             subject: params["subject"]?.string,
             hasTarget: params["target"] != nil || params["targetUserId"] != nil
         )

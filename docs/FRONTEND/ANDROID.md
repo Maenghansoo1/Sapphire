@@ -2,7 +2,7 @@
 
 > **음성 기능 제거 (2026-10-12):** 음성 미션·녹음·재생·파형·마이크 권한은 서비스에서 제거하기로 결정했다. 서버는 B0 에서 제거됐고, Android 코드는 A0, iOS 는 A5 항목 0 에서 삭제한다. 아래 문서의 음성 관련 내용(09 음성 화면, 13 음성 목록, `MediaRecorder`/`MediaPlayer`, `RECORD_AUDIO`)은 **제거됨 / 제거 예정**으로 읽는다.
 >
-> **새 미션 틀 6종 (A4, 2026-10-14):** 한 단어 일기·한 줄 후기·밸런스 게임·슬라이더 3종(내 위치·취향 막대·다수결 예측)의 수행 화면과 결과 화면(틀별 카드, 집계 틀의 "그룹 결과" 카드 — `GET /missions/{id}/result`)을 넣었다. 디자인이 없어 별점(★/☆), A/B 카드, 슬라이더는 **임시 UI**다. 서버는 Android·iOS(A5 항목 6) 둘 다 배포된 뒤 `hawe.mission.enabled-templates` 에 새 틀을 추가해 켠다(`MISSIONS_API.md` §6-1). 이 앱이 모르는 틀이 오면 05 카드에 "앱을 업데이트하면 이 미션을 할 수 있어요"만 보인다.
+> **새 미션 틀 6종 (A4, 2026-10-14 — 슬라이더 3종은 2026-10-19 삭제):** 한 단어 일기·한 줄 후기·밸런스 게임·슬라이더 3종(내 위치·취향 막대·다수결 예측)의 수행 화면과 결과 화면(틀별 카드, 집계 틀의 "그룹 결과" 카드 — `GET /missions/{id}/result`)을 넣었다. 디자인이 없어 별점(★/☆), A/B 카드, 슬라이더는 **임시 UI**다. 서버는 Android·iOS(A5 항목 6) 둘 다 배포된 뒤 `hawe.mission.enabled-templates` 에 새 틀을 추가해 켠다(`MISSIONS_API.md` §6-1). 이 앱이 모르는 틀이 오면 05 카드에 "앱을 업데이트하면 이 미션을 할 수 있어요"만 보인다.
 >
 > **AI가 맞혀볼게요 (A8, 2026-10-14):** 그림 화면의 "AI에게 보여주기"와 결과·상세 화면 그림의 "AI" 버튼이 M1 모델(`assets/quickdraw/`, LiteRT 1.4.2)로 **기기 안에서만** 그림을 추측한다(서버 전송·저장 없음, 제출·도장과 무관). 전처리는 `ml/quickdraw/PREPROCESS_SPEC.md` 그대로이고 골든 테스트(단위: 전처리, 기기: `connectedDebugAndroidTest` 로 모델 출력)로 맞춘다. "잘 모르겠어요" 기준은 M1 팀원 그림 평가(`ml/quickdraw/EVAL.md`)로 정한 0.55(`AI_GUESS_THRESHOLD`)이고, 모델 설명서(`export.json`)와 다르면 단위 테스트가 실패한다. 모델·범주·골든을 다시 만들면 `app/src/main/assets/quickdraw/`·`app/src/test/resources/quickdraw/` 복사본도 바꾼다(다르면 단위 테스트가 실패). LiteRT 네이티브 라이브러리로 디버그 APK 가 약 20MB(4개 ABI) 커졌다 — Play 배포(App Bundle)는 기기 ABI 하나(arm64 약 4.5MB)만 받는다. 16KB 페이지 정렬 확인함.
 

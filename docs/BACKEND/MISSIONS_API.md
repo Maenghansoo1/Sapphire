@@ -5,8 +5,8 @@
 
 ## 0. 핵심 개념
 
-- **틀(template)**: 매체(사진/글/그림/슬라이더) + 놀이 방식. 음성 매체는 2026-10-12 결정으로 제거되었다. 코드값으로 식별한다 (예: `TEXT_ACROSTIC`).
-- **빈칸(params)**: 틀이 요구하는 입력값 (삼행시는 3글자 제시어, 슬라이더는 양 끝 키워드 등). 틀마다 모양이 다르며 미션에 JSON으로 저장한다.
+- **틀(template)**: 매체(사진/글/그림) + 놀이 방식. 음성 매체는 2026-10-12, 슬라이더 매체는 2026-10-19 결정으로 제거되었다. 코드값으로 식별한다 (예: `TEXT_ACROSTIC`).
+- **빈칸(params)**: 틀이 요구하는 입력값 (삼행시는 3글자 제시어, 밸런스 게임은 두 선택지 등). 틀마다 모양이 다르며 미션에 JSON으로 저장한다.
 - **미션**: 그룹 × 날짜 × 슬롯마다 1개. `template` + `params` + 사용자에게 보여줄 문장 `content`로 구성된다.
 - **슬롯(slot)**: 하루에 열리는 미션의 순번 (`slotNo` 1, 2, 3 …). 그룹이 정한 "하루 미션 수"(`dailyMissionCount`)만큼 슬롯이 있다.
 - **발행 시각 규칙**: 슬롯마다 발행·마감 시각은 `group_mission_slots`(그룹 설정의 `missionSlots`)가 정한다. **지정하지 않은 슬롯(행이 없거나 값이 NULL)은 설정 파일(`hawe.mission.*`)의 기본 시각(발행 09:00, 마감 23:00 — 초안)을 쓴다.** 그룹 자체에는 발행·마감 시각 필드가 없다 (§2 "그룹 설정 연동").
@@ -63,18 +63,14 @@
 | 글 | 빈칸 채우기 | `TEXT_FILL_BLANK` | T | `sentence`(`___` 1개 포함), `targetUserId` | `text` | 1차 ⚠ §8 |
 | 그림 | 30초 스케치 | `DRAW_SKETCH` | S/T | `subject` 또는 `targetUserId`, `seconds` | `file`(이미지) | 1차 |
 | 그림 | A를 B로 | `DRAW_A_TO_B` | S/T | `a`(또는 `targetUserId`), `b` | `file`(이미지) | 1차 |
-| 슬라이더 | 내 위치는? | `SLIDER_POSITION` | V | `question`, `left`, `right` | `number`(0~100) | 1차 |
-| 슬라이더 | 취향 막대 | `SLIDER_TASTE` | V | `topic`, `left`, `right` | `number`(0~100) | 1차 |
-| 슬라이더 | 다수결 예측 | `SLIDER_CONSENSUS` | V | `question`, `left`, `right` | `number`(내 위치), `guess`(그룹 평균 예측) | 1차 |
 | 글 | 끝말 이어쓰기 | `TEXT_RELAY` | R | `startSentence` | 2차 | 2차 |
 | 그림 | 이어 그리기 | `DRAW_RELAY` | R | 시작 그림 | 2차 | 2차 |
 | 그림 | 그림 맞히기 | `DRAW_GUESS` | R | `word` | 2차 | 2차 |
 | 그림 | 갈틱폰 | `DRAW_TELEPHONE` | R | `startSentence` | 2차 | 2차 |
-| 슬라이더 | 제시어 바 | `SLIDER_CLUE_BAR` | R | `left`, `right` | 2차 | 2차 |
 
 - `target`을 쓰는 틀은 발행 시 서버가 그룹 멤버 중 1명을 결정적 시드로 뽑아 `targetUserId`를 저장한다. `TEXT_FILL_BLANK`는 항상, `DRAW_SKETCH`/`DRAW_A_TO_B`는 코드 상수 확률 0.3으로 지정한다 (§6-1). 응답에서는 서버가 닉네임을 풀어 `params.target`으로 내려준다 (§2 참조).
 - 음성 틀(한 줄·소리 흉내·성대모사)은 2026-10-12 음성 기능 제거로 코드표에서 삭제했다. DB에 예전 음성 미션 행이 남아 있어도 조회는 `media: null`로 응답하고 제출은 `INVALID_SUBMISSION`으로 거부한다.
-- `SLIDER_CONSENSUS`의 승자는 `guess`와 실제 평균(`number`들의 평균)의 차이가 가장 작은 멤버다. (MISSIONS.md의 설명을 이렇게 해석했다 — §11 확인 필요)
+- 슬라이더 틀 3종(`SLIDER_POSITION` 내 위치는?·`SLIDER_TASTE` 취향 막대·`SLIDER_CONSENSUS` 다수결 예측)과 2차 `SLIDER_CLUE_BAR`는 2026-10-19 결정으로 삭제했다. DB에 예전 슬라이더 미션 행이 남아 있어도 조회는 `media: null`로 응답하고, 제출은 `INVALID_SUBMISSION`, 결과는 `RESULT_NOT_SUPPORTED`로 거부한다.
 
 ---
 
@@ -114,15 +110,6 @@
   ]
 }
 ```
-슬라이더 미션 항목 예시:
-```json
-{
-  "missionId": 11, "groupId": 1, "slotNo": 2, "content": "오늘 컨디션은 어디쯤?", "category": "일상",
-  "template": "SLIDER_POSITION", "media": "SLIDER",
-  "params": { "question": "오늘 컨디션", "left": "방전", "right": "풀충전" },
-  "publishedAt": "2026-09-28T14:00:00", "deadlineAt": "2026-09-28T23:00:00", "submittedByMe": true
-}
-```
 `target`을 쓰는 틀은 `params`에 서버가 풀어준 대상이 추가된다.
 ```json
 "params": { "sentence": "[대상]은 무인도에 가면 제일 먼저 ___ 할 것 같다", "target": { "userId": 3, "nickname": "잎사귀" } }
@@ -144,9 +131,9 @@
   { "template": "TEXT_ACROSTIC", "media": "TEXT", "name": "삼행시", "phase": 1,
     "paramsSchema": { "word": "string(3)" },
     "payloadSchema": { "text": "string(required)" } },
-  { "template": "SLIDER_POSITION", "media": "SLIDER", "name": "내 위치는?", "phase": 1,
-    "paramsSchema": { "question": "string", "left": "string", "right": "string" },
-    "payloadSchema": { "number": "int(0..100, required)" } }
+  { "template": "TEXT_BALANCE", "media": "TEXT", "name": "밸런스 게임", "phase": 1,
+    "paramsSchema": { "optionA": "string", "optionB": "string" },
+    "payloadSchema": { "choice": "A|B(required)", "caption": "string(optional)" } }
 ] }
 ```
 정적 목록이라 페이지네이션 봉투를 쓰지 않아도 되지만 목록 응답 규칙(`content`)은 따른다.
@@ -201,7 +188,7 @@ hawe.mission.max-daily-count=5
 
 ## 3. 제출
 
-6단계 1차 구현됨, B5(2026-10-13)에서 새 틀 6종(`TEXT_ONE_WORD`·`TEXT_REVIEW`·`TEXT_BALANCE`·`SLIDER_*`)까지 받는다. 같은 슬롯의 다음 미션이 발행되면 이전 미션 제출은 409 `MISSION_CLOSED`로 거부한다. 2차 틀과 예전 음성 틀은 받지 않는다. 새 틀이 실제로 발행되는지는 발행 풀 설정이 정한다(§6-1).
+6단계 1차 구현됨, B5(2026-10-13)에서 새 틀(`TEXT_ONE_WORD`·`TEXT_REVIEW`·`TEXT_BALANCE`)까지 받는다(같이 넣었던 슬라이더 3종은 2026-10-19 삭제). 같은 슬롯의 다음 미션이 발행되면 이전 미션 제출은 409 `MISSION_CLOSED`로 거부한다. 2차 틀과 예전 음성 틀은 받지 않는다. 새 틀이 실제로 발행되는지는 발행 풀 설정이 정한다(§6-1).
 
 | Method | Path | 설명 |
 |---|---|---|
@@ -215,8 +202,7 @@ hawe.mission.max-daily-count=5
 |---|---|---|
 | `file` | file | 이미지 |
 | `text` | text | 글 본문 |
-| `number` | int | 별점(1~5) 또는 슬라이더 위치(0~100) |
-| `guess` | int | `SLIDER_CONSENSUS`의 예측값(0~100) |
+| `number` | int | 별점(1~5) |
 | `choice` | text | `A` 또는 `B` (`TEXT_BALANCE`) |
 | `caption` | text | 보조 설명 (최대 200자, 틀에 따라 선택/필수) |
 
@@ -232,20 +218,18 @@ hawe.mission.max-daily-count=5
 | `TEXT_REVIEW` | `number`(1~5), `text`(≤ 100자) | - | 별점은 정수 |
 | `TEXT_BALANCE` | `choice` | `caption`(≤ 200자) | 정확히 `A` 또는 `B`(대문자) |
 | `TEXT_FILL_BLANK` | `text`(≤ 100자) | - | 공백 불가 |
-| `SLIDER_POSITION`, `SLIDER_TASTE` | `number`(0~100) | - | 정수 |
-| `SLIDER_CONSENSUS` | `number`, `guess` | - | 둘 다 0~100 정수 |
 
 - 시간 제한이 있는 틀(`DRAW_SKETCH`의 `seconds`)은 **클라이언트가 시간을 강제**한다. 서버는 그림 제작 시간을 신뢰할 수 있는 방식으로 알 수 없으므로 검증하지 않는다.
 - 파일 제한: 이미지 ≤ 10MB (`jpg`/`png`/`webp`). 그 밖의 형식(예전 음성 형식 포함)은 415 `UNSUPPORTED_FILE_TYPE`. 서버가 파일 헤더로 종류와 확장자를 판정하며 원본 파일명·Content-Type은 신뢰하지 않는다. 로컬 저장 키로 저장한 파일은 인증 없이 `/files/<key>`로 공개된다.
 
 **1차 구현 규칙:** 사진·그림 5종은 `file` 필수·`caption` 선택이다. `TEXT_FILL_BLANK`는 공백 제거 후 1~100 grapheme, `TEXT_ACROSTIC`은 정확히 3줄이며 `params.word`가 3글자일 때 각 줄은 해당 글자로 시작해야 한다. 삼행시·빈칸 채우기에서 `caption`은 받지 않는다.
 
-**B5 구현 규칙 (새 틀 6종):**
+**B5 구현 규칙 (새 틀 3종):**
 - 글자 수는 grapheme(이모지·결합 문자를 한 글자로) 기준, `caption`은 코드포인트 기준이다. 글은 앞뒤 공백을 지우고 센다.
-- 숫자 필드(`number`, `guess`)는 부호·소수점·공백 없는 정수 문자열만 받는다(`50.0`, ` 5`, `-1`, `+5`, 빈 값은 400). 그다음 틀의 범위를 확인한다.
+- 숫자 필드(`number`)는 부호·소수점·공백 없는 정수 문자열만 받는다(`50.0`, ` 5`, `-1`, `+5`, 빈 값은 400). 그다음 틀의 범위를 확인한다.
 - 새 틀의 `caption`은 앞뒤 공백을 지우고, 비면 저장하지 않는다(`null`).
 - 새 틀은 파일을 받지 않는다(`file`이 오면 요구하지 않는 필드).
-- 저장 위치: `number` → `submissions.number_value`, `choice` → `choice_value`, `text` → `answer_data.text`, `guess` → `answer_data.guess`. 스키마는 바꾸지 않았다(V1에 이미 있던 컬럼).
+- 저장 위치: `number` → `submissions.number_value`, `choice` → `choice_value`, `text` → `answer_data.text`. 스키마는 바꾸지 않았다(V1에 이미 있던 컬럼).
 
 ### 3-3. 응답
 
@@ -265,15 +249,14 @@ hawe.mission.max-daily-count=5
 
 | 필드 | 틀 |
 |---|---|
-| `number` | `TEXT_REVIEW`(별점), `SLIDER_*`(위치) |
+| `number` | `TEXT_REVIEW`(별점) |
 | `choice` | `TEXT_BALANCE` |
-| `guess` | `SLIDER_CONSENSUS` |
 | `text` | `TEXT_ONE_WORD`(단어), `TEXT_REVIEW`(한 줄 후기) |
 | `caption` | `TEXT_ONE_WORD`(이유), `TEXT_BALANCE`(이유) — 보냈을 때만 |
 
 ```json
 { "id": 101, "missionId": 12, "author": { "userId": 3, "nickname": "서연", "characterKey": "mulbangul", "profileImageUrl": null },
-  "template": "SLIDER_CONSENSUS", "number": 80, "guess": 60, "reactions": [], "commentCount": 0,
+  "template": "TEXT_REVIEW", "text": "또 먹고 싶다", "number": 4, "reactions": [], "commentCount": 0,
   "submittedAt": "2026-10-13T21:00:00+09:00", "isLate": false }
 ```
 
@@ -323,34 +306,19 @@ hawe.mission.max-daily-count=5
 |---|---|---|
 | GET | `/missions/{missionId}/result` | 집계 틀의 그룹 결과 |
 
-V 유형 틀(`TEXT_BALANCE`, `SLIDER_POSITION`, `SLIDER_TASTE`, `SLIDER_CONSENSUS`)에서만 의미가 있다. 잠금 규칙이 적용되어 **내가 제출해야** 볼 수 있다. 결과는 현재까지의 제출 기준이며, 제출이 늘면 값이 바뀐다.
+V 유형 틀(지금은 `TEXT_BALANCE`만. 슬라이더 3종은 2026-10-19 삭제)에서만 의미가 있다. 잠금 규칙이 적용되어 **내가 제출해야** 볼 수 있다. 결과는 현재까지의 제출 기준이며, 제출이 늘면 값이 바뀐다.
 
 ```json
 // TEXT_BALANCE
 { "template": "TEXT_BALANCE", "totalCount": 4,
   "choices": [ { "choice": "A", "count": 3 }, { "choice": "B", "count": 1 } ],
   "myChoice": "A" }
-
-// SLIDER_POSITION / SLIDER_TASTE
-{ "template": "SLIDER_POSITION", "totalCount": 4, "average": 62.5,
-  "distribution": [ { "userId": 1, "nickname": "몽실이", "number": 70 }, { "userId": 2, "nickname": "잎사귀", "number": 20 } ],
-  "myNumber": 70, "diffFromAverage": 7.5 }
-
-// SLIDER_CONSENSUS
-{ "template": "SLIDER_CONSENSUS", "totalCount": 4, "average": 62.5,
-  "ranking": [ { "userId": 2, "nickname": "잎사귀", "guess": 60, "diff": 2.5 },
-               { "userId": 1, "nickname": "몽실이", "guess": 80, "diff": 17.5 } ],
-  "winnerUserIds": [2] }
 ```
 - 에러: `MISSION_NOT_FOUND` (404), `NOT_GROUP_MEMBER` (403), `FEED_LOCKED` (423), `RESULT_NOT_SUPPORTED` (400) — V 유형이 아닌 틀. 검사 순서도 이 순서다.
 
 **B5 구현 규칙 (2026-10-13 구현됨):**
 - 지난 미션(이미 다음 미션이 열린 것)의 결과도 볼 수 있다. 마감 뒤 늦은 제출도 결과에 들어간다.
 - `totalCount`는 제출 수. `choices`는 0표여도 항상 `A`·`B` 두 항목이다.
-- `average`(제출된 `number` 평균), `diffFromAverage`(= 내 값 − 평균), `diff`(= |`guess` − 평균|)는 정확한 값으로 계산·비교하고 **응답에서만 소수 첫째 자리로 반올림**한다(HALF_UP, 음수는 0에서 먼 쪽. 예: 평균 62.25 → 62.3, −32.75 → −32.8).
-- `distribution`·`ranking`의 `nickname`은 피드와 같은 표시 닉네임(그룹 내 프로필 우선)이다. `distribution`은 제출 순서다.
-- `ranking`은 `diff` 오름차순, 같으면 제출 순서(제출 시각 → id). `winnerUserIds`는 가장 작은 `diff`와 같은 사람 전부(동률이면 여러 명)다.
-- `SLIDER_CONSENSUS` 응답에는 `myNumber`·`distribution`이 없다(위 예시대로).
 
 ---
 
@@ -372,7 +340,6 @@ AI 응답에 대한 서버 검증 (`GeneratedMissionValidator`, AI가 규칙을 
 | 빈칸 | 틀의 빈칸 이름과 정확히 같다 (빠지거나 남으면 거부, `optional` 빈칸은 없어도 됨). 서버가 정하는 `targetUserId`를 AI가 보내면 거부. 값은 글 1~40자(위 문장 규칙과 같음), `seconds`만 10~60 정수(글 `"30"`도 숫자로 바꿈) |
 | 삼행시 | `word`가 정확히 한글 3글자이고 문장에도 들어 있는가 |
 | 밸런스 | `optionA` ≠ `optionB` (공백·문장부호 무시), 각 ≤ 20자 |
-| 슬라이더 | `left` ≠ `right`, 각 ≤ 20자 |
 | 빈칸 채우기 | `sentence`에 `___`가 정확히 1개(밑줄 4개 이상 거부), `sentence`에 `[대상]` 포함 |
 | 대상 | 대상이 있으면 문장에 `[대상]` 필수, 없으면 문장·빈칸 어디에도 `[대상]` 금지 |
 | 카테고리 | 주어진 목록에 있는 값인가 |
@@ -383,11 +350,11 @@ AI 응답에 대한 서버 검증 (`GeneratedMissionValidator`, AI가 규칙을 
 
 ### 6-1. 틀 선택 규칙 (서버가 정함, AI 개입 없음)
 
-MVP 발행 풀은 `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_SKETCH`, `DRAW_A_TO_B`, `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`의 7종이다. 매체는 PHOTO/TEXT/DRAW 3종이다. `GET /mission-templates`는 1차 틀 13종 전체를 반환한다. (2026-10-12 음성 제거 전에는 풀 8종·매체 4종·목록 16종이었다.)
+MVP 발행 풀은 `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_SKETCH`, `DRAW_A_TO_B`, `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`의 7종이다. 매체는 PHOTO/TEXT/DRAW 3종이다. `GET /mission-templates`는 1차 틀 10종 전체를 반환한다(슬라이더 3종 삭제 전에는 13종). (2026-10-12 음성 제거 전에는 풀 8종·매체 4종·목록 16종이었다.)
 
 **발행 풀 설정 (B5, 2026-10-13):** 발행 풀은 `hawe.mission.enabled-templates`(쉼표로 구분한 틀 이름)로 정한다. 기본값은 위 MVP 7종이고, 비어 있으면 서버가 시작하지 않는다.
-- 새 틀 6종(`TEXT_ONE_WORD`, `TEXT_REVIEW`, `TEXT_BALANCE`, `SLIDER_POSITION`, `SLIDER_TASTE`, `SLIDER_CONSENSUS`)은 서버가 제출·결과를 받을 수 있다. 하지만 **앱(A4)이 그 화면을 배포한 뒤에** 이 설정에 추가한다. 그 전에 켜면 구 앱이 미션을 열 수 없다.
-- 매체는 풀에 틀이 있는 것만 돈다. 순서는 `PHOTO, TEXT, DRAW, SLIDER` 고정 목록에서 거른 뒤 섞는다. 슬라이더 틀을 넣으면 매체가 4종이 된다.
+- 새 틀 3종(`TEXT_ONE_WORD`, `TEXT_REVIEW`, `TEXT_BALANCE`)은 서버가 제출·결과를 받을 수 있다. 하지만 **앱(A4)이 그 화면을 배포한 뒤에** 이 설정에 추가한다. 그 전에 켜면 구 앱이 미션을 열 수 없다.
+- 매체는 풀에 틀이 있는 것만 돈다. 순서는 `PHOTO, TEXT, DRAW` 고정 목록에서 거른 뒤 섞는다.
 - 풀은 설정에 쓴 순서·중복과 상관없이 틀 정의 순서로 쓴다. 그래서 기본 설정에서는 B5 이전과 **같은 틀**이 골라진다(회귀 테스트로 고정).
 
 | # | 규칙 | 강도 |
@@ -473,7 +440,7 @@ N >= 2 : p = (k-1) % 매체 수, r = (k-1) / 매체 수        // 슬롯 k, r = 
 
 ## 7. 2차 틀 (R 유형) — 별도 설계 필요
 
-`TEXT_RELAY`, `DRAW_RELAY`, `DRAW_GUESS`, `DRAW_TELEPHONE`, `SLIDER_CLUE_BAR`는 이 문서의 단일 제출 구조로는 표현할 수 없다.
+`TEXT_RELAY`, `DRAW_RELAY`, `DRAW_GUESS`, `DRAW_TELEPHONE`은 이 문서의 단일 제출 구조로는 표현할 수 없다.
 
 | 필요한 것 | 이유 |
 |---|---|
@@ -503,7 +470,7 @@ N >= 2 : p = (k-1) % 매체 수, r = (k-1) / 매체 수        // 슬롯 k, r = 
 | `groups` | `relation_type VARCHAR(20) NOT NULL DEFAULT 'CASUAL'` 추가 (그룹 관계, 코드 유효성은 서비스에서 검증). `daily_mission_count TINYINT UNSIGNED NOT NULL DEFAULT 1` 추가. `mission_publish_time`, `mission_deadline_time` **삭제** (현재 데이터가 없어 이전 없이 삭제) |
 | `group_mission_slots` (신규) | 슬롯별 발행·마감 시각 지정. 컬럼: `group_id`, `slot_no`, `publish_time NULL`, `deadline_time NULL`. 행이 없거나 값이 NULL이면 설정 파일의 기본 시각을 사용. `(group_id, slot_no)` UNIQUE |
 | `missions` | `template VARCHAR(40) NOT NULL`, `params JSON NOT NULL`, `slot_no TINYINT UNSIGNED NOT NULL DEFAULT 1`, `published_at DATETIME NOT NULL`, `deadline_at DATETIME NOT NULL` 추가. UNIQUE `(group_id, mission_date, slot_no)` 추가 (중복 발행 방지). B9: `generation_source VARCHAR(20) NULL`, `experiment_arm VARCHAR(10) NULL`, 인덱스 `(experiment_arm, mission_date)` (§6-3) |
-| `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `number_value`, `choice_value`, `answer_data`(JSON: 글 본문 `text`, 다수결 예측값 `guess` 등 집계하지 않는 답), `answer_text`(정답), `answer_aliases`(별칭 JSON 배열) 추가 (모두 NULL 허용, `answer_text`·`answer_aliases`는 음성 제거로 **현재 미사용** 잔재). 요청 필드(`text`, `guess`)는 그대로이고 저장만 다르다: `number`→`number_value`, `choice`→`choice_value`, `text`→`answer_data.text`, `guess`→`answer_data.guess` (`BACKEND_DB.md` "제출 답 저장 방식"). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
+| `submissions` | `image_url NOT NULL` → `media_url NULL`로 변경. `media_type`, `number_value`, `choice_value`, `answer_data`(JSON: 글 본문 `text` 등 집계하지 않는 답. 삭제한 다수결 예측의 예전 `guess` 값이 남아 있을 수 있다), `answer_text`(정답), `answer_aliases`(별칭 JSON 배열) 추가 (모두 NULL 허용, `answer_text`·`answer_aliases`는 음성 제거로 **현재 미사용** 잔재). 요청 필드(`text`, `guess`)는 그대로이고 저장만 다르다: `number`→`number_value`, `choice`→`choice_value`, `text`→`answer_data.text`, `guess`→`answer_data.guess` (`BACKEND_DB.md` "제출 답 저장 방식"). `(mission_id, user_id)` UNIQUE 추가 (`ALREADY_SUBMITTED`를 DB가 보장, 동시 제출 방지) |
 | `submission_guesses` (신규) | 정답 시도 기록 — **현재 미사용** (음성 제거로 정답 맞히기 폐기, 테이블은 유지). 컬럼: `id`, `submission_id`(FK), `user_id`(FK), `guess_text VARCHAR(100) NOT NULL`, `is_correct BOOLEAN NOT NULL`, `created_at DATETIME`. `(submission_id, user_id)` 인덱스(UNIQUE 아님, 여러 번 시도 가능) |
 
 - 기존 `group_members` UNIQUE 제약처럼 **동시 요청에서의 중복은 DB 제약으로 막고** 서비스에서 `DuplicateKeyException`을 `ALREADY_SUBMITTED`로 변환한다.
@@ -543,7 +510,7 @@ N >= 2 : p = (k-1) % 매체 수, r = (k-1) / 매체 수        // 슬롯 k, r = 
 2. 하루가 끝난 뒤(예: 자정) 제출을 완전히 막을 것인가? 현재는 마감 후에도 `isLate`로 제출 가능하고 상한이 없다.
 3. "오늘"의 기준 시간대. DB `CURDATE()`와 서버 시간대를 `Asia/Seoul`로 통일할지 (그룹 API의 `submittedToday`와 동일 문제).
 4. (결정됨) 틀 중복·순환 규칙은 §6-1이다. 그룹 관계별 허용 틀 목록은 두지 않는다.
-5. `SLIDER_CONSENSUS`의 승리 판정 해석 확인 (§1-2).
+5. (해당 없음) 슬라이더 틀 삭제(2026-10-19)로 `SLIDER_CONSENSUS` 승리 판정 문제는 없어졌다.
 6. 대상 지정 틀에서 대상 본인이 제출할 수 있는가, 대상이 도중에 탈퇴하면 어떻게 표시하는가.
 7. 파일 한도·허용 형식의 확정값. (음성 길이 검증 문제는 음성 제거로 해당 없음)
 8. (결정됨, B7) **도장은 미션별**(선택지 c). 달력은 그날 `missions[]`의 미션마다 도장을 따로 보여 준다(이미 미션 단위로 계산하고 있었다). 멤버 목록의 `stampedToday`는 "현재 미션 중 하나라도 제출"이다.

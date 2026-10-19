@@ -39,7 +39,7 @@ struct ResultsView: View {
                     LoadFailedView(title: "결과를 불러오지 못했어요") { reload += 1 }
                 }
             } else if let feed, feed.loadedResult != nil {
-                ResultsContent(feed: feed, aggregate: aggregate, myUserID: session.account.userID) { aggregateRetry += 1 }
+                ResultsContent(feed: feed, aggregate: aggregate) { aggregateRetry += 1 }
             } else {
                 Color.bg
             }
@@ -80,7 +80,7 @@ struct ResultsView: View {
             }
             return
         }
-        // 달력에서 연 지난 미션은 밸런스 선택지·슬라이더 라벨·그림 대상을 모르니 미션 정보를 한 번 받아 와요
+        // 달력에서 연 지난 미션은 밸런스 선택지·그림 대상을 모르니 미션 정보를 한 번 받아 와요
         // (실패하면 라벨 없이, AI 추측은 판정 없이 보여요).
         guard let template, MissionTemplates.isAggregate(template) || template.hasPrefix("DRAW_"),
               store.needsMissionSpec(groupID: groupID, missionID: missionID) else { return }
@@ -109,7 +109,6 @@ struct ResultsView: View {
 private struct ResultsContent: View {
     let feed: ResultFeed
     let aggregate: AggregateLoad
-    let myUserID: Int
     let onRetryAggregate: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -130,8 +129,7 @@ private struct ResultsContent: View {
                 VStack(alignment: .leading, spacing: 0) {
                     title
                     if MissionTemplates.isAggregate(result.template) {
-                        AggregateCard(load: aggregate, spec: result.spec, members: feed.members, myUserID: myUserID,
-                                      onRetry: onRetryAggregate)
+                        AggregateCard(load: aggregate, spec: result.spec, onRetry: onRetryAggregate)
                             .padding(.bottom, 20)
                     }
                     content
@@ -172,7 +170,7 @@ private struct ResultsContent: View {
         switch result.type {
         case .photo: photoFeed
         case .draw: drawingGrid
-        case .write, .slider: answerCards
+        case .write: answerCards
         }
     }
 

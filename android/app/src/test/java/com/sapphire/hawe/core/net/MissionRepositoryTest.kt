@@ -60,17 +60,17 @@ class MissionRepositoryTest {
             assertNull(repo.current(7L, 8L).mission)
             server.enqueue(MockResponse().setBody("""{"date":"2026-10-12","dailyMissionCount":1,"missions":[{
                 "missionId":11,"groupId":7,"slotNo":1,"number":1,"content":"새 미션","category":"일상",
-                "template":"FUTURE","media":"SLIDER","publishedAt":"2026-10-12T09:00:00+09:00",
+                "template":"FUTURE","media":"TEXT","publishedAt":"2026-10-12T09:00:00+09:00",
                 "deadlineAt":"2026-10-12T23:00:00+09:00","closesAt":"2026-10-13T09:00:00+09:00",
                 "submittedByMe":false,"members":[]}]}"""))
             val mission = repo.current(7L, 8L).mission!!
-            // 슬라이더 매체는 알지만 모르는 틀(나중에 서버가 켤 새 틀)은 "앱 업데이트" 안내 대상
-            assertEquals(MissionType.SLIDER, mission.type)
+            // 매체는 알지만 모르는 틀(나중에 서버가 켤 새 틀)은 "앱 업데이트" 안내 대상
+            assertEquals(MissionType.WRITE, mission.type)
             assertFalse(supportsTemplate(mission.template))
             assertNull(mission.spec.seconds)
             assertEquals(MissionType.WRITE, mediaToType("TEXT"))
             assertEquals(MissionType.PHOTO, mediaToType("PHOTO"))
-            assertEquals(MissionType.SLIDER, mediaToType("SLIDER"))
+            assertNull(mediaToType("SLIDER"))  // 슬라이더도 없앴다
             assertNull(mediaToType("VOICE"))  // 음성은 없앴다 — 예전 서버가 보내도 "열 수 없는 미션"
             assertNull(mediaToType("DICE"))
             // 예전 음성 미션 행은 서버가 media: null 로 보내도 읽혀야 한다(목록 전체가 실패하면 안 됨)
@@ -136,31 +136,17 @@ class MissionRepositoryTest {
 
             // 지난 미션 한 개(달력에서 연 결과 화면용)
             server.enqueue(MockResponse().setBody("""{"missionId":21,"groupId":7,"slotNo":2,"number":6,
-                "content":"민트초코, 어디쯤?","category":"일상","template":"SLIDER_TASTE","media":"SLIDER",
-                "params":{"topic":"민트초코","left":"별로","right":"최고"},
+                "content":"냉장고가 아이돌로 데뷔한다면?","category":"유머","template":"DRAW_A_TO_B","media":"DRAW",
+                "params":{"a":"냉장고","b":"아이돌"},
                 "publishedAt":"2026-10-10T09:00:00+09:00","deadlineAt":"2026-10-10T23:00:00+09:00",
                 "closesAt":"2026-10-11T09:00:00+09:00","submittedByMe":true,"members":[{"userId":8,"submitted":true}]}"""))
-            val taste = repo.mission(21L)
+            val past = repo.mission(21L)
             assertEquals("/api/missions/21", server.takeRequest().path)
-            assertEquals(MissionType.SLIDER, taste.type)
-            assertEquals("민트초코", taste.spec.topic)
-            assertEquals("민트초코", taste.spec.sliderQuestion)
-            assertEquals("별로", taste.spec.left)
-            assertEquals("최고", taste.spec.right)
-            assertNull(taste.spec.question)
-            assertTrue(taste.submittedByMe)
+            assertEquals(MissionType.DRAW, past.type)
+            assertEquals("냉장고", past.spec.drawFrom)
+            assertEquals("아이돌", past.spec.drawTo)
+            assertTrue(past.submittedByMe)
         }
-    }
-
-    @Test fun sliderQuestionPrefersQuestion() {
-        val spec = paramsToSpec(buildJsonObject {
-            put("question", JsonPrimitive("오늘 컨디션"))
-            put("left", JsonPrimitive("방전"))
-            put("right", JsonPrimitive("풀충전"))
-        })
-        assertEquals("오늘 컨디션", spec.sliderQuestion)
-        assertEquals("방전", spec.left)
-        assertNull(spec.optionA)
     }
 
     @Test fun drawSubjectAndTargetParams() {

@@ -124,12 +124,6 @@ public class SubmissionService {
                 if (!"A".equals(choice) && !"B".equals(choice)) invalid("A와 B 중 하나를 골라 주세요");
                 caption = optionalCaption(caption);
             }
-            case "SLIDER_POSITION", "SLIDER_TASTE" -> number = integer(fields, "number", 0, 100, "0~100 사이로 골라 주세요");
-            case "SLIDER_CONSENSUS" -> {
-                number = integer(fields, "number", 0, 100, "내 위치를 0~100 사이로 골라 주세요");
-                int guess = integer(fields, "guess", 0, 100, "예상 평균을 0~100 사이로 골라 주세요");
-                answerData = json.writeValueAsString(Map.of("guess", guess));
-            }
             case "PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "DRAW_SKETCH", "DRAW_A_TO_B" -> {
                 MultipartFile file = files.getFirst("file");
                 if (file == null || file.isEmpty()) invalid("파일을 첨부해 주세요");
@@ -234,8 +228,6 @@ public class SubmissionService {
             case "TEXT_ONE_WORD" -> Set.of("text", "caption");
             case "TEXT_REVIEW" -> Set.of("number", "text");
             case "TEXT_BALANCE" -> Set.of("choice", "caption");
-            case "SLIDER_POSITION", "SLIDER_TASTE" -> Set.of("number");
-            case "SLIDER_CONSENSUS" -> Set.of("number", "guess");
             default -> null;
         };
     }
@@ -299,17 +291,15 @@ public class SubmissionService {
             AiReviewResponse aiReview) {
         if (row == null) throw new IllegalStateException("Inserted submission was not found");
         String text = null;
-        Integer guess = null;
         if (row.getAnswerData() != null) try {
             Map<?, ?> answer = json.readValue(row.getAnswerData(), Map.class);
             if (answer.get("text") instanceof String value) text = value;
-            if (answer.get("guess") instanceof Number value) guess = value.intValue();
         } catch (Exception ignored) { }
         return new SubmissionResponse(row.getId(), row.getMissionId(),
                 new MemberProfileResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
                         row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl())),
                 row.getTemplate(), row.getMediaUrl() == null ? null : storage.publicUrl(row.getMediaUrl()),
-                row.getMediaType(), row.getCaption(), text, row.getNumberValue(), row.getChoiceValue(), guess,
+                row.getMediaType(), row.getCaption(), text, row.getNumberValue(), row.getChoiceValue(),
                 reactions, commentCount, aiReview, SeoulTime.toOffset(row.getSubmittedAt()), row.isLate());
     }
 }

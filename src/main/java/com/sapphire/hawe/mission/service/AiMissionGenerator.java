@@ -42,7 +42,7 @@ public class AiMissionGenerator {
     static final String SERVER_GUIDE = "classpath:mission-ai/server-guide.txt";
     static final Map<String, String> RELATIONS = Map.of("COUPLE", "연인", "FAMILY", "가족", "FRIEND", "친구",
             "RIVAL", "웬수", "CASUAL", "그저그런사이");
-    static final Map<String, String> MEDIA = Map.of("PHOTO", "사진", "TEXT", "글", "DRAW", "그림", "SLIDER", "슬라이더");
+    static final Map<String, String> MEDIA = Map.of("PHOTO", "사진", "TEXT", "글", "DRAW", "그림");
     // 도구 정의는 바뀌지 않게 둔다 (시스템 프롬프트와 함께 캐시된다). 틀별 빈칸은 입력 메시지에 적는다
     static final Map<String, Object> TOOL = linked(
             "name", TOOL_NAME,

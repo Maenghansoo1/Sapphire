@@ -62,9 +62,6 @@ class MissionFormatTest {
         assertEquals("내 미션을 올리면 친구들의 글이 열려요.", lockNoticeText(MissionType.WRITE, MissionTemplates.TEXT_ONE_WORD))
         assertEquals("내 답을 올리면 친구들의 답과 그룹 결과가 열려요.",
             lockNoticeText(MissionType.WRITE, MissionTemplates.TEXT_BALANCE))
-        assertEquals("내 답을 올리면 친구들의 답과 그룹 결과가 열려요.",
-            lockNoticeText(MissionType.SLIDER, MissionTemplates.SLIDER_TASTE))
-        assertEquals("내 미션을 올리면 친구들의 슬라이더가 열려요.", lockNoticeText(MissionType.SLIDER))
         assertEquals("민준님을 콕 찔렀어요", pokeToastText("민준"))
         assertEquals("민준님을 콕 찔렀어요", pokeSentText(PokeKind.POKE, "민준"))
         assertEquals(listOf("콕"), PokeKind.entries.map(::pokeButtonLabel))
@@ -84,15 +81,10 @@ class MissionFormatTest {
 
     @Test fun templateGuideAndButtonCopy() {
         val balance = MissionSpec(optionA = "짜장면", optionB = "짬뽕")
-        val slider = MissionSpec(question = "오늘 컨디션", left = "방전", right = "풀충전")
         assertEquals("띄어쓰기 없이 한 단어로 남겨요", templateGuideText(MissionTemplates.TEXT_ONE_WORD, MissionSpec()))
         assertEquals("별점 1~5개와 한 줄 후기를 남겨요", templateGuideText(MissionTemplates.TEXT_REVIEW, MissionSpec()))
         assertEquals("‘짜장면’ vs ‘짬뽕’ 둘 중 하나를 골라요", templateGuideText(MissionTemplates.TEXT_BALANCE, balance))
         assertEquals("둘 중 하나를 골라요", templateGuideText(MissionTemplates.TEXT_BALANCE, MissionSpec(optionA = "짜장면")))
-        assertEquals("‘방전’ ↔ ‘풀충전’ 사이에서 내 위치를 골라요", templateGuideText(MissionTemplates.SLIDER_POSITION, slider))
-        assertEquals("‘방전’ ↔ ‘풀충전’ 사이에서 내 위치를 골라요", templateGuideText(MissionTemplates.SLIDER_TASTE, slider))
-        assertEquals("내 위치를 골라요", templateGuideText(MissionTemplates.SLIDER_TASTE, MissionSpec(left = " ", right = "최고")))
-        assertEquals("내 위치와 우리 그룹 평균을 함께 예측해요", templateGuideText(MissionTemplates.SLIDER_CONSENSUS, slider))
         // 기존 틀은 주제 문장만으로 충분해서 안내가 없어요
         assertNull(templateGuideText(MissionTemplates.TEXT_ACROSTIC, MissionSpec(word = "퇴근길")))
         assertNull(templateGuideText(MissionTemplates.PHOTO_NOW, MissionSpec()))
@@ -110,12 +102,11 @@ class MissionFormatTest {
 
         assertEquals("하나 고르기", missionActionTitle(MissionType.WRITE, MissionTemplates.TEXT_BALANCE))
         assertEquals("글 쓰기", missionActionTitle(MissionType.WRITE, MissionTemplates.TEXT_REVIEW))
-        assertEquals("슬라이더 정하기", missionActionTitle(MissionType.SLIDER, MissionTemplates.SLIDER_POSITION))
         assertEquals("사진 찍기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_NOW))
         assertEquals("갤러리 둘러보기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_GALLERY))
         assertEquals("사진 찍기", missionActionTitle(MissionType.PHOTO, MissionTemplates.PHOTO_COLOR))
         assertEquals("결과 보기", resultsActionTitle(MissionTemplates.TEXT_BALANCE))
-        assertEquals("결과 보기", resultsActionTitle(MissionTemplates.SLIDER_CONSENSUS))
+        assertEquals("작품 보기", resultsActionTitle("SLIDER_CONSENSUS"))  // 없앤 슬라이더는 결과 카드가 없어요
         assertEquals("작품 보기", resultsActionTitle(MissionTemplates.TEXT_ONE_WORD))
         assertEquals("작품 보기", resultsActionTitle(MissionTemplates.DRAW_SKETCH))
         assertEquals("앱을 업데이트하면 이 미션을 할 수 있어요", UNSUPPORTED_MISSION_TEXT)

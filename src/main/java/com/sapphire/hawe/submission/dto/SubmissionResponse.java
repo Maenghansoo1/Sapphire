@@ -8,6 +8,6 @@ import java.util.List;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record SubmissionResponse(Long id, Long missionId, MemberProfileResponse author, String template,
-        String mediaUrl, String mediaType, String caption, String text, Integer number, String choice, Integer guess,
+        String mediaUrl, String mediaType, String caption, String text, Integer number, String choice,
         List<ReactionSummary> reactions, int commentCount, AiReviewResponse aiReview, OffsetDateTime submittedAt,
         @JsonProperty("isLate") boolean isLate) { }

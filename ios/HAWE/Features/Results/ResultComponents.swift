@@ -136,7 +136,7 @@ struct AiReviewLine: View {
     }
 }
 
-/// 제출물 본문. 새 틀은 틀별 모양(한 단어+이유, 별점+후기, 선택+이유, 슬라이더 위치)이고,
+/// 제출물 본문. 새 틀은 틀별 모양(한 단어+이유, 별점+후기, 선택+이유)이고,
 /// 그 밖의 글 틀은 지금까지처럼 글만 보여요. `large` 는 상세 화면용 큰 글씨.
 struct TemplateAnswer: View {
     let submission: Submission
@@ -174,14 +174,6 @@ struct TemplateAnswer: View {
                 if let caption = submission.caption {
                     bodyText(caption, size: bodySize)
                 }
-            }
-        case MissionTemplates.sliderPosition, MissionTemplates.sliderTaste:
-            SliderAnswer(label: nil, value: submission.number, spec: spec, large: large)
-        case MissionTemplates.sliderConsensus:
-            VStack(alignment: .leading, spacing: 16) {
-                // 두 막대는 같은 눈금이라 양 끝 라벨은 아래에 한 번만
-                SliderAnswer(label: "내 위치", value: submission.number, spec: spec, large: large, showsEndLabels: false)
-                SliderAnswer(label: "평균 예측", value: submission.guess, spec: spec, large: large)
             }
         default:
             Text(submission.text ?? "")
@@ -221,39 +213,6 @@ private struct BalancePick: View {
                 .foregroundStyle(.ink)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-/// 읽기 전용 슬라이더 한 줄 (임시 UI): 라벨·값, 막대 위 점, 양 끝 라벨
-private struct SliderAnswer: View {
-    let label: String?
-    let value: Int?
-    let spec: MissionSpec
-    let large: Bool
-    var showsEndLabels = true
-
-    var body: some View {
-        if let value {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(label ?? "")
-                        .font(.caption13)
-                        .foregroundStyle(.textSecondary)
-                    Spacer()
-                    Text("\(value)")
-                        .font(.plex(large ? 24 : 18, .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(.ink)
-                }
-                HSliderTrack(marks: [HSliderMark(value: value, color: .accent, size: large ? 18 : 14)])
-                if showsEndLabels {
-                    HSliderEndLabels(left: spec.left, right: spec.right)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel([label, "\(value)", spec.left.map { "왼쪽 \($0)" }, spec.right.map { "오른쪽 \($0)" }]
-                .compactMap { $0 }.joined(separator: ", "))
         }
     }
 }

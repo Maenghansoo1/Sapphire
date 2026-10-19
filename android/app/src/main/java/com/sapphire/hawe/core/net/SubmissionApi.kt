@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
     val author: SubmissionAuthorDto, val template: String, val mediaUrl: String? = null,
     val mediaType: String? = null,
     val caption: String? = null, val text: String? = null, val number: Int? = null,
-    val choice: String? = null, val guess: Int? = null, val submittedAt: String,
+    val choice: String? = null, val submittedAt: String,
     val isLate: Boolean = false, val reactions: List<ReactionDto>? = null, val commentCount: Int = 0,
     val aiReview: AiReviewDto? = null)
 
@@ -33,12 +33,7 @@ import kotlinx.serialization.Serializable
     val size: Int, val totalPages: Int, val totalElements: Long)
 
 @Serializable internal data class MissionResultDto(val template: String, val totalCount: Int = 0,
-    val choices: List<ChoiceCountDto>? = null, val myChoice: String? = null,
-    val average: Double? = null, val distribution: List<NumberEntryDto>? = null, val myNumber: Int? = null,
-    val diffFromAverage: Double? = null, val ranking: List<RankingEntryDto>? = null,
-    val winnerUserIds: List<Long>? = null)
+    val choices: List<ChoiceCountDto>? = null, val myChoice: String? = null)
 
 @Serializable internal data class ChoiceCountDto(val choice: String, val count: Int = 0)
-@Serializable internal data class NumberEntryDto(val userId: Long, val nickname: String = "", val number: Int)
-@Serializable internal data class RankingEntryDto(val userId: Long, val nickname: String = "", val guess: Int,
-    val diff: Double)
+

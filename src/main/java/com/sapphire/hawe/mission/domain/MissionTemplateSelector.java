@@ -17,7 +17,7 @@ public final class MissionTemplateSelector {
             MissionTemplate.DRAW_SKETCH, MissionTemplate.DRAW_A_TO_B,
             MissionTemplate.TEXT_ACROSTIC, MissionTemplate.TEXT_FILL_BLANK);
     // 매체 순서는 고정한다 — 섞는 시드가 같으면 풀에 같은 매체가 있을 때 같은 순서가 나온다
-    private static final List<String> MEDIA = List.of("PHOTO", "TEXT", "DRAW", "SLIDER");
+    private static final List<String> MEDIA = List.of("PHOTO", "TEXT", "DRAW");
 
     private MissionTemplateSelector() {
     }

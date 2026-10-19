@@ -23,7 +23,7 @@ enum class HIcon(@DrawableRes val drawable: Int) {
     PLUS(R.drawable.ic_plus), REDO(R.drawable.ic_redo), TEXT(R.drawable.ic_text), UNDO(R.drawable.ic_undo),
     // 임시 이미지: Figma 디자인이 나오면 같은 이름의 drawable 만 바꾼다
     POKE_TEMP(R.drawable.ic_poke_temp),
-    SLIDER_TEMP(R.drawable.ic_slider_temp), BADGE_FIT_TEMP(R.drawable.ic_badge_fit_temp),
+    BADGE_FIT_TEMP(R.drawable.ic_badge_fit_temp),
     AI_GUESS_TEMP(R.drawable.ic_ai_guess_temp), INSIGHT_TEMP(R.drawable.ic_insight_temp),
 }
 

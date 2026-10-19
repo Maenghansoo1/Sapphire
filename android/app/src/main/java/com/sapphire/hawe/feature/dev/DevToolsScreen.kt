@@ -359,7 +359,7 @@ fun DevToolsScreen(session: AppSession, store: DataStore, dev: DevRepository,
 
 private val templates = listOf("PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "TEXT_ACROSTIC",
     "TEXT_ONE_WORD", "TEXT_REVIEW", "TEXT_BALANCE", "TEXT_FILL_BLANK", "DRAW_SKETCH",
-    "DRAW_A_TO_B", "SLIDER_POSITION", "SLIDER_TASTE", "SLIDER_CONSENSUS")
+    "DRAW_A_TO_B")
 private val stickers = listOf("heart", "laugh", "wow", "sad", "fire")
 
 @Composable private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {

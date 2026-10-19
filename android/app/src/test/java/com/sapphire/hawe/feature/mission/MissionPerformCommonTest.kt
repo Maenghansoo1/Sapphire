@@ -27,14 +27,10 @@ class MissionPerformCommonTest {
         listOf(MissionTemplates.TEXT_ONE_WORD, MissionTemplates.TEXT_REVIEW, MissionTemplates.TEXT_BALANCE).forEach {
             assertEquals(PerformEntryDecision.Allow(MissionType.WRITE), performEntryDecision(mission(template = it), null))
         }
-        listOf(MissionTemplates.SLIDER_POSITION, MissionTemplates.SLIDER_TASTE, MissionTemplates.SLIDER_CONSENSUS).forEach {
-            assertEquals(PerformEntryDecision.Allow(MissionType.SLIDER),
-                performEntryDecision(mission(type = MissionType.SLIDER, template = it), MissionType.SLIDER))
-        }
         // 서버가 나중에 켤 2차 틀(매체는 알아도 화면이 없음)·빈 틀은 열지 않아요
         assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(template = "TEXT_RELAY"), null))
-        assertEquals(PerformEntryDecision.Unsupported,
-            performEntryDecision(mission(type = MissionType.SLIDER, template = "SLIDER_CLUE_BAR"), null))
+        // 없앤 슬라이더 틀이 예전 서버에서 와도 열지 않아요
+        assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(template = "SLIDER_POSITION"), null))
         assertEquals(PerformEntryDecision.Unsupported, performEntryDecision(mission(template = ""), null))
         // 이미 냈으면 틀과 상관없이 "이미 냈어요"
         assertEquals(PerformEntryDecision.AlreadySubmitted, performEntryDecision(mission(true, template = "TEXT_RELAY"), null))

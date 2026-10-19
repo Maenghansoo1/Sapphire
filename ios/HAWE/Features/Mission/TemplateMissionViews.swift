@@ -1,7 +1,7 @@
 import SwiftUI
 
-// 새 미션 틀 6종(A4) 수행 화면 — 한 단어 일기 · 한 줄 후기 · 밸런스 게임 · 슬라이더 3종.
-// 디자인이 없어 별점(★/☆), A/B 카드, 슬라이더는 임시 UI 예요 (Figma 확정 시 교체).
+// 새 미션 틀(A4) 수행 화면 — 한 단어 일기 · 한 줄 후기 · 밸런스 게임.
+// 디자인이 없어 별점(★/☆), A/B 카드는 임시 UI 예요 (Figma 확정 시 교체).
 
 /// 한 단어 일기(TEXT_ONE_WORD): 단어 하나(20자, 띄어쓰기 없음) + 이유(선택, 100자)
 struct OneWordMissionView: View {
@@ -148,86 +148,6 @@ private struct BalanceOption: View {
     }
 }
 
-/// 슬라이더 3종(SLIDER_POSITION·SLIDER_TASTE·SLIDER_CONSENSUS): 양 끝 라벨 사이 0~100, 기본 50.
-/// 다수결 예측은 "내 위치"와 "그룹 평균 예측" 슬라이더 두 개예요.
-struct SliderMissionView: View {
-    let topic: String
-    var template = MissionTemplates.sliderPosition
-    var spec = MissionSpec()
-    var onSubmit: (SubmissionContent) async -> Bool = { _ in true }
-
-    @State private var state = SliderState()
-
-    private var consensus: Bool { template == MissionTemplates.sliderConsensus }
-
-    var body: some View {
-        TemplateMissionScaffold(
-            type: .slider, topic: topic,
-            guide: MissionFormat.templateGuideText(template, spec: spec),
-            hasDraft: state.touched, canSubmit: true,
-            onSubmit: {
-                var answer = state
-                answer.consensus = consensus
-                return await onSubmit(.scalar(answer.content))
-            }
-        ) {
-            VStack(alignment: .leading, spacing: 16) {
-                if let question = spec.sliderQuestion.nonBlank, question != topic {
-                    Text(question)
-                        .font(.plex(16, .semibold))
-                        .foregroundStyle(.ink)
-                        .padding(.bottom, -4)
-                }
-                SliderInput(label: consensus ? "내 위치" : nil, value: state.number, spec: spec) {
-                    state.number = $0
-                    state.touched = true
-                }
-                if consensus {
-                    SliderInput(label: "우리 그룹 평균은 어디쯤일까?", value: state.guess, spec: spec) {
-                        state.guess = $0
-                        state.touched = true
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// 임시 UI: 기본 슬라이더를 디자인 토큰 색으로 맞췄어요 (Figma 확정 시 교체).
-private struct SliderInput: View {
-    let label: String?
-    let value: Int
-    let spec: MissionSpec
-    let onChange: (Int) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(label ?? "")
-                    .font(.fieldLabel)
-                    .foregroundStyle(.textSecondary)
-                Spacer(minLength: 12)
-                Text("\(value)")
-                    .font(.plex(26, .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.ink)
-            }
-            Slider(
-                value: Binding(get: { Double(value) }, set: { onChange(TemplateInput.sliderValue($0)) }),
-                in: 0...Double(TemplateLimits.sliderMax), step: 1
-            )
-            .tint(.accent)
-            .accessibilityLabel([label, spec.left.map { "왼쪽 \($0)" }, spec.right.map { "오른쪽 \($0)" }].compactMap { $0 }.joined(separator: ", "))
-            HSliderEndLabels(left: spec.left, right: spec.right)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .background(.surface, in: RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
-    }
-}
-
-// MARK: - 공통
-
 /// 새 틀 수행 화면의 공통 뼈대: 닫기 헤더, 제목·안내, 입력, 올리기 버튼
 struct TemplateMissionScaffold<Content: View>: View {
     let type: MissionType
@@ -338,9 +258,4 @@ struct MissionTextBox: View {
 
 #Preview("밸런스") {
     BalanceMissionView(topic: "평생 하나만 먹는다면?", spec: MissionSpec(optionA: "짜장면", optionB: "짬뽕"))
-}
-
-#Preview("다수결 예측") {
-    SliderMissionView(topic: "우리 그룹은 아침형일까?", template: MissionTemplates.sliderConsensus,
-                      spec: MissionSpec(left: "아침형", right: "저녁형"))
 }

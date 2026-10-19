@@ -12,10 +12,7 @@ public enum MissionTemplate {
     TEXT_BALANCE("TEXT", "밸런스 게임", Map.of("optionA", "string", "optionB", "string"), Map.of("choice", "A|B(required)", "caption", "string(optional)")),
     TEXT_FILL_BLANK("TEXT", "빈칸 채우기", Map.of("sentence", "string(one ___)", "targetUserId", "long(server-assigned)"), Map.of("text", "string(required)")),
     DRAW_SKETCH("DRAW", "30초 스케치", Map.of("subject", "string(optional)", "targetUserId", "long(server-assigned, optional)", "seconds", "int"), Map.of("file", "image(required)")),
-    DRAW_A_TO_B("DRAW", "A를 B로", Map.of("a", "string(optional)", "targetUserId", "long(server-assigned, optional)", "b", "string"), Map.of("file", "image(required)")),
-    SLIDER_POSITION("SLIDER", "내 위치는?", Map.of("question", "string", "left", "string", "right", "string"), Map.of("number", "int(0..100, required)")),
-    SLIDER_TASTE("SLIDER", "취향 막대", Map.of("topic", "string", "left", "string", "right", "string"), Map.of("number", "int(0..100, required)")),
-    SLIDER_CONSENSUS("SLIDER", "다수결 예측", Map.of("question", "string", "left", "string", "right", "string"), Map.of("number", "int(0..100, required)", "guess", "int(0..100, required)"));
+    DRAW_A_TO_B("DRAW", "A를 B로", Map.of("a", "string(optional)", "targetUserId", "long(server-assigned, optional)", "b", "string"), Map.of("file", "image(required)"));
 
     private final String media;
     private final String name;

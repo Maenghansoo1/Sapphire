@@ -132,8 +132,6 @@ public class DevActionService {
             case "TEXT_REVIEW" -> { fields.add("number", "4"); fields.add("text", "재미있었어요"); }
             case "TEXT_BALANCE" -> fields.add("choice", "A");
             case "TEXT_FILL_BLANK" -> fields.add("text", "함께한 하루였어요");
-            case "SLIDER_POSITION", "SLIDER_TASTE" -> fields.add("number", "55");
-            case "SLIDER_CONSENSUS" -> { fields.add("number", "55"); fields.add("guess", "50"); }
             case "PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "DRAW_SKETCH", "DRAW_A_TO_B" ->
                     files.add("file", new ImageFile(samplePng()));
             default -> throw new BusinessException(CommonErrorCode.VALIDATION_ERROR);

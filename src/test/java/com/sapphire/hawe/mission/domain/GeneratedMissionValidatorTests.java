@@ -101,14 +101,9 @@ class GeneratedMissionValidatorTests {
         rejects(raw, TEXT_ACROSTIC, false);
     }
 
-    @Test void choicesAndSliderEndsMustDiffer() {
+    @Test void balanceChoicesMustDiffer() {
         rejects(withParams(TEXT_BALANCE, Map.of("optionA", "평생 여름", "optionB", " 평생여름! ")), TEXT_BALANCE, false);
         rejects(withParams(TEXT_BALANCE, Map.of("optionA", "가".repeat(21), "optionB", "평생 겨울")), TEXT_BALANCE, false);
-        for (MissionTemplate slider : List.of(SLIDER_POSITION, SLIDER_TASTE, SLIDER_CONSENSUS)) {
-            Map<String, Object> params = new HashMap<>(params(valid(slider)));
-            params.put("right", params.get("left"));
-            rejects(withParams(slider, params), slider, false);
-        }
     }
 
     @Test void fillBlankHasExactlyOneBlankAndTheTarget() {
@@ -194,10 +189,6 @@ class GeneratedMissionValidatorTests {
             case TEXT_FILL_BLANK -> raw("[대상]의 숨겨진 재능은 ___. 다들 채워 줘", "sentence", "[대상]의 숨겨진 재능은 ___");
             case DRAW_SKETCH -> raw("30초 안에 고양이 그리기. 시작!", "subject", "고양이", "seconds", 30);
             case DRAW_A_TO_B -> raw("우리 집 냉장고가 아이돌로 데뷔한다면?", "a", "냉장고", "b", "아이돌");
-            case SLIDER_POSITION -> raw("오늘 컨디션 몇 %? 방전 ↔ 풀충전", "question", "오늘 컨디션", "left", "방전", "right", "풀충전");
-            case SLIDER_TASTE -> raw("민트초코, 내 취향은 어디쯤?", "topic", "민트초코", "left", "극혐", "right", "최애");
-            case SLIDER_CONSENSUS -> raw("우리 그룹은 아침형일까 저녁형일까?", "question", "우리 그룹은 아침형? 저녁형?",
-                    "left", "아침형", "right", "저녁형");
         };
     }
 

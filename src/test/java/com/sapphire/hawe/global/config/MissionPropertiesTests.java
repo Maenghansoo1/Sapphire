@@ -32,10 +32,10 @@ class MissionPropertiesTests {
     void missingPoolFallsBackToMvpAndEmptyPoolIsRejected() {
         assertEquals(MissionTemplateSelector.MVP_POOL, create(null).enabledTemplates());
         assertThrows(IllegalArgumentException.class, () -> create(List.of()));
-        List<MissionTemplate> configured = new ArrayList<>(List.of(MissionTemplate.SLIDER_TASTE));
+        List<MissionTemplate> configured = new ArrayList<>(List.of(MissionTemplate.TEXT_BALANCE));
         MissionProperties copied = create(configured);
         configured.add(MissionTemplate.PHOTO_NOW);
-        assertEquals(List.of(MissionTemplate.SLIDER_TASTE), copied.enabledTemplates());
+        assertEquals(List.of(MissionTemplate.TEXT_BALANCE), copied.enabledTemplates());
     }
 
     private static MissionProperties create(List<MissionTemplate> pool) {

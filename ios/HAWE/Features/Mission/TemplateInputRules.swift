@@ -8,8 +8,6 @@ enum TemplateLimits {
     static let review = 100
     static let balanceReason = 200
     static let stars = 5
-    static let sliderMax = 100
-    static let sliderDefault = 50
 }
 
 enum TemplateInput {
@@ -46,11 +44,6 @@ enum TemplateInput {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-
-    /// 슬라이더 값은 0~100 정수 (서버는 소수를 거부해요).
-    static func sliderValue(_ raw: Double) -> Int {
-        min(max(Int(raw.rounded()), 0), TemplateLimits.sliderMax)
-    }
 }
 
 struct OneWordState: Equatable {
@@ -82,14 +75,4 @@ struct BalanceState: Equatable {
     var hasDraft: Bool { choice != nil || !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var counter: String { "\(TemplateInput.codePointCount(reason)) / \(TemplateLimits.balanceReason)" }
     var content: ScalarAnswer { ScalarAnswer(choice: choice, caption: TemplateInput.optionalCaption(reason)) }
-}
-
-/// 슬라이더는 늘 값이 있어서(기본 50) 바로 올릴 수 있어요. 다수결 예측은 내 위치와 평균 예측 두 값.
-struct SliderState: Equatable {
-    var number = TemplateLimits.sliderDefault
-    var guess = TemplateLimits.sliderDefault
-    var consensus = false
-    var touched = false
-
-    var content: ScalarAnswer { ScalarAnswer(number: number, guess: consensus ? guess : nil) }
 }

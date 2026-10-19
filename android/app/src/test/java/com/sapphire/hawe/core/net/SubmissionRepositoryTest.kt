@@ -2,10 +2,8 @@ package com.sapphire.hawe.core.net
 
 import com.sapphire.hawe.core.data.SubmissionContent
 import com.sapphire.hawe.core.model.AiReview
-import com.sapphire.hawe.core.model.ConsensusRank
 import com.sapphire.hawe.core.model.MissionAggregate
 import com.sapphire.hawe.core.model.MissionType
-import com.sapphire.hawe.core.model.SliderPoint
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -107,14 +105,12 @@ class SubmissionRepositoryTest {
 
     @Test fun scalarSubmissionsSendOnlyTemplateFields() = runBlocking {
         val cases = listOf(
-            // 한 단어(이유 있음/없음), 후기, 밸런스(이유 없음), 슬라이더, 다수결 예측
+            // 한 단어(이유 있음/없음), 후기, 밸런스(이유 없음)
             SubmissionContent.Scalar(text = "몰입", caption = "하루 종일 코딩") to
                 mapOf("text" to "몰입", "caption" to "하루 종일 코딩"),
             SubmissionContent.Scalar(text = "피곤") to mapOf("text" to "피곤"),
             SubmissionContent.Scalar(number = 4, text = "또 먹고 싶다") to mapOf("number" to "4", "text" to "또 먹고 싶다"),
             SubmissionContent.Scalar(choice = "B") to mapOf("choice" to "B"),
-            SubmissionContent.Scalar(number = 0) to mapOf("number" to "0"),
-            SubmissionContent.Scalar(number = 80, guess = 60) to mapOf("number" to "80", "guess" to "60"),
         )
         MockWebServer().use { server ->
             repeat(cases.size) { server.enqueue(MockResponse().setResponseCode(201).setBody(response(template = "TEXT_REVIEW", media = null))) }
@@ -130,9 +126,9 @@ class SubmissionRepositoryTest {
         }
     }
 
-    @Test fun mapsNewTemplateFieldsAndSliderType() = runBlocking {
+    @Test fun mapsNewTemplateFieldsAndSkipsRemovedSlider() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setResponseCode(201).setBody("""{"id":101,"missionId":12,"author":{"userId":3,"nickname":"서연"},"template":"SLIDER_CONSENSUS","number":80,"guess":60,"reactions":[],"commentCount":0,"submittedAt":"2026-10-13T21:00:00+09:00","isLate":false}"""))
+            server.enqueue(MockResponse().setResponseCode(201).setBody("""{"id":101,"missionId":12,"author":{"userId":3,"nickname":"서연"},"template":"TEXT_REVIEW","number":4,"text":"또 먹고 싶다","reactions":[],"commentCount":0,"submittedAt":"2026-10-13T21:00:00+09:00","isLate":false}"""))
             server.enqueue(MockResponse().setBody("""{"content":[
                 {"id":1,"missionId":13,"author":{"userId":3,"nickname":"서연"},"template":"TEXT_BALANCE","choice":"A","caption":"면이 좋아","submittedAt":"2026-10-13T21:00:00+09:00"},
                 {"id":2,"missionId":13,"author":{"userId":4,"nickname":"지우"},"template":"TEXT_REVIEW","text":"최고","number":5,"submittedAt":"2026-10-13T21:01:00+09:00"},
@@ -140,42 +136,37 @@ class SubmissionRepositoryTest {
                 {"id":4,"missionId":13,"author":{"userId":6,"nickname":"민준"},"template":"SLIDER_TASTE","number":0,"submittedAt":"2026-10-13T21:03:00+09:00"}],
                 "page":0,"size":100,"totalPages":1,"totalElements":4}"""))
             val repo = SubmissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
-            val consensus = repo.submit(12L, SubmissionContent.Scalar(number = 80, guess = 60), 3L)
-            assertEquals(MissionType.SLIDER, consensus.type)
-            assertEquals("SLIDER_CONSENSUS", consensus.template)
-            assertEquals(80, consensus.number)
-            assertEquals(60, consensus.guess)
-            assertNull(consensus.choice)
-            assertNull(consensus.mediaURL)
+            val review = repo.submit(12L, SubmissionContent.Scalar(number = 4, text = "또 먹고 싶다"), 3L)
+            assertEquals(MissionType.WRITE, review.type)
+            assertEquals("TEXT_REVIEW", review.template)
+            assertEquals(4, review.number)
+            assertNull(review.choice)
+            assertNull(review.mediaURL)
 
-            // 새 틀 제출이 피드에서 사라지면 안 된다(templateType 매핑)
+            // 새 틀 제출이 피드에서 사라지면 안 되고(templateType 매핑), 없앤 슬라이더 제출은 빼요
             val feed = repo.feed(13L, 3L)
-            assertEquals(listOf(1L, 2L, 3L, 4L), feed.map { it.id })
-            assertEquals(listOf(MissionType.WRITE, MissionType.WRITE, MissionType.WRITE, MissionType.SLIDER), feed.map { it.type })
+            assertEquals(listOf(1L, 2L, 3L), feed.map { it.id })
+            assertEquals(listOf(MissionType.WRITE, MissionType.WRITE, MissionType.WRITE), feed.map { it.type })
             assertEquals("A", feed[0].choice)
             assertEquals("면이 좋아", feed[0].caption)
             assertEquals(5, feed[1].number)
             assertEquals("최고", feed[1].text)
             assertEquals("몰입", feed[2].text)
             assertNull(feed[2].caption)
-            assertEquals(0, feed[3].number)
         }
     }
 
     @Test fun resultMapsEachAggregateShape() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"template":"TEXT_BALANCE","totalCount":4,"choices":[{"choice":"A","count":3},{"choice":"B","count":1}],"myChoice":"A"}"""))
-            server.enqueue(MockResponse().setBody("""{"template":"SLIDER_POSITION","totalCount":2,"average":45.0,"distribution":[{"userId":1,"nickname":"몽실이","number":70},{"userId":2,"nickname":"잎사귀","number":20}],"myNumber":70,"diffFromAverage":25.0}"""))
-            server.enqueue(MockResponse().setBody("""{"template":"SLIDER_CONSENSUS","totalCount":3,"average":62.5,"ranking":[{"userId":2,"nickname":"잎사귀","guess":60,"diff":2.5},{"userId":3,"nickname":"서연","guess":65,"diff":2.5},{"userId":1,"nickname":"몽실이","guess":80,"diff":17.5}],"winnerUserIds":[2,3]}"""))
+            server.enqueue(MockResponse().setBody("""{"template":"SLIDER_POSITION","totalCount":2,"average":45.0}"""))
             server.enqueue(MockResponse().setBody("""{"template":"SLIDER_FUTURE","totalCount":1}"""))
             val repo = SubmissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore()))
 
             assertEquals(MissionAggregate.Balance(4, 3, 1, "A"), repo.result(30L))
             assertEquals("/api/missions/30/result", server.takeRequest().path)
-            assertEquals(MissionAggregate.Slider(2, 45.0,
-                listOf(SliderPoint(1L, "몽실이", 70), SliderPoint(2L, "잎사귀", 20)), 70, 25.0), repo.result(31L))
-            assertEquals(MissionAggregate.Consensus(3, 62.5, listOf(ConsensusRank(2L, "잎사귀", 60, 2.5),
-                ConsensusRank(3L, "서연", 65, 2.5), ConsensusRank(1L, "몽실이", 80, 17.5)), setOf(2L, 3L)), repo.result(32L))
+            // 없앤 슬라이더나 앱이 모르는 틀의 결과는 보여 주지 않아요
+            assertNull(repo.result(31L))
             assertNull(repo.result(33L))
         }
     }

@@ -1,6 +1,6 @@
-/// 오늘의 미션 콘텐츠 유형 (서버 `media`: DRAW · PHOTO · TEXT · SLIDER)
+/// 오늘의 미션 콘텐츠 유형 (서버 `media`: DRAW · PHOTO · TEXT)
 enum MissionType: String, CaseIterable, Identifiable, Codable {
-    case draw, photo, write, slider
+    case draw, photo, write
 
     var id: String { rawValue }
 
@@ -9,7 +9,6 @@ enum MissionType: String, CaseIterable, Identifiable, Codable {
         case .draw: "그림"
         case .photo: "사진"
         case .write: "글"
-        case .slider: "슬라이더"
         }
     }
 
@@ -18,14 +17,13 @@ enum MissionType: String, CaseIterable, Identifiable, Codable {
         case .draw: .pencil
         case .photo: .camera
         case .write: .text
-        case .slider: .sliderTemp
         }
     }
 
-    /// "그림이", "슬라이더가"처럼 받침에 맞춘 이름 + 이/가
+    /// "그림이", "글이"처럼 받침에 맞춘 이름 + 이/가
     var subjectForm: String { displayName + KoreanText.josa(displayName, "이", "가") }
 
-    /// "그림을", "슬라이더를"처럼 받침에 맞춘 이름 + 을/를
+    /// "그림을", "글을"처럼 받침에 맞춘 이름 + 을/를
     var objectForm: String { displayName + KoreanText.josa(displayName, "을", "를") }
 }
 

@@ -44,8 +44,8 @@ class MissionTemplateSelectorTests {
         List<MissionTemplate> all = List.of(MissionTemplate.values());
         assertEquals(-4145052931149490977L, single(MissionTemplateSelector.MVP_POOL));
         assertEquals(3092926919537925442L, firstRound(MissionTemplateSelector.MVP_POOL));
-        assertEquals(6152782044319302440L, single(all));
-        assertEquals(8856775955212337386L, firstRound(all));
+        assertEquals(4940000468824773898L, single(all));
+        assertEquals(-7350718843695646376L, firstRound(all));
         assertEquals(List.of(TEXT_FILL_BLANK, TEXT_FILL_BLANK, PHOTO_NOW, DRAW_SKETCH, PHOTO_COLOR, DRAW_SKETCH,
                 PHOTO_COLOR, TEXT_ACROSTIC), java.util.stream.LongStream.rangeClosed(1, 8).mapToObj(groupId ->
                 MissionTemplateSelector.select(groupId, LocalDate.of(2026, 10, 12), 1, 1, Set.of())).toList());
@@ -98,10 +98,10 @@ class MissionTemplateSelectorTests {
         return templates;
     }
 
-    @Test void newTemplatesAddSliderMediaWhenEnabled() {
+    @Test void newTemplatesJoinThePoolWhenEnabled() {
         List<MissionTemplate> pool = new ArrayList<>(MissionTemplateSelector.MVP_POOL);
-        pool.addAll(List.of(TEXT_ONE_WORD, TEXT_REVIEW, TEXT_BALANCE, SLIDER_POSITION, SLIDER_TASTE, SLIDER_CONSENSUS));
-        Set<String> allMedia = Set.of("PHOTO", "TEXT", "DRAW", "SLIDER");
+        pool.addAll(List.of(TEXT_ONE_WORD, TEXT_REVIEW, TEXT_BALANCE));
+        Set<String> allMedia = Set.of("PHOTO", "TEXT", "DRAW");
         Set<MissionTemplate> seen = EnumSet.noneOf(MissionTemplate.class);
         LocalDate date = LocalDate.of(2026, 10, 13);
         for (long groupId = 1; groupId <= 300; groupId++) {
@@ -110,23 +110,23 @@ class MissionTemplateSelectorTests {
             seen.add(first);
             assertNotEquals(first.media(), MissionTemplateSelector.select(groupId, date, 1, 1,
                     Set.of(first.media()), pool).media());
-            // 어제 네 매체를 다 썼으면 제외 규칙을 풀고 고른다
+            // 어제 세 매체를 다 썼으면 제외 규칙을 풀고 고른다
             assertTrue(pool.contains(MissionTemplateSelector.select(groupId, date, 1, 1, allMedia, pool)));
             Set<String> media = new HashSet<>();
-            for (int slot = 1; slot <= 4; slot++)
-                media.add(MissionTemplateSelector.select(groupId, date, slot, 4, Set.of(), pool).media());
+            for (int slot = 1; slot <= 3; slot++)
+                media.add(MissionTemplateSelector.select(groupId, date, slot, 3, Set.of(), pool).media());
             assertEquals(allMedia, media);
         }
         assertEquals(EnumSet.copyOf(pool), seen);
     }
 
     @Test void onlyMediaInThePoolAreUsed() {
-        List<MissionTemplate> pool = List.of(SLIDER_TASTE, PHOTO_COLOR);
+        List<MissionTemplate> pool = List.of(TEXT_REVIEW, PHOTO_COLOR);
         LocalDate date = LocalDate.of(2026, 10, 13);
         for (long groupId = 1; groupId <= 50; groupId++) {
-            assertEquals(PHOTO_COLOR, MissionTemplateSelector.select(groupId, date, 1, 1, Set.of("SLIDER"), pool));
-            assertEquals(SLIDER_TASTE, MissionTemplateSelector.select(groupId, date, 1, 1, Set.of("PHOTO"), pool));
-            assertEquals(Set.of(SLIDER_TASTE, PHOTO_COLOR), Set.of(
+            assertEquals(PHOTO_COLOR, MissionTemplateSelector.select(groupId, date, 1, 1, Set.of("TEXT"), pool));
+            assertEquals(TEXT_REVIEW, MissionTemplateSelector.select(groupId, date, 1, 1, Set.of("PHOTO"), pool));
+            assertEquals(Set.of(TEXT_REVIEW, PHOTO_COLOR), Set.of(
                     MissionTemplateSelector.select(groupId, date, 1, 2, Set.of(), pool),
                     MissionTemplateSelector.select(groupId, date, 2, 2, Set.of(), pool)));
         }

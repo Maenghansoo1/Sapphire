@@ -20,7 +20,7 @@ public final class GeneratedMissionValidator {
     public static final double MAX_SIMILARITY = 0.8;
     public static final String TARGET = "[대상]";
     private static final Set<String> TOP_KEYS = Set.of("content", "category", "params");
-    private static final Set<String> SHORT_KEYS = Set.of("optionA", "optionB", "left", "right");
+    private static final Set<String> SHORT_KEYS = Set.of("optionA", "optionB");
     private static final Pattern HANGUL_3 = Pattern.compile("[가-힣]{3}");
     private static final Pattern BLANKS = Pattern.compile("_{3,}");
     private static final Pattern NUMBER = Pattern.compile("[0-9]{1,3}");
@@ -45,7 +45,6 @@ public final class GeneratedMissionValidator {
                 if (!content.contains(word)) throw new InvalidMission("삼행시 제시어가 문장에 없음");
             }
             case TEXT_BALANCE -> different(params, "optionA", "optionB", "밸런스 두 선택지가 같음");
-            case SLIDER_POSITION, SLIDER_TASTE, SLIDER_CONSENSUS -> different(params, "left", "right", "슬라이더 양 끝이 같음");
             case TEXT_FILL_BLANK -> {
                 String sentence = (String) params.get("sentence");
                 var blanks = BLANKS.matcher(sentence).results().toList();

@@ -85,16 +85,4 @@ class TemplateInputRulesTest {
         assertEquals(SubmissionContent.Scalar(choice = "A", caption = "면이 좋아"), BalanceState("A", "면이 좋아\n").content())
         assertEquals("0 / 200", BalanceState().counter)
     }
-
-    @Test fun sliderAlwaysHasIntegerValues() {
-        assertEquals(50, SliderState().number)
-        assertFalse(SliderState().touched)
-        assertEquals(SubmissionContent.Scalar(number = 50), SliderState().content())
-        assertEquals(SubmissionContent.Scalar(number = 80, guess = 60), SliderState(80, 60, consensus = true).content())
-        assertEquals(SubmissionContent.Scalar(number = 80), SliderState(80, 60, consensus = false).content())
-        assertEquals(0, sliderValue(-3f))
-        assertEquals(100, sliderValue(100.4f))
-        assertEquals(63, sliderValue(62.5f))
-        assertEquals(62, sliderValue(62.49f))
-    }
 }

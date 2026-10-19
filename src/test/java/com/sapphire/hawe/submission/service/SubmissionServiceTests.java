@@ -297,38 +297,22 @@ class SubmissionServiceTests {
                 form("choice", "A", "caption", "가".repeat(201)), form("choice", "A", "text", "이유")));
     }
 
-    @Test void slidersStoreAWholeNumberFromZeroToHundred() {
-        for (String template : List.of("SLIDER_POSITION", "SLIDER_TASTE")) {
-            assertEquals(0, saved(template, form("number", "0")).getNumberValue());
-            SubmissionInsertRow row = saved(template, form("number", "100"));
-            assertEquals(100, row.getNumberValue());
-            assertNull(row.getAnswerData());
-            rejects(template, List.of(form("number", "-1"), form("number", "101"), form("number", "50.0"),
-                    form("number", " 5"), form("number", ""), form("number", "abc"), form("number", "+5"),
-                    form("number", "1000"), form(), form("number", "50", "guess", "50"), form("number", "5", "number", "6")));
-        }
-    }
-
-    @Test void consensusStoresPositionAndGuess() {
-        SubmissionInsertRow row = saved("SLIDER_CONSENSUS", form("number", "70", "guess", "55"));
-        assertEquals(70, row.getNumberValue());
-        assertEquals("{\"guess\":55}", row.getAnswerData());
-        rejects("SLIDER_CONSENSUS", List.of(form("number", "70"), form("guess", "55"), form("number", "70", "guess", "101"),
-                form("number", "70", "guess", "x"), form("number", "70", "guess", "55", "text", "왜")));
+    @Test void removedSliderTemplatesNoLongerAcceptSubmissions() {
+        for (String template : List.of("SLIDER_POSITION", "SLIDER_TASTE", "SLIDER_CONSENSUS"))
+            rejects(template, List.of(form("number", "50"), form("number", "70", "guess", "55")));
     }
 
     @Test void scalarAnswersComeBackInTheResponse() {
         when(submissions.existsByMissionIdAndUserId(1L, 3L)).thenReturn(true);
         SubmissionRow row = feedRow(50L);
-        row.setTemplate("SLIDER_CONSENSUS");
-        row.setNumberValue(70);
-        row.setAnswerData("{\"guess\":55}");
+        row.setTemplate("TEXT_REVIEW");
+        row.setNumberValue(4);
+        row.setAnswerData("{\"text\":\"맛있었어요\"}");
         when(submissions.findDetailById(50L)).thenReturn(row);
         var response = service.detail(3L, 50L);
-        assertEquals(70, response.number());
-        assertEquals(55, response.guess());
+        assertEquals(4, response.number());
+        assertEquals("맛있었어요", response.text());
         assertNull(response.choice());
-        assertNull(response.text());
         row.setTemplate("TEXT_BALANCE");
         row.setNumberValue(null);
         row.setChoiceValue("A");
@@ -336,7 +320,6 @@ class SubmissionServiceTests {
         response = service.detail(3L, 50L);
         assertEquals("A", response.choice());
         assertNull(response.number());
-        assertNull(response.guess());
     }
 
     private static SubmissionRow feedRow(Long id) {

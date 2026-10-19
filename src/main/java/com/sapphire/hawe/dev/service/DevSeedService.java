@@ -48,8 +48,7 @@ import tools.jackson.databind.ObjectMapper;
 public class DevSeedService {
     private static final MissionTemplate[] TEMPLATES = {
             MissionTemplate.TEXT_ACROSTIC, MissionTemplate.TEXT_ONE_WORD, MissionTemplate.TEXT_REVIEW,
-            MissionTemplate.TEXT_BALANCE, MissionTemplate.TEXT_FILL_BLANK, MissionTemplate.SLIDER_POSITION,
-            MissionTemplate.SLIDER_TASTE, MissionTemplate.SLIDER_CONSENSUS };
+            MissionTemplate.TEXT_BALANCE, MissionTemplate.TEXT_FILL_BLANK };
     private static final String[] STICKERS = { "heart", "laugh", "wow", "sad", "fire" };
     private final UserMapper users;
     private final CharacterMapper characters;
@@ -202,8 +201,6 @@ public class DevSeedService {
             case TEXT_ACROSTIC -> Map.of("word", "테스트");
             case TEXT_BALANCE -> Map.of("optionA", "아침", "optionB", "저녁");
             case TEXT_FILL_BLANK -> Map.of("sentence", "오늘은 ___ 함께했어요", "targetUserId", members.getFirst());
-            case SLIDER_POSITION, SLIDER_CONSENSUS -> Map.of("question", "오늘의 기분은?", "left", "차분", "right", "활기");
-            case SLIDER_TASTE -> Map.of("topic", "오늘의 취향", "left", "별로", "right", "최고");
             default -> Map.of();
         };
     }
@@ -218,8 +215,6 @@ public class DevSeedService {
             case TEXT_REVIEW -> { answer = json.writeValueAsString(Map.of("text", "좋은 하루였어요")); number = 4; }
             case TEXT_BALANCE -> choice = "A";
             case TEXT_FILL_BLANK -> answer = json.writeValueAsString(Map.of("text", "함께해서 좋았어요"));
-            case SLIDER_POSITION, SLIDER_TASTE -> number = 55;
-            case SLIDER_CONSENSUS -> { number = 55; answer = json.writeValueAsString(Map.of("guess", 50)); }
             default -> throw new IllegalArgumentException("Seed template needs a file: " + template);
         }
         return new SubmissionInsertRow(missionId, userId, null, null, at, late, null, answer, number, choice);

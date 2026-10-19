@@ -77,18 +77,9 @@ enum MissionFormat {
         case MissionTemplates.textBalance:
             if let a = spec.optionA.nonBlank, let b = spec.optionB.nonBlank { return "‘\(a)’ vs ‘\(b)’ 둘 중 하나를 골라요" }
             return "둘 중 하나를 골라요"
-        case MissionTemplates.sliderPosition, MissionTemplates.sliderTaste:
-            return sliderEnds(spec).map { "\($0) 사이에서 내 위치를 골라요" } ?? "내 위치를 골라요"
-        case MissionTemplates.sliderConsensus:
-            return "내 위치와 우리 그룹 평균을 함께 예측해요"
         default:
             return nil
         }
-    }
-
-    private static func sliderEnds(_ spec: MissionSpec) -> String? {
-        guard let left = spec.left.nonBlank, let right = spec.right.nonBlank else { return nil }
-        return "‘\(left)’ ↔ ‘\(right)’"
     }
 
     static func pokeSentText(_ kind: PokeKind, nickname: String) -> String {

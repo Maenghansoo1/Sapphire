@@ -103,7 +103,6 @@ final class SubmissionRepository: Sendable {
         if let text = content.text { parts.append(.text(name: "text", value: text)) }
         if let caption = content.caption { parts.append(.text(name: "caption", value: caption)) }
         if let number = content.number { parts.append(.text(name: "number", value: String(number))) }
-        if let guess = content.guess { parts.append(.text(name: "guess", value: String(guess))) }
         if let choice = content.choice { parts.append(.text(name: "choice", value: choice)) }
         return parts
     }
@@ -148,7 +147,6 @@ final class SubmissionRepository: Sendable {
             template: dto.template,
             number: dto.number,
             choice: dto.choice,
-            guess: dto.guess,
             caption: dto.caption,
             aiReview: dto.aiReview?.model
         )
@@ -177,18 +175,6 @@ extension MissionResultDTO {
                 countA: choices.filter { $0.choice == "A" }.reduce(0) { $0 + ($1.count ?? 0) },
                 countB: choices.filter { $0.choice == "B" }.reduce(0) { $0 + ($1.count ?? 0) },
                 myChoice: myChoice
-            ))
-        case MissionTemplates.sliderPosition, MissionTemplates.sliderTaste:
-            return .slider(.init(
-                totalCount: total, average: average,
-                distribution: (distribution ?? []).map { SliderPoint(userID: $0.userId, nickname: $0.nickname ?? "", number: $0.number) },
-                myNumber: myNumber, diffFromAverage: diffFromAverage
-            ))
-        case MissionTemplates.sliderConsensus:
-            return .consensus(.init(
-                totalCount: total, average: average,
-                ranking: (ranking ?? []).map { ConsensusRank(userID: $0.userId, nickname: $0.nickname ?? "", guess: $0.guess, diff: $0.diff) },
-                winnerUserIDs: Set(winnerUserIds ?? [])
             ))
         default:
             return nil

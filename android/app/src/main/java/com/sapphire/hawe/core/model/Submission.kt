@@ -8,9 +8,9 @@ data class Submission(
     val createdAt: Instant, val mediaURL: URI? = null, val text: String? = null,
     val isLate: Boolean = false, val authorID: Long? = null,
     val reactions: List<Reaction> = emptyList(), val commentCount: Int = 0,
-    // 새 틀(B5)에서만 채워져요: 별점·슬라이더 위치(number), 밸런스 선택(choice), 평균 예측(guess), 이유(caption)
+    // 새 틀(B5)에서만 채워져요: 별점(number), 밸런스 선택(choice), 이유(caption)
     val template: String = "", val number: Int? = null, val choice: String? = null,
-    val guess: Int? = null, val caption: String? = null,
+    val caption: String? = null,
     // 사진-주제 적합도 AI 심사(B10). 심사가 끝나고 보여 줄 게 있을 때만 서버가 보내요(점수는 오지 않음).
     val aiReview: AiReview? = null,
 )

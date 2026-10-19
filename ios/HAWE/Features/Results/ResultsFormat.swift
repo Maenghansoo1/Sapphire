@@ -33,35 +33,6 @@ enum ResultsFormat {
         return option.nonBlank.map { "\(choice!) · \($0)" } ?? choice
     }
 
-    /// 서버가 소수 첫째 자리로 반올림해 준 값을 그대로 보여요. 62.0 은 "62", 62.5 는 "62.5".
-    static func decimalText(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), value)
-    }
-
-    /// 내 위치와 평균의 차이(내 값 − 평균)를 양 끝 라벨로 풀어 말해요.
-    static func diffFromAverageText(_ diff: Double?, spec: MissionSpec) -> String? {
-        guard let diff else { return nil }
-        if diff == 0 { return "내 위치가 딱 평균이에요" }
-        let side = diff > 0 ? spec.right : spec.left
-        let direction = side.nonBlank.map { "‘\($0)’ 쪽으로" } ?? (diff > 0 ? "오른쪽으로" : "왼쪽으로")
-        return "내 위치는 평균보다 \(direction) \(decimalText(abs(diff)))"
-    }
-
-    /// 다수결 예측 순위 (같은 차이는 같은 등수: 1, 1, 3). 서버가 차이 작은 순으로 보내 줘요.
-    static func competitionRanks(_ ranking: [ConsensusRank]) -> [Int] {
-        ranking.map { entry in 1 + ranking.filter { $0.diff < entry.diff }.count }
-    }
-
-    /// 승자 안내. 동률이면 모두, 나는 "나"로 불러요.
-    static func consensusWinnerText(_ ranking: [ConsensusRank], winnerUserIDs: Set<Int>, myUserID: Int) -> String? {
-        let winners = ranking.filter { winnerUserIDs.contains($0.userID) }
-        guard !winners.isEmpty else { return nil }
-        let mine = winners.contains { $0.userID == myUserID }
-        let others = winners.filter { $0.userID != myUserID }.map { "\($0.nickname)님" }.joined(separator: ", ")
-        if winners.count == 1 { return mine ? "내가 가장 가깝게 맞혔어요" : "\(others)이 가장 가깝게 맞혔어요" }
-        return mine ? "나와 \(others)이 공동으로 가장 가깝게 맞혔어요" : "\(others)이 공동으로 가장 가깝게 맞혔어요"
-    }
-
     /// AI 심사 배지 이름(B10). 앱이 모르는 배지는 이름 없이 코멘트만 보여요.
     static func aiBadgeLabel(_ badge: String?) -> String? {
         badge == "PERFECT_FIT" ? "오늘의 주제 찰떡상" : nil
@@ -100,8 +71,7 @@ enum ResultsFormat {
 
     /// 새 틀(B5)이라 글 한 덩어리가 아닌 전용 모양(`TemplateAnswer`)으로 그리는 제출물인지
     static func hasTemplateAnswer(_ template: String) -> Bool {
-        [MissionTemplates.textOneWord, MissionTemplates.textReview, MissionTemplates.textBalance,
-         MissionTemplates.sliderPosition, MissionTemplates.sliderTaste, MissionTemplates.sliderConsensus].contains(template)
+        [MissionTemplates.textOneWord, MissionTemplates.textReview, MissionTemplates.textBalance].contains(template)
     }
 }
 

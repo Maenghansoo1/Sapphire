@@ -271,8 +271,8 @@
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
                   "const c = pm.response.json().content;",
-                  "pm.test(\"13 phase-1 templates in doc order\", () => pm.expect(c.map(t => t.template)).to.eql([\"PHOTO_NOW\", \"PHOTO_GALLERY\", \"PHOTO_COLOR\", \"TEXT_ACROSTIC\", \"TEXT_ONE_WORD\", \"TEXT_REVIEW\", \"TEXT_BALANCE\", \"TEXT_FILL_BLANK\", \"DRAW_SKETCH\", \"DRAW_A_TO_B\", \"SLIDER_POSITION\", \"SLIDER_TASTE\", \"SLIDER_CONSENSUS\"]));",
-                  "pm.test(\"each has media/name/phase=1/schemas\", () => c.forEach(t => { pm.expect([\"PHOTO\",\"TEXT\",\"DRAW\",\"SLIDER\"]).to.include(t.media); pm.expect(t.name).to.be.a(\"string\").and.not.empty; pm.expect(t.phase).to.eql(1); pm.expect(t.paramsSchema).to.be.an(\"object\"); pm.expect(t.payloadSchema).to.be.an(\"object\").and.not.empty; }));",
+                  "pm.test(\"10 phase-1 templates in doc order\", () => pm.expect(c.map(t => t.template)).to.eql([\"PHOTO_NOW\", \"PHOTO_GALLERY\", \"PHOTO_COLOR\", \"TEXT_ACROSTIC\", \"TEXT_ONE_WORD\", \"TEXT_REVIEW\", \"TEXT_BALANCE\", \"TEXT_FILL_BLANK\", \"DRAW_SKETCH\", \"DRAW_A_TO_B\"]));",
+                  "pm.test(\"each has media/name/phase=1/schemas\", () => c.forEach(t => { pm.expect([\"PHOTO\",\"TEXT\",\"DRAW\"]).to.include(t.media); pm.expect(t.name).to.be.a(\"string\").and.not.empty; pm.expect(t.phase).to.eql(1); pm.expect(t.paramsSchema).to.be.an(\"object\"); pm.expect(t.payloadSchema).to.be.an(\"object\").and.not.empty; }));",
                   "pm.test(\"TEXT_ACROSTIC sample\", () => { const t = c.find(x => x.template === \"TEXT_ACROSTIC\"); pm.expect(t.media).to.eql(\"TEXT\"); pm.expect(t.paramsSchema.word).to.eql(\"string(3)\"); });"
                 ]
               }

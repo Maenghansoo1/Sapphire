@@ -27,7 +27,7 @@ class MissionResultControllerTests {
     @Autowired GroupService groups;
     @Autowired JwtTokenProvider tokens;
 
-    @Test void scalarTemplatesSubmitAndShowGroupResults() throws Exception {
+    @Test void balanceSubmitsAndShowsGroupResults() throws Exception {
         String suffix = UUID.randomUUID().toString();
         Long owner = user("result-owner-" + suffix, "하늘");
         Long member = user("result-member-" + suffix, "민준");
@@ -36,43 +36,14 @@ class MissionResultControllerTests {
             groupId = groups.createGroup(owner, new GroupCreateRequest("Result group", null,
                     null, 1, List.of(new MissionSlotRequest(1, "00:00", null)))).id();
             jdbc.update("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'member')", groupId, member);
-            Long consensus = jdbc.queryForObject("SELECT id FROM missions WHERE group_id = ?", Long.class, groupId);
-            jdbc.update("UPDATE missions SET template = 'SLIDER_CONSENSUS', params = ? WHERE id = ?",
-                    "{\"question\":\"우리 그룹은 아침형일까?\",\"left\":\"아침형\",\"right\":\"저녁형\"}", consensus);
+            Long balance = jdbc.queryForObject("SELECT id FROM missions WHERE group_id = ?", Long.class, groupId);
+            jdbc.update("UPDATE missions SET template = 'TEXT_BALANCE', params = ? WHERE id = ?",
+                    "{\"optionA\":\"산\",\"optionB\":\"바다\"}", balance);
             String ownerAuth = "Bearer " + tokens.createAccessToken(owner, "하늘");
             String memberAuth = "Bearer " + tokens.createAccessToken(member, "민준");
 
-            mvc.perform(get(result(consensus)).header("Authorization", ownerAuth)).andExpect(status().isLocked())
+            mvc.perform(get(result(balance)).header("Authorization", ownerAuth)).andExpect(status().isLocked())
                     .andExpect(jsonPath("$.code").value("FEED_LOCKED"));
-            mvc.perform(multipart(submissions(consensus)).param("number", "80").header("Authorization", ownerAuth))
-                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_SUBMISSION"));
-            mvc.perform(multipart(submissions(consensus)).param("number", "80").param("guess", "60")
-                    .header("Authorization", ownerAuth)).andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.number").value(80)).andExpect(jsonPath("$.guess").value(60))
-                    .andExpect(jsonPath("$.choice").doesNotExist()).andExpect(jsonPath("$.text").doesNotExist());
-            mvc.perform(multipart(submissions(consensus)).param("number", "45").param("guess", "70")
-                    .header("Authorization", memberAuth)).andExpect(status().isCreated());
-            // 평균 62.5 — 하늘 |60 − 62.5| = 2.5 로 1등, 민준 |70 − 62.5| = 7.5
-            mvc.perform(get(result(consensus)).header("Authorization", memberAuth)).andExpect(status().isOk())
-                    .andExpect(jsonPath("$.template").value("SLIDER_CONSENSUS"))
-                    .andExpect(jsonPath("$.totalCount").value(2))
-                    .andExpect(jsonPath("$.average").value(62.5))
-                    .andExpect(jsonPath("$.ranking[0].userId").value(owner))
-                    .andExpect(jsonPath("$.ranking[0].nickname").value("하늘"))
-                    .andExpect(jsonPath("$.ranking[0].guess").value(60))
-                    .andExpect(jsonPath("$.ranking[0].diff").value(2.5))
-                    .andExpect(jsonPath("$.ranking[1].diff").value(7.5))
-                    .andExpect(jsonPath("$.winnerUserIds.length()").value(1))
-                    .andExpect(jsonPath("$.winnerUserIds[0]").value(owner))
-                    .andExpect(jsonPath("$.choices").doesNotExist())
-                    .andExpect(jsonPath("$.distribution").doesNotExist());
-            mvc.perform(get(submissions(consensus)).header("Authorization", memberAuth)).andExpect(status().isOk())
-                    .andExpect(jsonPath("$.content[0].number").value(80))
-                    .andExpect(jsonPath("$.content[0].guess").value(60))
-                    .andExpect(jsonPath("$.content[1].number").value(45));
-
-            // 다음 날 밸런스 게임이 열려도 지난 미션의 결과는 계속 볼 수 있다
-            Long balance = insertMission(groupId, "TEXT_BALANCE", "{\"optionA\":\"산\",\"optionB\":\"바다\"}", 1);
             mvc.perform(multipart(submissions(balance)).param("choice", "b").header("Authorization", ownerAuth))
                     .andExpect(status().isBadRequest());
             mvc.perform(multipart(submissions(balance)).param("choice", "B").param("caption", " 시원해서 ")
@@ -81,20 +52,28 @@ class MissionResultControllerTests {
                     .andExpect(jsonPath("$.number").doesNotExist());
             mvc.perform(multipart(submissions(balance)).param("choice", "B").header("Authorization", memberAuth))
                     .andExpect(status().isCreated());
-            mvc.perform(get(result(balance)).header("Authorization", ownerAuth)).andExpect(status().isOk())
+            mvc.perform(get(result(balance)).header("Authorization", memberAuth)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.template").value("TEXT_BALANCE"))
                     .andExpect(jsonPath("$.totalCount").value(2))
                     .andExpect(jsonPath("$.choices[0].choice").value("A")).andExpect(jsonPath("$.choices[0].count").value(0))
                     .andExpect(jsonPath("$.choices[1].choice").value("B")).andExpect(jsonPath("$.choices[1].count").value(2))
                     .andExpect(jsonPath("$.myChoice").value("B"))
                     .andExpect(jsonPath("$.average").doesNotExist());
-            mvc.perform(get(result(consensus)).header("Authorization", ownerAuth)).andExpect(status().isOk());
 
             // 집계가 없는 틀은 제출해도 결과가 없다
-            Long text = insertMission(groupId, "TEXT_ONE_WORD", "{}", 2);
+            Long text = insertMission(groupId, "TEXT_ONE_WORD", "{}", 1);
             mvc.perform(multipart(submissions(text)).param("text", "설렘").header("Authorization", ownerAuth))
                     .andExpect(status().isCreated()).andExpect(jsonPath("$.text").value("설렘"));
             mvc.perform(get(result(text)).header("Authorization", ownerAuth)).andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("RESULT_NOT_SUPPORTED"));
+            // 다음 미션이 열려도 지난 밸런스 게임의 결과는 계속 볼 수 있다
+            mvc.perform(get(result(balance)).header("Authorization", ownerAuth)).andExpect(status().isOk());
+
+            // 삭제한 슬라이더 틀이 DB 에 남아 있어도 제출을 받지 않는다
+            Long slider = insertMission(groupId, "SLIDER_CONSENSUS", "{\"left\":\"아침형\",\"right\":\"저녁형\"}", 2);
+            mvc.perform(multipart(submissions(slider)).param("number", "80").param("guess", "60")
+                    .header("Authorization", ownerAuth)).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_SUBMISSION"));
         } finally {
             if (groupId != null) {
                 jdbc.update("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", groupId, member);

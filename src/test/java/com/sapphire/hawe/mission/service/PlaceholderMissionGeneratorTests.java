@@ -64,8 +64,7 @@ class PlaceholderMissionGeneratorTests {
 
     @Test void newTemplatesHaveValidVariants() {
         for (MissionTemplate template : List.of(MissionTemplate.TEXT_ONE_WORD, MissionTemplate.TEXT_REVIEW,
-                MissionTemplate.TEXT_BALANCE, MissionTemplate.SLIDER_POSITION, MissionTemplate.SLIDER_TASTE,
-                MissionTemplate.SLIDER_CONSENSUS)) {
+                MissionTemplate.TEXT_BALANCE)) {
             Set<String> contents = new HashSet<>();
             for (long seed = 0; seed < 100; seed++) {
                 var result = generator.generate(template, seed, recent(), false);
@@ -75,12 +74,6 @@ class PlaceholderMissionGeneratorTests {
                 assertFalse(result.content().contains("[대상]"));
                 if (template == MissionTemplate.TEXT_BALANCE)
                     assertNotEquals(result.params().get("optionA"), result.params().get("optionB"));
-                if (template.media().equals("SLIDER")) {
-                    String left = (String) result.params().get("left");
-                    String right = (String) result.params().get("right");
-                    assertNotEquals(left, right);
-                    assertTrue(!left.isBlank() && left.length() <= 20 && !right.isBlank() && right.length() <= 20);
-                }
                 assertNotEquals(result.content(), generator.generate(template, seed, recent(result.content()), false).content());
                 contents.add(result.content());
             }

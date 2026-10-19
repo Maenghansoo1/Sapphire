@@ -202,7 +202,7 @@ struct RecordCalendarView: View {
                 if let stamp = record?.stamp {
                     stampImage(stamp, size: 20)
                 } else {
-                    // 도장이 없으면 유형 이름 (그림·사진·글·슬라이더). 글자가 없어도 높이를 맞춰요.
+                    // 도장이 없으면 유형 이름 (그림·사진·글). 글자가 없어도 높이를 맞춰요.
                     Text(record?.type.displayName ?? " ")
                         .font(.plex(10, .semibold))
                         .foregroundStyle(isSelected ? Color.onAccent : Color.textSecondary)

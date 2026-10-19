@@ -33,7 +33,6 @@ struct MissionPerformView: View {
                 case MissionTemplates.textBalance: BalanceMissionView(topic: topic, spec: spec, onSubmit: submit)
                 default: WriteMissionView(topic: topic, template: template, spec: spec, onSubmit: submit)
                 }
-            case .slider: SliderMissionView(topic: topic, template: template, spec: spec, onSubmit: submit)
             }
         }
         .background(.bg)

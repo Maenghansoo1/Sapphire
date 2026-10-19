@@ -68,17 +68,6 @@ public class PlaceholderMissionGenerator implements MissionGenerator {
                     new GeneratedMission("최근에 본 영상이나 들은 노래에 별점과 한 줄 후기를 남겨줘", "일상", Map.of()));
             case TEXT_BALANCE -> List.of(
                     balance("평생 여름", "평생 겨울"), balance("짜장면", "짬뽕"), balance("산", "바다"));
-            case SLIDER_POSITION -> List.of(
-                    position("나는 계획형일까 즉흥형일까?", "계획형", "즉흥형"),
-                    position("요즘 나의 에너지는 어느 정도?", "방전", "충전 완료"),
-                    position("주말의 나는 어느 쪽?", "집콕", "밖으로"));
-            case SLIDER_TASTE -> List.of(
-                    taste("민트초코", "별로", "최고"), taste("매운 음식", "못 먹어", "잘 먹어"),
-                    taste("공포 영화", "별로", "최고"));
-            case SLIDER_CONSENSUS -> List.of(
-                    consensus("우리 그룹은 아침형일까 저녁형일까?", "아침형", "저녁형"),
-                    consensus("우리 그룹은 여행 갈 때 계획형일까 즉흥형일까?", "계획형", "즉흥형"),
-                    consensus("우리 그룹은 답장이 빠른 편일까?", "느긋하게", "바로바로"));
             default -> throw new IllegalArgumentException("Unsupported placeholder template: " + template);
         };
     }
@@ -86,20 +75,6 @@ public class PlaceholderMissionGenerator implements MissionGenerator {
     private GeneratedMission balance(String optionA, String optionB) {
         return new GeneratedMission(optionA + " vs " + optionB + ", 하나만 고른다면?", "유머",
                 Map.of("optionA", optionA, "optionB", optionB));
-    }
-
-    private GeneratedMission position(String question, String left, String right) {
-        return new GeneratedMission(question, "일상", Map.of("question", question, "left", left, "right", right));
-    }
-
-    private GeneratedMission taste(String topic, String left, String right) {
-        return new GeneratedMission(topic + ", 내 취향은 어디쯤?", "일상",
-                Map.of("topic", topic, "left", left, "right", right));
-    }
-
-    private GeneratedMission consensus(String question, String left, String right) {
-        return new GeneratedMission(question + " 내 위치를 고르고 그룹 평균도 맞혀봐", "유머",
-                Map.of("question", question, "left", left, "right", right));
     }
 
     private GeneratedMission acrostic(String word) {

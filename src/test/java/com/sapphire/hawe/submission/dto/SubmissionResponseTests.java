@@ -12,7 +12,7 @@ class SubmissionResponseTests {
     @Test void lateKeyAndOptionalFields() {
         var response = new SubmissionResponse(1L, 2L,
                 new MemberProfileResponse(3L, "Writer", null, null), "TEXT_FILL_BLANK",
-                null, null, null, "hello", null, null, null, List.of(), 0, null,
+                null, null, null, "hello", null, null, List.of(), 0, null,
                 OffsetDateTime.parse("2026-10-12T12:00:00+09:00"), true);
         String body = new ObjectMapper().writeValueAsString(response);
         assertTrue(body.contains("\"isLate\":true"));
@@ -28,7 +28,7 @@ class SubmissionResponseTests {
 
     @Test void reviewHasNoScoreField() {
         var response = new SubmissionResponse(1L, 2L, new MemberProfileResponse(3L, "Writer", null, null),
-                "PHOTO_NOW", null, null, null, null, null, null, null, List.of(), 0,
+                "PHOTO_NOW", null, null, null, null, null, null, List.of(), 0,
                 new AiReviewResponse("PERFECT_FIT", "주제를 잘 담았어요"),
                 OffsetDateTime.parse("2026-10-13T12:00:00+09:00"), false);
         String body = new ObjectMapper().writeValueAsString(response);
@@ -40,12 +40,12 @@ class SubmissionResponseTests {
 
     @Test void scalarAnswersAppearWhenPresent() {
         var response = new SubmissionResponse(1L, 2L, new MemberProfileResponse(3L, "Writer", null, null),
-                "SLIDER_CONSENSUS", null, null, null, null, 70, null, 55, List.of(), 0, null,
+                "TEXT_REVIEW", null, null, null, "맛있었어요", 4, null, List.of(), 0, null,
                 OffsetDateTime.parse("2026-10-13T12:00:00+09:00"), false);
         String body = new ObjectMapper().writeValueAsString(response);
-        assertTrue(body.contains("\"number\":70"));
-        assertTrue(body.contains("\"guess\":55"));
+        assertTrue(body.contains("\"number\":4"));
+        assertTrue(body.contains("\"text\":\"맛있었어요\""));
         assertFalse(body.contains("\"choice\""));
-        assertFalse(body.contains("\"text\""));
+        assertFalse(body.contains("\"guess\""));
     }
 }

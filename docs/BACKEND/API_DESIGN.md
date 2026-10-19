@@ -190,7 +190,7 @@
 
 - 미션/제출 API 명세: `docs/BACKEND/MISSIONS_API.md`
 - 미션 템플릿 목록: `docs/FEATURE/MISSIONS.md`
-- B5(2026-10-13): 새 틀 6종(한 단어·한 줄 후기·밸런스·슬라이더 3종) 제출 규칙은 `MISSIONS_API.md` §3-2, 집계 결과 `GET /missions/{missionId}/result`는 §5, 발행 풀 설정 `hawe.mission.enabled-templates`는 §6-1
+- B5(2026-10-13): 새 틀(한 단어·한 줄 후기·밸런스, 슬라이더 3종은 2026-10-19 삭제) 제출 규칙은 `MISSIONS_API.md` §3-2, 집계 결과 `GET /missions/{missionId}/result`는 §5, 발행 풀 설정 `hawe.mission.enabled-templates`는 §6-1
 - B7(2026-10-13): 하루 미션 여러 개(1~5) — 설정·현재 미션 규칙은 `MISSIONS_API.md` §2, 같은 날 틀·문장 겹침 방지는 §6·§6-1, 결정 사항은 §11
 - B8(2026-10-13): 그룹 맞춤 AI 미션 문장(Claude API, 기본 꺼짐) — `MISSIONS_API.md` §6·§6-2. HTTP API 모양은 바뀌지 않는다
 - B9(2026-10-13): AI 주제 vs 랜덤 주제 비교 실험(기본 꺼짐)과 내부 리포트 `GET /internal/experiments/topic`(헤더 `X-Admin-Token`) — `MISSIONS_API.md` §6-3, `EXPERIMENT_TOPIC.md`. 앱용 API 모양은 바뀌지 않는다
@@ -340,7 +340,7 @@ Response 204.
 - `completedMissions`: 내 제출 수 (지각 포함, 나간 그룹의 제출도 포함)
 - `streakDays`: 오늘(오늘 아직 안 냈으면 어제)부터 거꾸로 하루도 빠짐없이 제출한 날 수. 모든 그룹 합산, `mission_date` 기준
 - `groupCount`: 지금 속한 그룹 수
-- `byMedia`: 유형별 제출 수. 세 유형(`DRAW`, `PHOTO`, `TEXT`)은 0이어도 항상 들어 있다 (`SLIDER`는 제출이 있을 때만). 음성 제거(2026-10-12)로 `VOICE` 키는 없어졌고, 지워진 틀의 예전 제출은 `completedMissions`에만 세고 `byMedia`에서는 빠진다
+- `byMedia`: 유형별 제출 수. 세 유형(`DRAW`, `PHOTO`, `TEXT`)은 0이어도 항상 들어 있다. 음성 제거(2026-10-12)·슬라이더 제거(2026-10-19)로 `VOICE`·`SLIDER` 키는 없어졌고, 지워진 틀의 예전 제출은 `completedMissions`에만 세고 `byMedia`에서는 빠진다
 
 ---
 

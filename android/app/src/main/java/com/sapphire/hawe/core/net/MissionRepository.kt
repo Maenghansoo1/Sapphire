@@ -22,7 +22,6 @@ fun mediaToType(media: String): MissionType? = when (media) {
     "PHOTO" -> MissionType.PHOTO
     "TEXT" -> MissionType.WRITE
     "DRAW" -> MissionType.DRAW
-    "SLIDER" -> MissionType.SLIDER
     else -> null
 }
 
@@ -32,7 +31,6 @@ internal fun paramsToSpec(params: JsonObject): MissionSpec {
         seconds = params["seconds"]?.let { runCatching { it.jsonPrimitive.intOrNull ?: it.jsonPrimitive.content.toIntOrNull() }.getOrNull() },
         word = text("word"), drawFrom = text("a"), drawTo = text("b"),
         optionA = text("optionA"), optionB = text("optionB"),
-        question = text("question"), topic = text("topic"), left = text("left"), right = text("right"),
         subject = text("subject"), hasTarget = params["target"] != null || params["targetUserId"] != null,
     )
 }

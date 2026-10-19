@@ -1,10 +1,9 @@
 import Foundation
 import Observation
 
-/// 새 틀(한 단어·후기·밸런스·슬라이더)의 글·숫자·선택 필드. nil 인 필드는 보내지 않아요.
+/// 새 틀(한 단어·후기·밸런스)의 글·숫자·선택 필드. nil 인 필드는 보내지 않아요.
 struct ScalarAnswer: Equatable {
     var number: Int? = nil
-    var guess: Int? = nil
     var choice: String? = nil
     var text: String? = nil
     var caption: String? = nil
@@ -104,7 +103,7 @@ final class DataStore {
     private var calendars: [CalendarKey: [DayRecord]] = [:]
     /// 달력에서 연 지난 미션의 피드 (missionID → 제출물)
     private var pastFeeds: [Int: [Submission]] = [:]
-    /// 달력에서 연 지난 미션의 틀·빈칸(밸런스 선택지, 슬라이더 양 끝 라벨). 달력 응답에는 없어서 따로 받아 둬요.
+    /// 달력에서 연 지난 미션의 틀·빈칸(밸런스 선택지, 그림 대상). 달력 응답에는 없어서 따로 받아 둬요.
     private var pastSpecs: [Int: (template: String, spec: MissionSpec)] = [:]
 
     private struct CalendarKey: Hashable {
@@ -516,7 +515,6 @@ enum TopicPool {
         case .draw: ["요즘 제일 웃겼던 순간", "오늘 기분을 날씨로 그려줘", "내 방 책상 위", "지금 제일 먹고 싶은 것", "서로의 첫인상"]
         case .photo: ["지금 창밖으로 보이는 풍경", "오늘 먹은 것 중 최고", "지금 신고 있는 신발", "오늘의 하늘", "내 주변에서 가장 파란 것"]
         case .write: ["오늘 들은 가장 따뜻한 말", "너에게 해주고 싶은 말 한 줄", "요즘 빠져 있는 것", "오늘 하루를 세 단어로", "지금 가장 고마운 사람"]
-        case .slider: ["요즘 나의 에너지는 어느 정도?", "나는 계획형일까 즉흥형일까?", "주말의 나는 집콕일까 밖으로일까?"]
         }
     }
 
@@ -526,7 +524,6 @@ enum TopicPool {
         case .draw: MissionTemplates.drawSketch
         case .photo: MissionTemplates.photoNow
         case .write: MissionTemplates.textFillBlank
-        case .slider: MissionTemplates.sliderPosition
         }
     }
 }

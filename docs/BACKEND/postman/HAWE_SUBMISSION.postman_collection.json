@@ -139,49 +139,6 @@
       }
     },
     {
-      "name": "5e. 내 위치는? (SLIDER_POSITION) — 0~100",
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
-      ] } }],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-        "body": { "mode": "formdata", "formdata": [
-          { "key": "number", "type": "text", "value": "70" }
-        ] },
-        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
-      }
-    },
-    {
-      "name": "5f. 취향 막대 (SLIDER_TASTE) — 0~100",
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
-      ] } }],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-        "body": { "mode": "formdata", "formdata": [
-          { "key": "number", "type": "text", "value": "35" }
-        ] },
-        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
-      }
-    },
-    {
-      "name": "5g. 다수결 예측 (SLIDER_CONSENSUS) — 내 위치 + 그룹 평균 예측",
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-        "if (pm.response.code === 201) pm.collectionVariables.set('submissionId', pm.response.json().id);"
-      ] } }],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-        "body": { "mode": "formdata", "formdata": [
-          { "key": "number", "type": "text", "value": "80" },
-          { "key": "guess", "type": "text", "value": "60" }
-        ] },
-        "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions"
-      }
-    },
-    {
       "name": "6. 피드",
       "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "url": "{{baseUrl}}/api/missions/{{missionId}}/submissions?page=0&size=20" }
@@ -192,7 +149,7 @@
         "url": "{{baseUrl}}/api/submissions/{{submissionId}}" }
     },
     {
-      "name": "8. 집계 결과 (밸런스·슬라이더 미션, 내가 제출한 뒤)",
+      "name": "8. 집계 결과 (밸런스 게임 미션, 내가 제출한 뒤)",
       "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "url": "{{baseUrl}}/api/missions/{{missionId}}/result" }
     }
