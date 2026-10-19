@@ -102,7 +102,7 @@ enum LateLabel {
     static let text = "지각"
 }
 
-/// AI 심사 배지·한 줄 코멘트(B10, 임시 UI: Figma 확정 시 교체). 서버가 준 것만 보여요 — 점수나 낮은 평가는 없어요.
+/// AI 심사 배지·한 줄 코멘트(B10, 임시 UI: Figma 확정 시 교체). 점수는 숨기고, 배지 없이 격려 코멘트만 보여 줄 수도 있어요.
 /// 피드에서는 코멘트 1줄, 상세에서는 2줄까지.
 struct AiReviewLine: View {
     let review: AiReview

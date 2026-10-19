@@ -8,9 +8,9 @@ See the [vision service contract](../../ml/vision-service/README.md).
 
 The service receives the image, template, and topic. Images go only to our configured vision
 service (`hawe.vision.base-url`), not to the mission text AI. Scores stay in `fit_score` in the
-database. Feed and detail responses include `aiReview: { badge, comment }` only for a completed
-review with a positive verdict. They never include `fit`, `fit_score`, or `cosine`. The response
-omits `aiReview` when review is disabled, pending, failed, skipped, or below the good threshold.
+database. Feed and detail responses include `aiReview: { badge, comment }` for a completed
+review, including comment-only low-score reviews. They never include `fit`, `fit_score`, or `cosine`.
+The response omits `aiReview` when review is disabled, pending, failed, or skipped.
 
 | Template | Perfect badge | Good comment |
 | --- | ---: | ---: |
@@ -19,8 +19,9 @@ omits `aiReview` when review is disabled, pending, failed, skipped, or below the
 
 Thresholds follow the 2026-10-13, 177-image [evaluation](../../ml/vision-service/EVAL.md).
 The backend uses `>=` at each boundary. Perfect yields `PERFECT_FIT` and a positive comment;
-good yields a positive comment; lower scores show nothing. Comments are selected deterministically
-from three variants using the submission ID. They contain no negative assessment or emoji.
+good yields a positive comment; lower scores get an encouraging comment without a badge.
+Comments are selected deterministically from three variants using the submission ID. They contain
+no negative assessment or emoji.
 
 | Property | Default |
 | --- | --- |

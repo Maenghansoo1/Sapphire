@@ -42,6 +42,13 @@ class TopicFitServiceTests {
         verify(reviews).complete(eq(1L), eq("DONE"), eq(0.5), eq("PERFECT_FIT"), anyString(), eq("model/1"), eq(1));
     }
 
+    @Test void lowFitStoresEncouragingCommentWithoutBadge() {
+        when(client.call(eq("PHOTO_NOW"), eq("창밖 풍경"), any(), eq("photo.jpg")))
+                .thenReturn(new TopicFitResult(0.016, "model", "1"));
+        service.review(1L);
+        verify(reviews).complete(1L, "DONE", 0.016, null, "오늘의 한 장, 잘 남겼어요", "model/1", 1);
+    }
+
     @Test void failureRetriesOnceAndCompletesFailed() {
         when(client.call(anyString(), anyString(), any(), anyString())).thenThrow(new VisionException("failed"));
         service.review(1L);
