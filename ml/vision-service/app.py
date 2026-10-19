@@ -32,7 +32,7 @@ def create_app(scorer=None):
         if holder["scorer"] is None:
             started = time.perf_counter()
             holder["scorer"] = scoring.TopicFitScorer()
-            log.info("model loaded in %.1fs", time.perf_counter() - started)
+            log.info("model loaded in %.1fs (%s)", time.perf_counter() - started, holder["scorer"].backend)
         yield
 
     app = FastAPI(title="HA'WE vision service", version=scoring.VERSION, lifespan=lifespan)
@@ -54,9 +54,13 @@ def create_app(scorer=None):
                  (time.perf_counter() - started) * 1000)
         return response
 
+    def version():
+        return getattr(holder["scorer"], "version", scoring.VERSION)
+
     @app.get("/healthz")
     def healthz():
-        return {"status": "ok", "model": scoring.MODEL_NAME, "version": scoring.VERSION}
+        return {"status": "ok", "model": scoring.MODEL_NAME, "version": version(),
+                "backend": getattr(holder["scorer"], "backend", None)}
 
     @app.post("/v1/topic-fit")
     def topic_fit(image: UploadFile = File(...), topic: str = Form(...), template: str = Form("PHOTO_NOW")):
@@ -74,7 +78,7 @@ def create_app(scorer=None):
             raise ServiceError(400, "INVALID_IMAGE", "이미지를 읽을 수 없습니다")
         result = holder["scorer"].score(picture, topic, template)
         return {"fit": round(result["fit"], 6), "cosine": round(result["cosine"], 6),
-                "model": scoring.MODEL_NAME, "version": scoring.VERSION}
+                "model": scoring.MODEL_NAME, "version": version()}
 
     return app
 

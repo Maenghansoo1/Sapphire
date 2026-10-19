@@ -5,6 +5,8 @@
 
 ## 실행 (Windows, Python 3.12)
 
+서비스는 `models/` 의 **ONNX 파일**로 점수를 낸다. PyTorch 가 필요 없어서 설치가 가볍다(아래 "ONNX").
+
 ```bat
 cd ml\vision-service
 py -3.12 -m venv .venv
@@ -13,8 +15,44 @@ pip install -r requirements.txt
 uvicorn app:app --port 8001
 ```
 
-- 처음 켤 때 모델 2개(약 1.1GB)를 Hugging Face 에서 받는다(`%USERPROFILE%\.cache\huggingface`). 그 뒤로는 `set HF_HUB_OFFLINE=1` 로 인터넷 없이 켤 수 있다.
-- 켜는 데 수 초, 요청 한 번에 CPU 기준 약 0.4초(p50) · 0.8초(p95).
+- `models/` 에 ONNX 파일이 있어야 한다. 처음 한 번 `export_onnx.py` 로 만들거나, 만들어 둔 파일을 복사해 온다(아래).
+- 켜는 데 약 2초, 요청 한 번에 CPU 기준 약 0.4초.
+- `models/` 에 ONNX 파일이 없으면 예전처럼 sentence-transformers(PyTorch)로 돌린다. 이때는 `pip install -r requirements-export.txt` 가 필요하고, 처음 켤 때 모델 2개(약 1.1GB)를 Hugging Face 에서 받는다.
+
+## ONNX (2026-10-19)
+
+PyTorch 없이 `onnxruntime` 으로 돌리려고 두 인코더(사진 CLIP, 한국어 글)를 ONNX 파일로 바꿔 둔다. 사진 전처리(짧은 변 224 로 줄이고 가운데 자르기)는 `scoring.clip_pixels` 가 transformers 와 똑같이 한다.
+
+**만들기** (PyTorch 가 있는 환경에서 한 번, 몇 분):
+
+```bat
+pip install -r requirements-export.txt
+python export_onnx.py
+```
+
+`models/`(깃 제외)에 생기는 파일:
+
+| 파일 | 크기 | 설명 |
+|---|---|---|
+| `image_encoder.fp16.onnx` | 176MB | 사진 → 벡터. **서비스가 쓰는 파일** |
+| `text_encoder.fp16.onnx` | 270MB | 글 → 벡터. **서비스가 쓰는 파일** |
+| `tokenizer.json` | 3MB | 글 토크나이저. **서비스가 쓰는 파일** |
+| `image_encoder.onnx`, `text_encoder.onnx` | 352MB, 541MB | fp32 원본(fp16 을 만드는 재료, 비교용) |
+| `manifest.json` | | 원본 모델, 해시, PyTorch 와의 차이 |
+
+**정확도**: fp16 은 가중치만 절반 크기로 저장하고 계산 결과는 거의 같다. 팀 평가 사진 5,140쌍(`eval.py --backend onnx`)에서 PyTorch 대비 점수 차이 최대 0.00045, **배지·한마디 판정이 바뀐 쌍 0**, ROC-AUC 와 추천 임계값도 같다. int8 은 크기가 1/4 이지만 점수 차이가 최대 0.07~0.13 이라 쓰지 않는다.
+
+**크기 비교**: 예전(PyTorch) 프로그램 약 1.2GB + 모델 약 1.1GB → 지금 프로그램 약 230MB + 모델 449MB.
+
+**다른 서버(AWS)에 올리기**: `requirements.txt` 로 설치하고, `models/` 에 위 표의 "서비스가 쓰는 파일" 3개만 복사하면 된다(약 450MB). `GET /healthz` 의 `backend` 가 `onnx.fp16` 이면 ONNX 로 돌고 있다.
+
+| 환경변수 | 기본 | 설명 |
+|---|---|---|
+| `HAWE_VISION_MODEL_DIR` | `models/` | ONNX 파일 위치 |
+| `HAWE_VISION_ONNX_VARIANT` | 비움 | `fp16` 또는 빈 값(fp32). 비우면 있는 파일 중 fp16 → fp32 순서 |
+| `HAWE_VISION_BACKEND` | `auto` | `auto`(ONNX 있으면 ONNX), `onnx`, `torch` |
+
+응답과 `/healthz` 의 `version` 은 fp16 일 때 `1-fp16`, fp32·PyTorch 일 때 `1` 이다(백엔드는 기록만 한다).
 
 ## API (백엔드와의 약속은 이것 하나)
 
@@ -39,7 +77,7 @@ uvicorn app:app --port 8001
 | 400 | `VALIDATION_ERROR` | image 나 topic 이 없음 |
 | 413 | `FILE_TOO_LARGE` | 10MB 초과 |
 
-`GET /healthz` → `{ "status": "ok", "model": "...", "version": "1" }`
+`GET /healthz` → `{ "status": "ok", "model": "...", "version": "1-fp16", "backend": "onnx.fp16" }`
 
 ```bash
 curl -F "image=@photo.jpg" -F "topic=창밖 풍경" http://localhost:8001/v1/topic-fit
@@ -64,7 +102,7 @@ curl -F "image=@photo.jpg" -F "topic=창밖 풍경" http://localhost:8001/v1/top
 `ml/eval-data/topic-fit/<사람>/` 에 사진과 `<사람>.csv`(`파일,주제,색,메모`, 주제는 `|` 로 여러 개, 색은 `빨강·주황·노랑·초록·파랑·보라·분홍·흰색·검정·갈색·회색`)를 넣고:
 
 ```bat
-python eval.py                               :: 모델을 직접 읽어 평가
+python eval.py                               :: 모델을 직접 읽어 평가 (--backend onnx|torch 로 방식 지정)
 python eval.py --url http://localhost:8001   :: + 떠 있는 서비스로 60번 호출해 지연 시간·점수 일치 확인
 ```
 
@@ -77,7 +115,7 @@ python eval.py --url http://localhost:8001   :: + 떠 있는 서비스로 60번 
 
 ```bat
 python -m pytest                                        :: 모델 없이 (API·점수 계산·평가 도구)
-set HAWE_VISION_MODEL_TESTS=1 && python -m pytest       :: 실제 모델 포함 (모델을 받아 둔 경우)
+set HAWE_VISION_MODEL_TESTS=1 && python -m pytest       :: 실제 모델 포함 (ONNX 파일, PyTorch 가 있으면 둘의 점수 비교까지)
 ```
 
 ## 개인정보·라이선스

@@ -155,11 +155,11 @@ def pick_threshold(curve, min_precision):
 
 
 class LocalClient:
-    def __init__(self):
+    def __init__(self, backend="auto", variant=None):
         import scoring
 
         self.scoring = scoring
-        self.scorer = scoring.TopicFitScorer()
+        self.scorer = scoring.TopicFitScorer(backend=backend, variant=variant)
         self._vectors = {}
 
     def score(self, path, topic, template):
@@ -311,6 +311,8 @@ def main(argv=None):
     parser.add_argument("--repeats", type=int, default=5, help="안 맞음 짝을 다르게 뽑는 횟수")
     parser.add_argument("--api-samples", type=int, default=60)
     parser.add_argument("--report", default=str(HERE / "EVAL.md"))
+    parser.add_argument("--backend", default="auto", choices=("auto", "onnx", "torch"), help="점수 계산 방식(scoring.py)")
+    parser.add_argument("--variant", default=None, help='ONNX 파일 종류. "fp16" 또는 "" (fp32). 비우면 fp16 → fp32 순서로 고른다')
     args = parser.parse_args(argv)
 
     root = Path(args.data)
@@ -325,7 +327,8 @@ def main(argv=None):
 
     rows = [{**pair, "repeat": r} for r in range(args.repeats) for pair in make_pairs(photos, args.seed + r)]
     unique = list(dict.fromkeys((row["photo"], row["template"], row["topic"]) for row in rows))
-    client = LocalClient()
+    client = LocalClient(args.backend, args.variant)
+    print(f"점수 계산: {client.scorer.backend}")
     fits = {}
     for index, (photo, template, topic) in enumerate(unique, start=1):
         fits[(photo, template, topic)] = client.score(paths[photo], topic, template)[0]

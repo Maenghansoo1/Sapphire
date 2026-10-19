@@ -1,0 +1,6 @@
+# Only for export_onnx.py and PyTorch comparison/eval. Versions checked on Windows, CPU. ASCII only (pip uses the OS encoding).
+-r requirements.txt
+sentence-transformers==6.1.0
+transformers==5.19.0
+torch==2.14.1
+onnx==1.23.2
