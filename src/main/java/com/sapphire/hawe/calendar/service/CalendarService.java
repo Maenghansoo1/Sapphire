@@ -1,5 +1,6 @@
 package com.sapphire.hawe.calendar.service;
 
+import com.sapphire.hawe.global.text.KoreanJosa;
 import com.sapphire.hawe.calendar.dao.CalendarMapper;
 import com.sapphire.hawe.calendar.dao.CalendarMissionRow;
 import com.sapphire.hawe.calendar.dao.TemplateCountRow;
@@ -107,7 +108,7 @@ public class CalendarService {
             return content;
         }
         String nickname = row.getTargetNickname() != null ? row.getTargetNickname() : "친구";
-        return content.replace("[대상]", nickname);
+        return KoreanJosa.replaceTarget(content, nickname);
     }
 
     private String mediaOf(String template) {

@@ -228,7 +228,8 @@ class MissionServiceTests {
         assertFalse(summaries.containsKey(15L));
         var summary = summaries.get(11L).getFirst();
         assertEquals("TEXT", summary.media());
-        assertEquals("잎사귀은 ___ 할 것 같다", summary.content());
+        // [대상] 뒤 조사는 닉네임 받침에 맞춘다(잎사귀 → 는)
+        assertEquals("잎사귀는 ___ 할 것 같다", summary.content());
         assertEquals(2, summary.submittedCount());
         assertTrue(summary.submittedByMe());
         assertEquals("PHOTO", summaries.get(11L).get(1).media());
