@@ -40,9 +40,6 @@ CLAUDE.md
 .env
 uploads/
 
-### 개인 프롬프트 (팀원이 따로 관리, 저장소에 올리지 않음) ###
-src/main/resources/prompts/
-
 .agent/
 
 ### ML ###
