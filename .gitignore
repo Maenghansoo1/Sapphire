@@ -54,3 +54,6 @@ ml/**/__pycache__/
 ml/**/.pytest_cache/
 ml/**/runs/
 ml/**/dist/
+
+# macOS
+.DS_Store
