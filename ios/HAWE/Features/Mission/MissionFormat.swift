@@ -94,6 +94,13 @@ enum MissionFormat {
         }
     }
 
+    enum PokeTapAction: Equatable { case send, replayMotion, ignore }
+
+    static func pokeTapAction(sent: Bool, busy: Bool, motionPlaying: Bool) -> PokeTapAction {
+        if busy || motionPlaying { return .ignore }
+        return sent ? .replayMotion : .send
+    }
+
     /// VoiceOver 용. 보낸 뒤에는 보낸 사실을 읽어 줘요.
     static func pokeButtonDescription(_ kind: PokeKind, nickname: String, sent: Bool) -> String {
         if sent { return pokeSentText(kind, nickname: nickname) }

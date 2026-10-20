@@ -71,12 +71,17 @@ public class MissionPublisher {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishIfDue(Long groupId, LocalDateTime now) {
-        publish(groupId, now, false, null);
+        publish(groupId, now, false, null, false);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void publishFirstMission(Long groupId, LocalDateTime now) {
+        publish(groupId, now, false, null, true);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<Long> forcePublish(Long groupId, LocalDateTime now, MissionTemplate template) {
-        return publish(groupId, now, true, template);
+        return publish(groupId, now, true, template, false);
     }
 
     /** Joins the dev service transaction so its submission cleanup and this update commit together. */
@@ -112,7 +117,8 @@ public class MissionPublisher {
             throw new BusinessException(MissionErrorCode.MISSION_NOT_FOUND);
     }
 
-    private List<Long> publish(Long groupId, LocalDateTime now, boolean forced, MissionTemplate requestedTemplate) {
+    private List<Long> publish(Long groupId, LocalDateTime now, boolean forced, MissionTemplate requestedTemplate,
+            boolean forceFirstSlot) {
         Group group = groups.findById(groupId);
         if (group == null) return List.of();
         List<Long> created = new ArrayList<>();
@@ -132,9 +138,10 @@ public class MissionPublisher {
             LocalTime deadlineTime = slot != null && slot.getDeadlineTime() != null
                     ? slot.getDeadlineTime() : properties.defaultDeadlineTime();
             LocalDateTime scheduled = MissionTiming.scheduledPublishAt(date, publishTime);
-            if ((!forced && now.isBefore(scheduled)) || missions.existsByGroupIdAndDateAndSlot(groupId, date, slotNo)) continue;
+            boolean forceThis = forced || (forceFirstSlot && slotNo == 1);
+            if ((!forceThis && now.isBefore(scheduled)) || missions.existsByGroupIdAndDateAndSlot(groupId, date, slotNo)) continue;
 
-            LocalDateTime publishedAt = forced ? now :
+            LocalDateTime publishedAt = forceThis ? now :
                     (scheduled.isBefore(group.getCreatedAt()) ? group.getCreatedAt() : scheduled);
             long seed = MissionTemplateSelector.seed(groupId, date, slotNo);
             MissionTemplate template = requestedTemplate == null ? MissionTemplateSelector.select(groupId, date, slotNo,

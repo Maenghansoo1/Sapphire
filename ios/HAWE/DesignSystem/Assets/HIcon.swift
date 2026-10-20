@@ -8,7 +8,6 @@ enum HIcon: String, CaseIterable {
     case close, comment, copy, flash, flip, heart, heartFill = "heart-fill", image, lock, more
     case pencil, person, plus, redo, text, undo
     // 임시 이미지: Figma 디자인이 나오면 같은 이름의 SVG 만 바꿔요 (Android `*_TEMP` 와 같은 이름)
-    case pokeTemp = "poke-temp"
     case aiGuessTemp = "ai-guess-temp", insightTemp = "insight-temp"
 }
 

@@ -19,7 +19,7 @@ enum NotificationFormat {
     static func badgeIcon(_ type: NotificationType) -> HIcon {
         switch type {
         case .topic: .bell
-        case .poke: .pokeTemp
+        case .poke: .bell
         case .comment, .mention: .comment
         case .reaction: .heartFill
         }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 결과 공개 — 10 사진(세로 피드) · 11 그림(2열 격자) · 12 글·새 틀(카드). 집계 틀은 위에 "그룹 결과" 카드.
+/// 결과 공개 — 사진·그림·글 작품은 2열 격자. 집계 틀은 위에 "그룹 결과" 카드.
 /// 작품을 누르면 14 작품 상세(스티커·댓글)로 가요.
 /// 들어올 때·앱으로 돌아올 때마다 서버 피드를 받아요. 내가 올리지 않았으면 서버가 막아요(423 FEED_LOCKED).
 struct ResultsView: View {
@@ -157,114 +157,59 @@ private struct ResultsContent: View {
         .padding(.bottom, 18)
     }
 
-    @ViewBuilder
     private var content: some View {
-        switch result.type {
-        case .photo: photoFeed
-        case .draw: drawingGrid
-        case .write: answerCards
-        }
-    }
-
-    // MARK: - 10 사진
-
-    private var photoFeed: some View {
-        VStack(spacing: 24) {
-            ForEach(result.submissions) { submission in
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        HAvatar(content: submission.author.avatar, size: 34)
-                        Text(submission.author.nickname)
-                            .font(.plex(15, .semibold))
-                            .foregroundStyle(.ink)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Text(submission.createdAt.koreanTime)
-                            .font(.caption13)
-                            .foregroundStyle(.textSecondary)
-                        if submission.isLate {
-                            Text(LateLabel.text)
-                                .font(.caption12)
-                                .foregroundStyle(.textSecondary)
-                        }
-                    }
-                    Button { openedID = submission.id } label: {
-                        PhotoArtwork(submission: submission, height: 260)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    // MARK: - 11 그림
-
-    /// 2열 · 가로 12 · 세로 14 · 칸 165 높이 · 모서리 18
-    private var drawingGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 14) {
             ForEach(result.submissions) { submission in
-                VStack(spacing: 6) {
-                    Button { openedID = submission.id } label: {
-                        DrawingArtwork(submission: submission, height: 165, cornerRadius: 18, drawingSize: 130)
-                    }
-                    .buttonStyle(.plain)
-                    Button { openedID = submission.id } label: {
-                        HStack(spacing: 8) {
-                            HAvatar(content: submission.author.avatar, size: 26)
-                            Text(submission.author.nickname)
-                                .font(.plex(14, .semibold))
-                                .foregroundStyle(.ink)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if submission.isLate {
-                                Text(LateLabel.text)
-                                    .font(.caption12)
-                                    .foregroundStyle(.textSecondary)
-                            }
-                        }
-                        .padding(.horizontal, 2)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                Button { openedID = submission.id } label: {
+                    gridCell(submission)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(submission.author.nickname) 작품 보기")
             }
         }
     }
 
-    // MARK: - 12 글 · 새 틀
+    @ViewBuilder
+    private func gridCell(_ submission: Submission) -> some View {
+        switch result.type {
+        case .photo:
+            VStack(spacing: 6) {
+                PhotoArtwork(submission: submission, height: 165)
+                gridAuthor(submission)
+            }
+        case .draw:
+            VStack(spacing: 6) {
+                DrawingArtwork(submission: submission, height: 165, cornerRadius: 18, drawingSize: 130)
+                gridAuthor(submission)
+            }
+        case .write:
+            VStack(alignment: .leading, spacing: 8) {
+                gridAuthor(submission)
+                TemplateAnswer(submission: submission, spec: result.spec)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 165, alignment: .top)
+            .background(.surface, in: RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
+        }
+    }
 
-    /// surface · 모서리 20 · 안쪽 18 · 간격 12
-    private var answerCards: some View {
-        VStack(spacing: 12) {
-            ForEach(result.submissions) { submission in
-                Button { openedID = submission.id } label: {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 8) {
-                            HAvatar(content: submission.author.avatar, size: 30)
-                                .background(.bg, in: Circle())
-                            Text(submission.author.nickname)
-                                .font(.plex(14, .semibold))
-                                .foregroundStyle(.ink)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(submission.createdAt.koreanTime)
-                                .font(.caption12)
-                                .foregroundStyle(.textSecondary)
-                            if submission.isLate {
-                                Text(LateLabel.text)
-                                    .font(.caption12)
-                                    .foregroundStyle(.textSecondary)
-                            }
-                        }
-                        TemplateAnswer(submission: submission, spec: result.spec)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(18)
-                    .background(.surface, in: RoundedRectangle(cornerRadius: HRadius.card, style: .continuous))
-                }
-                .buttonStyle(.plain)
+    private func gridAuthor(_ submission: Submission) -> some View {
+        HStack(spacing: 8) {
+            HAvatar(content: submission.author.avatar, size: 26)
+            Text(submission.author.nickname)
+                .font(.plex(14, .semibold))
+                .foregroundStyle(.ink)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if submission.isLate {
+                Text(LateLabel.text)
+                    .font(.caption12)
+                    .foregroundStyle(.textSecondary)
             }
         }
+        .padding(.horizontal, 2)
     }
 }
 

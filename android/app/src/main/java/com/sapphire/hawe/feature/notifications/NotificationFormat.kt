@@ -22,7 +22,7 @@ fun notificationText(notification: AppNotification): String {
 /** 아바타 오른쪽 아래에 붙는 종류 표시. */
 fun notificationBadgeIcon(type: NotificationType): HIcon = when (type) {
     NotificationType.TOPIC -> HIcon.BELL
-    NotificationType.POKE -> HIcon.POKE_TEMP
+    NotificationType.POKE -> HIcon.BELL
     NotificationType.COMMENT, NotificationType.MENTION -> HIcon.COMMENT
     NotificationType.REACTION -> HIcon.HEART_FILL
 }

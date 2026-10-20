@@ -47,6 +47,7 @@ struct MyPageView: View {
     @Environment(DevAccountSwitcher.self) private var switcher
     @State private var openedLink: WebLink?
     @State private var confirmsLogout = false
+    @State private var confirmsDevOff = false
     @State private var toast: String?
     @State private var devUsers: [DevUserDTO]?
     @State private var usersFailed = false
@@ -98,9 +99,23 @@ struct MyPageView: View {
                         session.signOut()
                     }
                 )
+            } else if confirmsDevOff {
+                HAlert(
+                    title: "개발자 모드를 해제할까요?",
+                    message: "개발자 도구와 유저 전환이 사라져요.\n서버 시계는 개발자 도구에서 초기화하세요.",
+                    confirmTitle: "해제",
+                    onCancel: { confirmsDevOff = false },
+                    onConfirm: {
+                        DevFaults.clear()
+                        devMode.changeEnabled(false)
+                        confirmsDevOff = false
+                        toast = "개발자 모드를 껐어요"
+                    }
+                )
             }
         }
         .animation(.easeOut(duration: 0.2), value: confirmsLogout)
+        .animation(.easeOut(duration: 0.2), value: confirmsDevOff)
         .hToast($toast)
         .task { await loadStats() }
         .task(id: DevUsersKey(enabled: devMode.enabled, retry: usersRetry)) { await loadDevUsers() }
@@ -121,6 +136,7 @@ struct MyPageView: View {
     private var devSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HListRow("개발자 도구", height: 48) { path.append(.myPage(.devTools)) }
+            HListRow("개발자 모드 해제", height: 48) { confirmsDevOff = true }
             Text("유저 전환")
                 .font(.plex(15, .semibold))
                 .foregroundStyle(.ink)

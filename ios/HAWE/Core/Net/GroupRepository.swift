@@ -185,7 +185,9 @@ private extension GroupMemberDTO {
             defaultProfile: profile,
             groupProfile: hasGroupProfile == true ? profile : nil,
             isMe: userId == myUserID,
-            isOwner: userId == ownerID || role == "owner"
+            isOwner: userId == ownerID || role == "owner",
+            monthlySubmissionCount: submissionCountThisMonth,
+            stampedToday: stampedToday
         )
     }
 }

@@ -67,6 +67,10 @@ class MissionFormatTest {
         assertEquals(listOf("콕"), PokeKind.entries.map(::pokeButtonLabel))
         assertEquals("민준님 콕 찌르기", pokeButtonDescription(PokeKind.POKE, "민준", sent = false))
         assertEquals("민준님을 콕 찔렀어요", pokeButtonDescription(PokeKind.POKE, "민준", sent = true))
+        assertEquals(PokeTapAction.SEND, pokeTapAction(sent = false, busy = false, motionPlaying = false))
+        assertEquals(PokeTapAction.REPLAY_MOTION, pokeTapAction(sent = true, busy = false, motionPlaying = false))
+        assertEquals(PokeTapAction.IGNORE, pokeTapAction(sent = false, busy = true, motionPlaying = false))
+        assertEquals(PokeTapAction.IGNORE, pokeTapAction(sent = true, busy = false, motionPlaying = true))
     }
 
     @Test fun deadlineShowsNormalLateAndClosedStates() {

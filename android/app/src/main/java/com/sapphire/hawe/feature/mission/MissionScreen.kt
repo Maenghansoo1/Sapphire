@@ -8,6 +8,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import android.provider.Settings
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.*
@@ -16,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -24,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -51,6 +57,7 @@ import java.time.Duration
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 
 @Composable
 fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes: PokeRepository, session: AppSession,
@@ -142,6 +149,10 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
         }
     }
     var sending by remember(id) { mutableStateOf(emptySet<Triple<Long, Long, PokeKind>>()) }
+    var pokeMotions by remember(id) { mutableStateOf(emptyMap<Triple<Long, Long, PokeKind>, Int>()) }
+    fun showPokeMotion(key: Triple<Long, Long, PokeKind>) {
+        pokeMotions = pokeMotions + (key to ((pokeMotions[key] ?: 0) + 1))
+    }
     fun sendPoke(missionID: Long, member: MissionMember, kind: PokeKind) {
         val key = Triple(missionID, member.id, kind)
         if (key in sending) return
@@ -152,6 +163,7 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                 sending = sending - key
                 if (session.state != AppSession.State.SIGNED_IN) return@launch
                 store.markPoked(id, sent.missionId, member.id, sent.kind)
+                showPokeMotion(key)
                 toast.show(pokeSentText(kind, member.profile.nickname))
             } catch (error: Exception) {
                 sending = sending - key
@@ -159,7 +171,7 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                 if (session.state != AppSession.State.SIGNED_IN) return@launch
                 val failure = classifyPokeFailure(error)
                 when (failure.followUp) {
-                    PokeFollowUp.MARK_SENT -> { store.markPoked(id, missionID, member.id, kind); refresh++ }
+                    PokeFollowUp.MARK_SENT -> { store.markPoked(id, missionID, member.id, kind); showPokeMotion(key); refresh++ }
                     PokeFollowUp.REFRESH -> refresh++
                     PokeFollowUp.LEAVE -> onBack()
                     PokeFollowUp.NONE -> Unit
@@ -218,9 +230,11 @@ fun MissionScreen(id: Long, store: DataStore, missions: MissionRepository, pokes
                         style = HType.caption13, color = HColors.textSecondary)
                 }
                 mission.members.forEach { member ->
-                    MissionMemberRow(member, sending.filter { it.first == mission.id && it.second == member.id }
-                        .map { it.third }.toSet()) { kind ->
-                        sendPoke(mission.id, member, kind)
+                    key(mission.id, member.id) {
+                        MissionMemberRow(member, sending.filter { it.first == mission.id && it.second == member.id }
+                            .map { it.third }.toSet(), pokeMotions[Triple(mission.id, member.id, PokeKind.POKE)] ?: 0) { kind ->
+                            sendPoke(mission.id, member, kind)
+                        }
                     }
                 }
                 if (!mission.didSubmit && mission.type != null && supportsTemplate(mission.template)) Row(Modifier.fillMaxWidth().padding(top = 20.dp)
@@ -306,11 +320,51 @@ private fun MissionCountdown(closesAt: Instant, deadlineAt: Instant? = null) {
 }
 
 @Composable
-private fun MissionMemberRow(member: MissionMember, sending: Set<PokeKind>, onPoke: (PokeKind) -> Unit) {
+private fun MissionMemberRow(member: MissionMember, sending: Set<PokeKind>, motionSignal: Int,
+    onPoke: (PokeKind) -> Unit) {
+    val context = LocalContext.current
+    val reducedMotion = remember(context) {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }
+    val handOffset = remember { Animatable(28f) }
+    val avatarScale = remember { Animatable(1f) }
+    var motionPlaying by remember { mutableStateOf(false) }
+    var showHand by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    suspend fun playMotion() {
+        if (motionPlaying) return
+        motionPlaying = true
+        showHand = true
+        try {
+            if (reducedMotion) delay(300)
+            else {
+                handOffset.snapTo(28f)
+                coroutineScope {
+                    launch {
+                        avatarScale.animateTo(0.9f, tween(250))
+                        avatarScale.animateTo(1f, tween(250))
+                    }
+                    handOffset.animateTo(-3f, tween(270))
+                    delay(80)
+                    handOffset.animateTo(28f, tween(270))
+                }
+            }
+        } finally {
+            showHand = false
+            motionPlaying = false
+        }
+    }
+    LaunchedEffect(motionSignal) { if (motionSignal > 0) playMotion() }
     Column {
         Row(Modifier.fillMaxWidth().height(55.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HAvatar(member.profile.avatar, size = 38.dp)
+            Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.graphicsLayer { scaleX = avatarScale.value; scaleY = avatarScale.value }) {
+                    HAvatar(member.profile.avatar, size = 38.dp)
+                }
+                if (showHand) Text("👆", Modifier.offset(y = (if (reducedMotion) 0f else handOffset.value).dp),
+                    fontSize = 22.sp, lineHeight = 22.sp)
+            }
             Text(memberDisplayName(member), Modifier.weight(1f),
                 style = HType.plex(15, FontWeight.Medium), color = HColors.ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -324,7 +378,13 @@ private fun MissionMemberRow(member: MissionMember, sending: Set<PokeKind>, onPo
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     PokeKind.entries.forEach { kind ->
                         PokeButton(kind, member.profile.nickname, sent = kind in member.poked,
-                            busy = kind in sending) { onPoke(kind) }
+                            busy = kind in sending || motionPlaying) {
+                            when (pokeTapAction(kind in member.poked, kind in sending, motionPlaying)) {
+                                PokeTapAction.SEND -> onPoke(kind)
+                                PokeTapAction.REPLAY_MOTION -> scope.launch { playMotion() }
+                                PokeTapAction.IGNORE -> Unit
+                            }
+                        }
                     }
                 }
             }
@@ -333,7 +393,7 @@ private fun MissionMemberRow(member: MissionMember, sending: Set<PokeKind>, onPo
     }
 }
 
-/** 콕 버튼. 보내면 체크와 강조색으로 바뀌고 다시 누를 수 없다(미션마다 1번). */
+/** 콕 버튼. 보내면 체크와 강조색으로 바뀌고 다시 누르면 모션만 재생한다. */
 @Composable
 private fun PokeButton(kind: PokeKind, nickname: String, sent: Boolean, busy: Boolean, onClick: () -> Unit) {
     val description = pokeButtonDescription(kind, nickname, sent)
@@ -341,16 +401,14 @@ private fun PokeButton(kind: PokeKind, nickname: String, sent: Boolean, busy: Bo
     Row(Modifier.minimumInteractiveComponentSize().height(34.dp).clip(CircleShape)
         .background(if (sent) HColors.accentSubtle else HColors.bg)
         .border(1.dp, if (sent) HColors.accentSubtle else HColors.border, CircleShape)
-        .clickable(enabled = !sent && !busy, role = Role.Button, onClick = onClick)
+        .clickable(enabled = !busy, role = Role.Button, onClick = onClick)
         .semantics { contentDescription = description }
         .alpha(if (busy) 0.5f else 1f).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        HIconView(if (sent) HIcon.CHECK_SMALL else kind.icon, size = 16.dp, color = color)
+        if (sent) HIconView(HIcon.CHECK_SMALL, size = 16.dp, color = color)
+        else Text("👆", fontSize = 16.sp, lineHeight = 16.sp)
         Text(pokeButtonLabel(kind), Modifier.clearAndSetSemantics { },
             style = HType.plex(13, FontWeight.SemiBold), color = color)
     }
 }
 
-private val PokeKind.icon: HIcon get() = when (this) {
-    PokeKind.POKE -> HIcon.POKE_TEMP
-}

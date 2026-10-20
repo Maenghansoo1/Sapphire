@@ -106,7 +106,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (appSession.state == AppSession.State.RESTORING) viewModelScope.launch {
             try {
-                val account = auth.restore()
+                val account = auth.restoreWithRetry()
                 dataStore.setMyProfile(account.profile)
                 appSession.signIn(account)
             } catch (e: Exception) {

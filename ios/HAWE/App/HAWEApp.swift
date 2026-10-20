@@ -48,7 +48,7 @@ struct HAWEApp: App {
     private func restoreSession() async {
         guard session.state == .restoring else { return }
         do {
-            let account = try await services.auth.restore()
+            let account = try await services.auth.restoreWithRetry()
             store.setMyProfile(account.profile)
             session.signIn(account)
         } catch is CancellationError {

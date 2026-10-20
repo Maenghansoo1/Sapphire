@@ -50,6 +50,10 @@ final class MissionFormatTests: XCTestCase {
         XCTAssertEqual(PokeKind.allCases.map(MissionFormat.pokeButtonLabel), ["콕"])
         XCTAssertEqual(MissionFormat.pokeButtonDescription(.poke, nickname: "민준", sent: false), "민준님 콕 찌르기")
         XCTAssertEqual(MissionFormat.pokeButtonDescription(.poke, nickname: "민준", sent: true), "민준님을 콕 찔렀어요")
+        XCTAssertEqual(MissionFormat.pokeTapAction(sent: false, busy: false, motionPlaying: false), .send)
+        XCTAssertEqual(MissionFormat.pokeTapAction(sent: true, busy: false, motionPlaying: false), .replayMotion)
+        XCTAssertEqual(MissionFormat.pokeTapAction(sent: false, busy: true, motionPlaying: false), .ignore)
+        XCTAssertEqual(MissionFormat.pokeTapAction(sent: true, busy: false, motionPlaying: true), .ignore)
     }
 
     func testDeadlineShowsNormalLateAndClosedStates() {
@@ -156,6 +160,18 @@ final class ResultsFormatTests: XCTestCase {
     private let now = ISO8601DateFormatter().date(from: "2026-10-12T00:00:00Z")!
 
     private func date(_ text: String) -> Date { ISO8601DateFormatter().date(from: text)! }
+
+    func testStickerToggleSequenceCancelsBeforeReplacing() {
+        XCTAssertEqual(ResultsFormat.stickerToggleSequence(mine: [], pressed: .heart), [.heart])
+        XCTAssertEqual(ResultsFormat.stickerToggleSequence(mine: [.heart], pressed: .heart), [.heart])
+        XCTAssertEqual(ResultsFormat.stickerToggleSequence(mine: [.heart], pressed: .fire), [.heart, .fire])
+        XCTAssertEqual(ResultsFormat.stickerToggleSequence(mine: [.heart, .fire], pressed: .fire), [.heart, .fire])
+        XCTAssertEqual(ResultsFormat.stickerToggleSequence(mine: [.heart, .fire], pressed: .wow), [.heart, .fire, .wow])
+        XCTAssertEqual(ResultsFormat.stickerToggleSequence(mine: [.heart, .heart, .fire], pressed: .wow),
+                       [.heart, .fire, .wow])
+        XCTAssertEqual(ResultsFormat.stickerToggleSequence(mine: Sticker.allCases + [.heart], pressed: .fire),
+                       Sticker.allCases)
+    }
 
     func testSeoulTime() {
         XCTAssertEqual(date("2026-10-12T00:12:00Z").koreanTime, "오전 9:12")

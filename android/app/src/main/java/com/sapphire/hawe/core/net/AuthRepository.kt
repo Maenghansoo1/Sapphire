@@ -10,6 +10,7 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 
 data class SaveProfileResult(val account: MyAccount?, val error: Throwable?)
 
@@ -51,6 +52,20 @@ class AuthRepository(private val api: ApiClient, private val tokens: TokenStore)
     }
 
     suspend fun restore(): MyAccount = api.me().toAccount()
+
+    /** Retry temporary startup failures while retaining the stored refresh token. */
+    suspend fun restoreWithRetry(delays: List<Long> = listOf(1000, 2000)): MyAccount {
+        for (waitMs in delays) {
+            try {
+                return restore()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                if (e !is NetworkException && (e !is ApiException || e.status < 500)) throw e
+                delay(waitMs)
+            }
+        }
+        return restore()
+    }
 
     suspend fun saveProfile(current: Profile, nickname: String, avatar: AvatarContent,
         readPhoto: (Uri) -> ByteArray): SaveProfileResult {

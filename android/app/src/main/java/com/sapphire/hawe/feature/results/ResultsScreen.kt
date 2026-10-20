@@ -4,13 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -130,41 +133,47 @@ fun ResultsScreen(groupID: Long, missionID: Long, store: DataStore, repository: 
 
 @Composable
 private fun PhotoFeed(result: MissionResult, onDetail: (Long) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        result.submissions.forEach { submission ->
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HAvatar(submission.author.avatar, size = 34.dp)
-                    Text(submission.author.nickname, Modifier.weight(1f), style = HType.plex(15, FontWeight.SemiBold),
-                        color = HColors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(koreanTimeText(submission.createdAt), style = HType.caption13, color = HColors.textSecondary)
-                    if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
-                }
-                PhotoArtwork(submission, 260.dp, Modifier.clickable { onDetail(submission.id) })
-            }
+    SubmissionGrid(result.submissions, onDetail) { submission ->
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            PhotoArtwork(submission, 165.dp)
+            GridAuthor(submission)
         }
     }
 }
 
 @Composable
 private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit) {
+    SubmissionGrid(result.submissions, onDetail) { submission ->
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            DrawingArtwork(submission, 165.dp, 130.dp, cornerRadius = 18.dp)
+            GridAuthor(submission)
+        }
+    }
+}
+
+@Composable
+private fun AnswerCards(result: MissionResult, onDetail: (Long) -> Unit) {
+    SubmissionGrid(result.submissions, onDetail) { submission ->
+        Column(Modifier.fillMaxWidth().height(165.dp).clip(RoundedCornerShape(20.dp))
+            .background(HColors.surface).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GridAuthor(submission)
+            Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
+                TemplateAnswer(submission, result.spec)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubmissionGrid(submissions: List<Submission>, onDetail: (Long) -> Unit,
+    cell: @Composable (Submission) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        result.submissions.chunked(2).forEach { row ->
+        submissions.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { submission ->
-                    Column(Modifier.weight(1f).clickable { onDetail(submission.id) },
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box {
-                            DrawingArtwork(submission, 165.dp, 130.dp, cornerRadius = 18.dp)
-                        }
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            HAvatar(submission.author.avatar, size = 26.dp)
-                            Text(submission.author.nickname, Modifier.weight(1f),
-                                style = HType.plex(14, FontWeight.SemiBold), color = HColors.ink,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
-                        }
+                    Box(Modifier.weight(1f).clickable { onDetail(submission.id) }
+                        .semantics { contentDescription = "${submission.author.nickname} 작품 보기" }) {
+                        cell(submission)
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -174,21 +183,12 @@ private fun DrawingGrid(result: MissionResult, onDetail: (Long) -> Unit) {
 }
 
 @Composable
-private fun AnswerCards(result: MissionResult, onDetail: (Long) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        result.submissions.forEach { submission ->
-            Column(Modifier.fillMaxWidth().background(HColors.surface, RoundedCornerShape(20.dp))
-                .clickable { onDetail(submission.id) }.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    HAvatar(submission.author.avatar, Modifier.background(HColors.bg, CircleShape), size = 30.dp)
-                    Text(submission.author.nickname, Modifier.weight(1f), style = HType.plex(14, FontWeight.SemiBold),
-                        color = HColors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(koreanTimeText(submission.createdAt), style = HType.caption12, color = HColors.textSecondary)
-                    if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
-                }
-                TemplateAnswer(submission, result.spec)
-            }
-        }
+private fun GridAuthor(submission: Submission) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        HAvatar(submission.author.avatar, size = 26.dp)
+        Text(submission.author.nickname, Modifier.weight(1f), style = HType.plex(14, FontWeight.SemiBold),
+            color = HColors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (submission.isLate) Text(LATE_LABEL, style = HType.caption12, color = HColors.textSecondary)
     }
 }

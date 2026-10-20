@@ -67,6 +67,23 @@ final class AuthRepository: Sendable {
         )
     }
 
+    /// Retry only temporary failures while the startup screen is restoring the session.
+    func restoreWithRetry(delays: [TimeInterval] = [1, 2]) async throws -> MyAccount {
+        for seconds in delays {
+            try Task.checkCancellation()
+            do {
+                return try await restore()
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                guard error is NetworkError || (error as? APIError).map({ $0.status >= 500 }) == true else { throw error }
+                try await Task.sleep(for: .seconds(seconds))
+            }
+        }
+        try Task.checkCancellation()
+        return try await restore()
+    }
+
     /// 기본 프로필 저장 — 닉네임 → 캐릭터(또는 사진) → `GET /me` 순서예요 (Android 와 같아요).
     /// 중간에 실패해도 서버의 최신 내 정보를 받아 화면을 맞춰요.
     func saveProfile(current: Profile, nickname: String, avatar: AvatarContent) async throws -> SaveProfileResult {

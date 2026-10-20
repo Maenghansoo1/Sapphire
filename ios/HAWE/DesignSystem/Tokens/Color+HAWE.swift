@@ -33,8 +33,6 @@ extension ShapeStyle where Self == Color {
     static var textDisabled: Color { Color(hex: 0xB0B0B5) }
 
     // 카카오 로그인 버튼 — 카카오 디자인 가이드 고정 색
-    static var kakaoContainer: Color { Color(hex: 0xFEE500) }
-    static var kakaoLabel: Color { Color(hex: 0x191919) }
 }
 
 extension Color {

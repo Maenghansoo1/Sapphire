@@ -118,6 +118,7 @@ struct SubmissionSocial: View {
     @State private var reload = 0
     @State private var message: String?
     @State private var started = false
+    @State private var isToggling = false
 
     private var names: [Int: String] {
         Dictionary(members.map { ($0.id, $0.displayed.nickname) }, uniquingKeysWith: { a, _ in a })
@@ -213,9 +214,16 @@ struct SubmissionSocial: View {
     }
 
     private func toggle(_ sticker: Sticker) {
+        guard !isToggling else { return }
+        isToggling = true
+        let sequence = ResultsFormat.stickerToggleSequence(
+            mine: reactions.filter { $0.reactedByMe }.map { $0.sticker }, pressed: sticker)
         Task {
+            defer { isToggling = false }
             do {
-                reactions = try await repository.toggleReaction(submissionID: submissionID, sticker: sticker)
+                for next in sequence {
+                    reactions = try await repository.toggleReaction(submissionID: submissionID, sticker: next)
+                }
                 message = nil
             } catch is CancellationError {
             } catch {

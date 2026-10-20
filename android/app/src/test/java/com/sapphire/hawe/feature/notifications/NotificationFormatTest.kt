@@ -5,6 +5,7 @@ import com.sapphire.hawe.core.model.AvatarContent
 import com.sapphire.hawe.core.model.NotificationType
 import com.sapphire.hawe.core.model.Profile
 import com.sapphire.hawe.designsystem.assets.ProfileCharacter
+import com.sapphire.hawe.designsystem.assets.HIcon
 import java.time.Instant
 import org.junit.Assert.*
 import org.junit.Test
@@ -16,6 +17,7 @@ class NotificationFormatTest {
         from?.let { Profile(AvatarContent.Character(ProfileCharacter.MULBANGUL), it) }, missionId, null, body, false, at)
 
     @Test fun fallbackTextPerType() {
+        assertEquals(HIcon.BELL, notificationBadgeIcon(NotificationType.POKE))
         assertEquals("오늘의 미션이 열렸어요", notificationText(item(NotificationType.TOPIC, from = null)))
         assertEquals("서연님이 콕 찔렀어요", notificationText(item(NotificationType.POKE)))
         assertEquals("서연님이 내 작품에 댓글을 남겼어요", notificationText(item(NotificationType.COMMENT)))

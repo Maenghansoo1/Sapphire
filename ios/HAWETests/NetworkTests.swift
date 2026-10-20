@@ -14,6 +14,53 @@ final class NetworkTests: XCTestCase {
         api = APIClient(baseURL: URL(string: "http://stub.local")!, tokens: tokens, protocolClasses: [StubProtocol.self])
     }
 
+    func testGroupDetailMapsMemberSubmissionStats() async throws {
+        StubProtocol.respond(path: "/api/groups/7", 200, #"{"id":7,"name":"친구들","ownerId":5,"relationType":"FRIEND","createdAt":"2026-10-01T09:00:00+09:00","memberCount":2,"maxMembers":6,"inviteCode":"ABC123","inviteUrl":"https://example.com/invite","dailyMissionCount":1,"missionSlots":[],"missionCount":0}"#)
+        StubProtocol.respond(path: "/api/groups/7/members", 200, #"{"content":[{"userId":5,"nickname":"owner","characterKey":"gamja","role":"owner","submissionCountThisMonth":4,"stampedToday":true},{"userId":8,"nickname":"me","role":"member"}]}"#)
+        let group = try await GroupRepository(api: api).detail(groupID: 7, myUserID: 8)
+        XCTAssertEqual(group.members.first?.monthlySubmissionCount, 4)
+        XCTAssertEqual(group.members.first?.stampedToday, true)
+        XCTAssertNil(group.members.last?.monthlySubmissionCount)
+        XCTAssertNil(group.members.last?.stampedToday)
+    }
+
+    func testRestoreRetriesServerFailure() async throws {
+        StubProtocol.respond(503, #"{"code":"UNAVAILABLE","message":"later"}"#)
+        StubProtocol.respond(200, #"{"id":1,"email":"ada@example.com","nickname":"Ada","characterKey":null,"createdAt":"2026-09-28T09:00:00+09:00"}"#)
+        let account = try await AuthRepository(api: api, tokens: tokens).restoreWithRetry(delays: [0, 0])
+        XCTAssertEqual(account.profile.nickname, "Ada")
+        XCTAssertEqual(StubProtocol.requests.count, 2)
+    }
+
+    func testRestoreRetriesNetworkFailure() async throws {
+        StubProtocol.failNext = true
+        StubProtocol.respond(200, #"{"id":1,"email":"ada@example.com","nickname":"Ada","characterKey":null,"createdAt":"2026-09-28T09:00:00+09:00"}"#)
+        let account = try await AuthRepository(api: api, tokens: tokens).restoreWithRetry(delays: [0, 0])
+        XCTAssertEqual(account.profile.nickname, "Ada")
+        XCTAssertEqual(StubProtocol.requests.count, 2)
+    }
+
+    func testRestoreStopsAfterThreeServerFailures() async {
+        for _ in 0..<3 { StubProtocol.respond(503, #"{"code":"UNAVAILABLE","message":"later"}"#) }
+        do {
+            _ = try await AuthRepository(api: api, tokens: tokens).restoreWithRetry(delays: [0, 0])
+            XCTFail("Expected server failure")
+        } catch {
+            XCTAssertEqual(error.apiStatus, 503)
+            XCTAssertEqual(StubProtocol.requests.count, 3)
+        }
+    }
+
+    func testRestoreDoesNotRetryUnauthorized() async {
+        StubProtocol.respond(401, #"{"code":"INVALID_TOKEN","message":"invalid"}"#)
+        do {
+            _ = try await AuthRepository(api: api, tokens: tokens).restoreWithRetry(delays: [0, 0])
+            XCTFail("Expected authorization failure")
+        } catch {
+            XCTAssertEqual(StubProtocol.requests.count, 1)
+        }
+    }
+
     func testPokeSendsKindAndMissionAndMapsResponse() async throws {
         StubProtocol.respond(201, #"{"id":1,"toUserId":7,"type":"poke","missionId":10,"sentAt":"2026-10-13T15:41:48+09:00"}"#)
         let sent = try await PokeRepository(api: api).send(groupID: 3, toUserID: 7, kind: .poke, missionID: 10)
@@ -228,11 +275,15 @@ final class NetworkTests: XCTestCase {
 /// 서버 대신 미리 넣어 둔 응답을 차례로 돌려줘요.
 final class StubProtocol: URLProtocol {
     nonisolated(unsafe) static var responses: [(Int, Data)] = []
+    nonisolated(unsafe) static var pathResponses: [String: (Int, Data)] = [:]
+    nonisolated(unsafe) static var failNext = false
     nonisolated(unsafe) static var requests: [URLRequest] = []
     nonisolated(unsafe) static var bodies: [Data] = []
 
     static func reset() {
         responses = []
+        pathResponses = [:]
+        failNext = false
         requests = []
         bodies = []
     }
@@ -241,13 +292,23 @@ final class StubProtocol: URLProtocol {
         responses.append((status, Data(body.utf8)))
     }
 
+    static func respond(path: String, _ status: Int, _ body: String) {
+        pathResponses[path] = (status, Data(body.utf8))
+    }
+
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "stub.local" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         Self.requests.append(request)
         Self.bodies.append(request.httpBody ?? request.httpBodyStream.map(Self.read) ?? Data())
-        let (status, body) = Self.responses.isEmpty ? (500, Data()) : Self.responses.removeFirst()
+        if Self.failNext {
+            Self.failNext = false
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
+        let (status, body) = Self.pathResponses[request.url!.path]
+            ?? (Self.responses.isEmpty ? (500, Data()) : Self.responses.removeFirst())
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

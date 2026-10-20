@@ -27,8 +27,16 @@ class MissionTriggerTests {
     @Test
     void afterCommitListenerSwallowsPublishFailure() {
         MissionPublisher publisher = mock(MissionPublisher.class);
-        doThrow(new IllegalStateException("temporary")).when(publisher).publishIfDue(eq(1L), any(LocalDateTime.class));
+        doThrow(new IllegalStateException("temporary")).when(publisher).publishFirstMission(eq(1L), any(LocalDateTime.class));
 
         assertDoesNotThrow(() -> new MissionPublishListener(publisher).onGroupCreated(new GroupCreatedEvent(1L)));
+        verify(publisher).publishFirstMission(eq(1L), any(LocalDateTime.class));
+    }
+
+    @Test
+    void afterCommitListenerPublishesFirstMission() {
+        MissionPublisher publisher = mock(MissionPublisher.class);
+        new MissionPublishListener(publisher).onGroupCreated(new GroupCreatedEvent(1L));
+        verify(publisher).publishFirstMission(eq(1L), any(LocalDateTime.class));
     }
 }

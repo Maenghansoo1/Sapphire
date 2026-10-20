@@ -24,15 +24,17 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     // 기기 테스트(그림 인식 모델)가 단위 테스트와 같은 골든 예시를 쓰도록 test/resources 를 androidTest 자산으로도 묶는다
     sourceSets { getByName("androidTest").assets.srcDir("src/test/resources") }
+    // 서버 주소: -PhaweApiBaseUrl > 환경변수 HAWE_API_BASE_URL > 기본값 (EC2 주소가 바뀔 때마다 환경변수만 바꿔 설치)
+    val apiBaseOverride = (findProperty("haweApiBaseUrl") as String?) ?: System.getenv("HAWE_API_BASE_URL")
     buildTypes {
         getByName("debug") {
             buildConfigField("String", "API_BASE_URL",
-                "\"${findProperty("haweApiBaseUrl") ?: "http://10.0.2.2:8080"}\"")
+                "\"${apiBaseOverride ?: "http://10.0.2.2:8080"}\"")
         }
         getByName("release") {
             // Placeholder until the production API domain is chosen; override with -PhaweApiBaseUrl.
             buildConfigField("String", "API_BASE_URL",
-                "\"${findProperty("haweApiBaseUrl") ?: "https://api.hawe.app"}\"")
+                "\"${apiBaseOverride ?: "https://api.hawe.app"}\"")
         }
     }
 }

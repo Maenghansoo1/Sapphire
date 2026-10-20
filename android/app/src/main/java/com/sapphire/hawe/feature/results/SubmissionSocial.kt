@@ -65,6 +65,11 @@ internal fun socialErrorMessage(error: Throwable): String = when {
 internal fun mentionedIdsIn(text: String, picked: Map<Long, String>): List<Long> =
     picked.filter { (_, nickname) -> text.contains("@$nickname") }.keys.toList()
 
+internal fun stickerToggleSequence(mine: List<Sticker>, pressed: Sticker): List<Sticker> {
+    val selected = mine.distinct()
+    return if (pressed in selected) selected else selected + pressed
+}
+
 @Composable
 fun SubmissionSocial(submissionID: Long, initialReactions: List<Reaction>, members: List<GroupMember>,
     repository: SubmissionRepository) {
@@ -74,6 +79,7 @@ fun SubmissionSocial(submissionID: Long, initialReactions: List<Reaction>, membe
     var loadFailed by remember(submissionID) { mutableStateOf(false) }
     var reload by remember(submissionID) { mutableIntStateOf(0) }
     var message by remember(submissionID) { mutableStateOf<String?>(null) }
+    var toggling by remember(submissionID) { mutableStateOf(false) }
     val names = remember(members) { members.associate { it.id to it.displayed.nickname } }
 
     LaunchedEffect(submissionID, reload) {
@@ -87,12 +93,18 @@ fun SubmissionSocial(submissionID: Long, initialReactions: List<Reaction>, membe
 
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         StickerBar(reactions, names) { sticker ->
+            if (toggling) return@StickerBar
+            toggling = true
+            val sequence = stickerToggleSequence(reactions.filter { it.reactedByMe }.map { it.sticker }, sticker)
             scope.launch {
-                try { reactions = repository.toggleReaction(submissionID, sticker); message = null }
+                try {
+                    sequence.forEach { next -> reactions = repository.toggleReaction(submissionID, next) }
+                    message = null
+                }
                 catch (error: Exception) {
                     if (error is CancellationException) throw error
                     message = socialErrorMessage(error)
-                }
+                } finally { toggling = false }
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

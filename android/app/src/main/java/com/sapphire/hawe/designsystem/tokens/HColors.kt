@@ -21,6 +21,4 @@ object HColors {
     val controlOff = Color(0xFFD1D1D6)
     val textBody = Color(0xFF3A3A3C)
     val textDisabled = Color(0xFFB0B0B5)
-    val kakaoContainer = Color(0xFFFEE500)
-    val kakaoLabel = Color(0xFF191919)
 }

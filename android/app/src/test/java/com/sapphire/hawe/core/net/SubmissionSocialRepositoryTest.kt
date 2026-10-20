@@ -3,6 +3,7 @@ package com.sapphire.hawe.core.net
 import com.sapphire.hawe.core.model.Sticker
 import com.sapphire.hawe.core.model.AiDetail
 import com.sapphire.hawe.feature.results.mentionedIdsIn
+import com.sapphire.hawe.feature.results.stickerToggleSequence
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -10,6 +11,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SubmissionSocialRepositoryTest {
+    @Test fun stickerToggleSequenceCancelsBeforeReplacing() {
+        assertEquals(listOf(Sticker.HEART), stickerToggleSequence(emptyList(), Sticker.HEART))
+        assertEquals(listOf(Sticker.HEART), stickerToggleSequence(listOf(Sticker.HEART), Sticker.HEART))
+        assertEquals(listOf(Sticker.HEART, Sticker.FIRE),
+            stickerToggleSequence(listOf(Sticker.HEART), Sticker.FIRE))
+        assertEquals(listOf(Sticker.HEART, Sticker.FIRE),
+            stickerToggleSequence(listOf(Sticker.HEART, Sticker.FIRE), Sticker.FIRE))
+        assertEquals(listOf(Sticker.HEART, Sticker.FIRE, Sticker.WOW),
+            stickerToggleSequence(listOf(Sticker.HEART, Sticker.FIRE), Sticker.WOW))
+        assertEquals(listOf(Sticker.HEART, Sticker.FIRE, Sticker.WOW),
+            stickerToggleSequence(listOf(Sticker.HEART, Sticker.HEART, Sticker.FIRE), Sticker.WOW))
+        assertEquals(Sticker.entries, stickerToggleSequence(Sticker.entries + Sticker.HEART, Sticker.FIRE))
+    }
+
     private val comment = """{"id":2,"author":{"userId":3,"nickname":"잎사귀","characterKey":"ipsagwi"},"content":"@몽실이 뭐야","imageUrl":"/files/comments/a.jpg","mentionedUserIds":[1],"createdAt":"2026-09-28T21:10:00+09:00","mine":true}"""
     private fun repo(server: MockWebServer) =
         SubmissionRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore().apply { save("a", "r") }))

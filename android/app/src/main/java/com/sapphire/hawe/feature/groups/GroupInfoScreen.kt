@@ -3,7 +3,6 @@ package com.sapphire.hawe.feature.groups
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +25,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.sapphire.hawe.core.AppLinks
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.GroupDetail
 import com.sapphire.hawe.core.model.GroupMember
@@ -69,6 +67,7 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
     var reissuing by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
     var changingTime by remember { mutableStateOf(false) }
+    var selectedMemberId by remember(id) { mutableStateOf<Long?>(null) }
     val toast = rememberHToastState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -103,7 +102,6 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
                             HIconView(HIcon.COPY, size = 20.dp)
                         }
                     }
-                    HButton("초대 링크 공유하기") { shareInvite(context, group) }
                     if (group.amIOwner) Text("코드 다시 만들기", Modifier.clickable(enabled = !reissuing) {
                         showReissue = true
                     }, style = HType.plex(14, FontWeight.SemiBold), color = HColors.ink)
@@ -116,7 +114,10 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
                         color = HColors.textSecondary)
                 }
                 group.members.forEach { member ->
-                    Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically,
+                    Row(Modifier.fillMaxWidth().height(52.dp)
+                        .clickable { selectedMemberId = member.id }
+                        .semantics { contentDescription = "${member.displayed.nickname} 프로필 보기" },
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HAvatar(member.displayed.avatar, size = 36.dp)
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
@@ -217,12 +218,38 @@ fun GroupInfoScreen(id: Long, store: DataStore, groups: GroupRepository, session
             }
         }
     })
+    selectedMemberId?.let { memberId ->
+        group.members.firstOrNull { it.id == memberId }?.let { member ->
+            MemberInfoSheet(member, onDismiss = { selectedMemberId = null })
+        }
+    }
 }
 
-private fun shareInvite(context: Context, group: GroupDetail) {
-    val body = "HA'WE '${group.name}' 그룹에 초대할게요. 초대 코드: ${group.inviteCode}\n${AppLinks.invite(group.inviteCode)}"
-    val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, body) }
-    context.startActivity(Intent.createChooser(intent, "초대 링크 공유하기"))
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MemberInfoSheet(member: GroupMember, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = HColors.bg) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = HLayout.screenPaddingCompact)
+            .padding(bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            HAvatar(member.displayed.avatar, size = 96.dp)
+            Text(member.displayed.nickname, style = HType.plex(20, FontWeight.Bold), color = HColors.ink,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            memberBadge(member)?.let { Text(it, style = HType.caption13, color = HColors.textSecondary) }
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                MemberStatRow("이번 달 제출", member.monthlySubmissionCount?.let { "${it}회" } ?: "-")
+                MemberStatRow("오늘 제출", member.stampedToday?.let { if (it) "완료" else "아직" } ?: "-")
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemberStatRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = HType.body15, color = HColors.textSecondary)
+        Text(value, style = HType.body15, color = HColors.ink)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

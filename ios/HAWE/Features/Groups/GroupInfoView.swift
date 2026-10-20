@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 16 그룹 정보 · 설정 (Figma 1:1454)
-/// 초대 코드 복사·링크 공유·다시 만들기(그룹장), 멤버 목록·내 그룹 내 프로필, 우리 그룹 이야기(인사이트),
+/// 초대 코드 복사·다시 만들기(그룹장), 멤버 목록·내 그룹 내 프로필, 우리 그룹 이야기(인사이트),
 /// 주제 도착 시간(그룹장), 그룹 나가기(다른 멤버가 있는 그룹장은 그룹장을 넘기고 나가요). 그룹 알림은 준비 중이에요.
 struct GroupInfoView: View {
     let groupID: Int
@@ -18,6 +18,7 @@ struct GroupInfoView: View {
     @State private var isReissuing = false
     @State private var showsTimeSheet = false
     @State private var isChangingTime = false
+    @State private var selectedMember: SelectedMember?
     @State private var toast: String?
 
     /// 나간 직후처럼 그룹이 사라졌을 때는 빈 값으로 그려요.
@@ -72,6 +73,11 @@ struct GroupInfoView: View {
                 changeTopicTime(time)
             }
         }
+        .sheet(item: $selectedMember) { selection in
+            if let member = group.members.first(where: { $0.id == selection.id }) {
+                MemberInfoSheet(member: member, badge: badge(for: member))
+            }
+        }
         .hToast($toast)
         // 들어올 때마다 멤버·초대 코드를 서버에서 다시 받아요.
         .task { await reload() }
@@ -118,14 +124,6 @@ struct GroupInfoView: View {
                 .accessibilityLabel("초대 코드 복사")
             }
 
-            ShareLink(
-                item: AppLinks.invite(code: group.inviteCode),
-                message: Text("HA'WE '\(group.name)' 그룹에 초대할게요. 초대 코드: \(group.inviteCode)")
-            ) {
-                Text("초대 링크 공유하기")
-            }
-            .buttonStyle(HButtonStyle(kind: .primary))
-
             if group.amIOwner {
                 Button { showsReissueAlert = true } label: {
                     Text("코드 다시 만들기")
@@ -162,20 +160,28 @@ struct GroupInfoView: View {
         VStack(spacing: 0) {
             ForEach(group.members) { member in
                 HStack(spacing: 12) {
-                    HAvatar(content: member.displayed.avatar, size: 36)
-                    HStack(spacing: 6) {
-                        Text(member.displayed.nickname)
-                            .font(.plex(15, .medium))
-                            .foregroundStyle(.ink)
-                            .lineLimit(1)
-                        if let badge = badge(for: member) {
-                            Text(badge)
-                                .font(.caption12)
-                                .foregroundStyle(.textSecondary)
-                                .fixedSize()
+                    Button { selectedMember = SelectedMember(id: member.id) } label: {
+                        HStack(spacing: 12) {
+                            HAvatar(content: member.displayed.avatar, size: 36)
+                            HStack(spacing: 6) {
+                                Text(member.displayed.nickname)
+                                    .font(.plex(15, .medium))
+                                    .foregroundStyle(.ink)
+                                    .lineLimit(1)
+                                if let badge = badge(for: member) {
+                                    Text(badge)
+                                        .font(.caption12)
+                                        .foregroundStyle(.textSecondary)
+                                        .fixedSize()
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .frame(minHeight: 52)
+                        .contentShape(Rectangle())
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(member.displayed.nickname) 프로필 보기")
 
                     if member.isMe {
                         Button { path.append(.groupProfile(groupID: groupID)) } label: {
@@ -353,6 +359,49 @@ struct GroupInfoView: View {
         let hour24 = time.hour ?? 9
         let hour = hour24 % 12 == 0 ? 12 : hour24 % 12
         return "\(hour24 < 12 ? "오전" : "오후") \(hour):" + String(format: "%02d", time.minute ?? 0)
+    }
+}
+
+private struct SelectedMember: Identifiable {
+    let id: Int
+}
+
+private struct MemberInfoSheet: View {
+    let member: GroupMember
+    let badge: String?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HAvatar(content: member.displayed.avatar, size: 96)
+            Text(member.displayed.nickname)
+                .font(.plex(20, .bold))
+                .foregroundStyle(.ink)
+                .lineLimit(2)
+            if let badge {
+                Text(badge).font(.caption13).foregroundStyle(.textSecondary)
+            }
+            VStack(spacing: 0) {
+                statRow("이번 달 제출", value: member.monthlySubmissionCount.map { "\($0)회" } ?? "-")
+                statRow("오늘 제출", value: member.stampedToday.map { $0 ? "완료" : "아직" } ?? "-")
+            }
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, HLayout.screenPaddingCompact)
+        .padding(.bottom, 32)
+        .background(.bg)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func statRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.textSecondary)
+            Spacer()
+            Text(value).foregroundStyle(.ink)
+        }
+        .font(.body15)
+        .frame(height: 48)
     }
 }
 

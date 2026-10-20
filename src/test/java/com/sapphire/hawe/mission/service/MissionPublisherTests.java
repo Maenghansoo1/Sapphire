@@ -224,6 +224,28 @@ class MissionPublisherTests {
     }
 
     @Test
+    void groupCreationPublishesOnlyFirstSlotBeforeScheduledTime() {
+        LocalDateTime now = LocalDateTime.of(2026, 10, 12, 8, 0);
+        Group group = group(now);
+        group.setDailyMissionCount(3);
+        when(groups.findById(11L)).thenReturn(group);
+        when(generator.generate(any(), anyLong(), any(), anyBoolean()))
+                .thenReturn(new GeneratedMission("A", "일상", Map.of()));
+
+        publisher.publishFirstMission(11L, now);
+
+        ArgumentCaptor<MissionInsertRow> inserted = ArgumentCaptor.forClass(MissionInsertRow.class);
+        verify(missions).insert(inserted.capture());
+        assertEquals(1, inserted.getValue().getSlotNo());
+        assertEquals(now, inserted.getValue().getPublishedAt());
+        assertEquals(now.toLocalDate().atTime(23, 0), inserted.getValue().getDeadlineAt());
+
+        when(missions.existsByGroupIdAndDateAndSlot(11L, now.toLocalDate(), 1)).thenReturn(true);
+        publisher.publishFirstMission(11L, now);
+        verify(missions, times(1)).insert(any());
+    }
+
+    @Test
     void publishesOnlyFromTheConfiguredPool() {
         publisher = new MissionPublisher(missions, groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 1, List.of(MissionTemplate.TEXT_BALANCE)),

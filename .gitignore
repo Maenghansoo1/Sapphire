@@ -55,3 +55,6 @@ ml/vision-service/models/
 
 # macOS
 .DS_Store
+
+#old files
+frontend/

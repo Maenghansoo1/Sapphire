@@ -33,9 +33,9 @@
 | 항목 | 결정 | 이유 |
 |---|---|---|
 | 로그인 식별자 | **이메일.** `loginId`를 없애고 이메일을 필수·유일 값으로 쓴다 | 앱 화면(A1·A2)이 이메일 기준이고 아이디 입력 칸이 없음. 나중에 비밀번호 찾기를 넣으려면 어차피 이메일이 유일해야 함 |
-| 간편 로그인 (Apple·카카오·Google) | **MVP에서 구현하지 않는다. 버튼과 17-2 "로그인 연결"은 화면에 남기고, 누르면 "준비 중" 안내를 띄운다** | 사용자 결정. 서버에 소셜 로그인 API를 만들지 않는다 |
+| 간편 로그인 (Apple·카카오·Google) | **MVP에서 구현하지 않는다. A1 버튼과 17-2 "로그인 연결" 영역을 화면에서 제거한다** | 사용자 결정. 서버에 소셜 로그인 API를 만들지 않는다 |
 | 비밀번호 변경 | **백엔드 반영됨** — `PATCH /api/me/password` | 메일 인프라 없이 구현 가능 |
-| 비밀번호 찾기 (메일) | **MVP 제외.** A1 "비밀번호 찾기" 버튼은 남기고 누르면 "준비 중" 안내 (재설정 메일 화면으로 이동하지 않음) | 메일 발송 수단이 필요함. 간편 로그인과 같은 처리로 통일 (사용자 결정) |
+| 비밀번호 찾기 (메일) | **MVP 제외.** A1 "비밀번호 찾기" 버튼은 남기고 누르면 "준비 중" 안내 (재설정 메일 화면으로 이동하지 않음) | 메일 발송 수단이 필요함 (사용자 결정) |
 | 약관 동의 | **서버에 동의 시각을 저장한다.** `register`가 두 필수 동의를 받고, 하나라도 `true`가 아니면 400 | 동의 근거를 남김. 나중에 약관 버전 관리로 확장 가능 |
 | 가입 흐름 | A2(이메일·비밀번호·약관) → A3(닉네임·캐릭터/사진) 화면은 그대로. A3 "시작하기"에서 `register` → `login` → 캐릭터를 골랐으면 `PATCH /me/character`, 사진이면 `PUT /me/profile-image`(구현 후) 순서로 호출 | 화면 흐름을 바꾸지 않고 백엔드 계약도 단순하게 유지 (`register`는 토큰을 주지 않는다) |
 | 입력 규칙 | 서버가 앱과 같은 규칙을 검증한다: 이메일 형식, 비밀번호 8~100자 + 영문·숫자 포함, 닉네임 앞뒤 공백 제거 후 2~10자 | 다른 클라이언트로 규칙 밖의 값이 들어오지 않게 |
@@ -101,7 +101,7 @@
 | 대상 | 내용 |
 |---|---|
 | 백엔드 | `RegisterRequest`/`LoginRequest`/`RegisterResponse`의 `loginId` → `email`. `AuthErrorCode.LOGIN_ID_TAKEN` → `EMAIL_TAKEN`, 메시지 수정. 비밀번호·닉네임 검증 강화. `UserMapper`를 이메일 기준으로. 새 마이그레이션: `users.email` NOT NULL + UNIQUE, `login_id` 제거, `terms_agreed_at`·`privacy_agreed_at` DATETIME 추가. `GET /me`, `PATCH /me/password` 추가 (새 `user`/`me` 기능 패키지 또는 `auth`에 둘지 구현 계획에서 정함). `PasswordErrorCode` 등 새 오류 코드 |
-| Android | 네트워크 계층·토큰 저장소 신설(서버 연결 단계). A1 로그인, A3 가입 완료 시 API 호출. 간편 로그인 버튼 3개, 17-2 연결/해제, A1 "비밀번호 찾기"를 "준비 중" 안내로 (`PasswordResetScreen`은 진입하지 않음). A3 가입 요청에 A2 약관 동의 값을 넘김. 17-2 비밀번호 변경 활성 조건을 "항상"으로. `accountForLogin`(목업 계정 생성) 제거 |
+| Android | 네트워크 계층·토큰 저장소 신설(서버 연결 단계). A1 로그인, A3 가입 완료 시 API 호출. 간편 로그인 버튼 3개와 17-2 연결/해제 영역은 제거하고, A1 "비밀번호 찾기"는 "준비 중" 안내로 (`PasswordResetScreen`은 진입하지 않음). A3 가입 요청에 A2 약관 동의 값을 넘김. 17-2 비밀번호 변경 활성 조건을 "항상"으로. `accountForLogin`(목업 계정 생성) 제거 |
 | iOS | Android와 같음 (`LoginView.logIn`, `LoginView.links`의 비밀번호 찾기, `SignupAccountModel` 동의 값 전달, `SignupProfileView`, `UserInfoView`, `ChangePasswordView`) |
 | 설계 문서 | `API_DESIGN.md` §1 Auth 계약 교체, `GET /me`·`PATCH /me/password` 추가. `BACKEND_DB.md` users 테이블. `PROJECT_OVERVIEW.md` §8 "아이디/비밀번호 자체 가입" → 이메일. Postman `HAWE_AUTH` 컬렉션 |
 

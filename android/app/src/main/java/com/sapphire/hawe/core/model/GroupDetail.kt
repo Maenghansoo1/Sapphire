@@ -22,6 +22,8 @@ data class GroupMember(
     val groupProfile: Profile? = null,
     val isMe: Boolean = false,
     val isOwner: Boolean = false,
+    val monthlySubmissionCount: Int? = null,
+    val stampedToday: Boolean? = null,
 ) { val displayed: Profile get() = groupProfile ?: defaultProfile }
 
 data class GroupDetail(

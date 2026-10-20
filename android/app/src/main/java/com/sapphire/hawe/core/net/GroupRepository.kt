@@ -124,5 +124,6 @@ class GroupRepository(private val api: ApiClient) {
     private fun GroupMemberDto.toMember(myUserId: Long, ownerId: Long): GroupMember =
         GroupMember(userId, Profile(api.avatarOf(characterKey, profileImageUrl), nickname),
             groupProfile = if (hasGroupProfile) Profile(api.avatarOf(characterKey, profileImageUrl), nickname) else null,
-            isMe = userId == myUserId, isOwner = userId == ownerId || role == "owner")
+            isMe = userId == myUserId, isOwner = userId == ownerId || role == "owner",
+            monthlySubmissionCount = submissionCountThisMonth, stampedToday = stampedToday)
 }

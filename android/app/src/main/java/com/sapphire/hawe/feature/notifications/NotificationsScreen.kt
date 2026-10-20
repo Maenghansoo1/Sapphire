@@ -15,9 +15,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.dev.AppClock
 import com.sapphire.hawe.core.model.AppNotification
+import com.sapphire.hawe.core.model.NotificationType
 import com.sapphire.hawe.core.net.NotificationRepository
 import com.sapphire.hawe.core.net.toUserMessage
 import com.sapphire.hawe.designsystem.assets.HIcon
@@ -144,7 +146,8 @@ private fun NotificationRow(notification: AppNotification, now: java.time.Instan
                 }
                 if (from != null) Box(Modifier.size(20.dp).align(Alignment.BottomEnd).background(HColors.bg, CircleShape)
                     .border(1.dp, HColors.line, CircleShape), contentAlignment = Alignment.Center) {
-                    HIconView(notificationBadgeIcon(notification.type), size = 12.dp, color = HColors.accentPressed)
+                    if (notification.type == NotificationType.POKE) Text("👆", fontSize = 11.sp, lineHeight = 11.sp)
+                    else HIconView(notificationBadgeIcon(notification.type), size = 12.dp, color = HColors.accentPressed)
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

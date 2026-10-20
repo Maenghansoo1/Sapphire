@@ -199,7 +199,10 @@ private struct NotificationRow: View {
         if let from = notification.from {
             HAvatar(content: from.avatar, size: 40)
                 .overlay(alignment: .bottomTrailing) {
-                    HIconView(icon: NotificationFormat.badgeIcon(notification.type), size: 12, color: .accentPressed)
+                    Group {
+                        if notification.type == .poke { Text("👆").font(.system(size: 11)).frame(width: 14, height: 14) }
+                        else { HIconView(icon: NotificationFormat.badgeIcon(notification.type), size: 12, color: .accentPressed) }
+                    }
                         .frame(width: 20, height: 20)
                         .background(.bg, in: Circle())
                         .overlay(Circle().strokeBorder(.line, lineWidth: 1))

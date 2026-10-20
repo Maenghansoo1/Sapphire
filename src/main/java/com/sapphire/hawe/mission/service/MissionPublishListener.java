@@ -19,7 +19,7 @@ public class MissionPublishListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onGroupCreated(GroupCreatedEvent event) {
-        try { publisher.publishIfDue(event.groupId(), SeoulTime.now()); }
+        try { publisher.publishFirstMission(event.groupId(), SeoulTime.now()); }
         catch (Exception e) { log.error("First mission publish failed for group {}", event.groupId(), e); }
     }
 }

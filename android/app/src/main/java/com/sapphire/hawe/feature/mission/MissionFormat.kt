@@ -97,6 +97,12 @@ fun pokeSentText(kind: PokeKind, nickname: String): String = when (kind) {
 fun pokeButtonLabel(kind: PokeKind): String = when (kind) {
     PokeKind.POKE -> "콕"
 }
+enum class PokeTapAction { SEND, REPLAY_MOTION, IGNORE }
+fun pokeTapAction(sent: Boolean, busy: Boolean, motionPlaying: Boolean): PokeTapAction = when {
+    busy || motionPlaying -> PokeTapAction.IGNORE
+    sent -> PokeTapAction.REPLAY_MOTION
+    else -> PokeTapAction.SEND
+}
 /** 화면 읽기(TalkBack)용. 보낸 뒤에는 보낸 사실을 읽어 준다. */
 fun pokeButtonDescription(kind: PokeKind, nickname: String, sent: Boolean): String = if (sent) pokeSentText(kind, nickname)
     else when (kind) {

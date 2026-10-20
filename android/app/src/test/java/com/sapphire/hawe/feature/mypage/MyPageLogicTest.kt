@@ -33,20 +33,12 @@ class MyPageLogicTest {
         assertEquals("4", byTypeText(ActivityStats(4, 1, 1, mapOf(MissionType.PHOTO to 4)), MissionType.PHOTO))
     }
 
-    @Test fun notificationsAndProviders() {
+    @Test fun notifications() {
         val prefs = NotificationPrefs()
         val off = prefs.with(NotificationKey.ALL, false)
         assertFalse(individualEnabled(off))
         assertEquals(off, off.with(NotificationKey.TOPIC, false))
         assertTrue(off.with(NotificationKey.ALL, true).topic)
-        val base = MyAccount.mock
-        assertEquals(ProviderRowState.Linked(false), providerRowState(base, LoginProvider.KAKAO))
-        assertEquals(ProviderRowState.NotLinked, providerRowState(base, LoginProvider.APPLE))
-        assertEquals(base, base.unlinking(LoginProvider.KAKAO))
-        val linked = base.linking(LoginProvider.APPLE)
-        assertTrue(canUnlink(linked, LoginProvider.KAKAO))
-        assertEquals(setOf(LoginProvider.APPLE), linked.unlinking(LoginProvider.KAKAO).linkedProviders)
-        assertFalse(canUnlink(linked.unlinking(LoginProvider.KAKAO), LoginProvider.APPLE))
     }
 
     @Test fun passwordAndProfile() {

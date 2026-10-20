@@ -21,8 +21,6 @@ struct LoginView: View {
             VStack(alignment: .leading, spacing: 32) {
                 intro
                 form
-                divider
-                socialButtons
             }
             .padding(.horizontal, HLayout.screenPadding)
             .padding(.top, HLayout.introTopInset)
@@ -89,92 +87,6 @@ struct LoginView: View {
         .frame(maxWidth: .infinity, minHeight: HLayout.minTouch)
     }
 
-    private var divider: some View {
-        HStack(spacing: 12) {
-            Rectangle().fill(.line).frame(height: 1)
-            Text("간편 로그인")
-                .font(.caption13)
-                .foregroundStyle(.textSecondary)
-                .fixedSize()
-            Rectangle().fill(.line).frame(height: 1)
-        }
-    }
-
-    private var socialButtons: some View {
-        VStack(spacing: 10) {
-            // 간편 로그인은 MVP 범위 밖이라 아직 준비 중이에요.
-            SocialLoginButton(provider: .apple) { toast = ComingSoon.message }
-            SocialLoginButton(provider: .kakao) { toast = ComingSoon.message }
-            SocialLoginButton(provider: .google) { toast = ComingSoon.message }
-        }
-    }
-}
-
-/// 간편 로그인 버튼 — 높이 52 · 모서리 14 · 아이콘 18 + 16 SemiBold
-struct SocialLoginButton: View {
-    enum Provider {
-        case apple, kakao, google
-
-        var title: String {
-            switch self {
-            case .apple: "Apple로 계속하기"
-            case .kakao: "카카오로 계속하기"
-            case .google: "Google로 계속하기"
-            }
-        }
-
-        var iconName: String {
-            switch self {
-            case .apple: "social-apple"
-            case .kakao: "social-kakao"
-            case .google: "social-google"
-            }
-        }
-
-        var background: Color {
-            switch self {
-            case .apple: .ink
-            case .kakao: .kakaoContainer
-            case .google: .bg
-            }
-        }
-
-        var foreground: Color {
-            switch self {
-            case .apple: .onAccent
-            case .kakao: .kakaoLabel
-            case .google: .ink
-            }
-        }
-    }
-
-    let provider: Provider
-    let action: () -> Void
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: HRadius.input, style: .continuous)
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(provider.iconName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 18, height: 18)
-                Text(provider.title)
-                    .font(.plex(16, .semibold))
-            }
-            .foregroundStyle(provider.foreground)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(provider.background, in: shape)
-            .overlay {
-                if provider == .google {
-                    shape.strokeBorder(.border, lineWidth: 1)
-                }
-            }
-            .contentShape(shape)
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 #Preview {

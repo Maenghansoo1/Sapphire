@@ -23,6 +23,7 @@ struct MissionView: View {
     @State private var reload = 0
     /// 보내는 중인 재촉 (미션, 멤버, 종류)
     @State private var sending: Set<PokeKey> = []
+    @State private var pokeMotions: [PokeKey: Int] = [:]
     @State private var creating = false
     @State private var rerollConfirmation: Int?
 
@@ -273,47 +274,12 @@ struct MissionView: View {
     private func memberList(_ mission: TodayMission) -> some View {
         VStack(spacing: 0) {
             ForEach(mission.members) { member in
-                HStack(spacing: 12) {
-                    HAvatar(content: member.profile.avatar, size: 38)
-                    Text(MissionFormat.memberDisplayName(member))
-                        .font(.plex(15, .medium))
-                        .foregroundStyle(.ink)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    status(for: member, missionID: mission.id)
+                MissionMemberRow(member: member,
+                    busy: sending.contains(PokeKey(missionID: mission.id, memberID: member.id, kind: .poke)),
+                    motionSignal: pokeMotions[PokeKey(missionID: mission.id, memberID: member.id, kind: .poke)] ?? 0) { kind in
+                    sendPoke(missionID: mission.id, member: member, kind: kind)
                 }
-                .frame(height: 55)
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(.line).frame(height: 1)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func status(for member: MissionMember, missionID: Int) -> some View {
-        if member.isDone {
-            HStack(spacing: 4) {
-                HIconView(icon: .check, size: 16)
-                Text("완료")
-                    .font(.plex(13, .semibold))
-                    .foregroundStyle(.ink)
-            }
-        } else if member.isMe {
-            Text("아직 안 했어요")
-                .font(.caption13)
-                .foregroundStyle(.textSecondary)
-        } else {
-            HStack(spacing: 6) {
-                ForEach(PokeKind.allCases, id: \.self) { kind in
-                    PokeButton(
-                        kind: kind, nickname: member.profile.nickname,
-                        sent: member.poked.contains(kind),
-                        busy: sending.contains(PokeKey(missionID: missionID, memberID: member.id, kind: kind))
-                    ) {
-                        sendPoke(missionID: missionID, member: member, kind: kind)
-                    }
-                }
+                .id("\(mission.id)-\(member.id)")
             }
         }
     }
@@ -394,6 +360,7 @@ struct MissionView: View {
                 sending.remove(key)
                 guard session.state == .signedIn else { return }
                 store.markPoked(member.id, kind: sent.kind, missionID: sent.missionID, groupID: groupID)
+                pokeMotions[key, default: 0] += 1
                 toast = MissionFormat.pokeSentText(kind, nickname: member.profile.nickname)
             } catch {
                 sending.remove(key)
@@ -402,6 +369,7 @@ struct MissionView: View {
                 switch failure.followUp {
                 case .markSent:
                     store.markPoked(member.id, kind: kind, missionID: missionID, groupID: groupID)
+                    pokeMotions[key, default: 0] += 1
                     reload += 1
                 case .refresh:
                     reload += 1
@@ -454,7 +422,99 @@ struct MissionView: View {
     }
 }
 
-/// 콕 버튼. 보내면 체크와 강조색으로 바뀌고 다시 누를 수 없어요 (미션마다 1번).
+/// 멤버 아바타의 콕 모션과 버튼 상태를 함께 관리해요.
+private struct MissionMemberRow: View {
+    let member: MissionMember
+    let busy: Bool
+    let motionSignal: Int
+    let onPoke: (PokeKind) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var motionPlaying = false
+    @State private var showHand = false
+    @State private var handOffset: CGFloat = 28
+    @State private var avatarScale: CGFloat = 1
+    @State private var motionTask: Task<Void, Never>?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            HAvatar(content: member.profile.avatar, size: 38)
+                .scaleEffect(avatarScale)
+                .overlay {
+                    if showHand {
+                        Text("👆").font(.system(size: 22)).frame(width: 30, height: 30)
+                            .offset(y: reduceMotion ? 0 : handOffset)
+                    }
+                }
+                .frame(width: 38, height: 38)
+            Text(MissionFormat.memberDisplayName(member))
+                .font(.plex(15, .medium))
+                .foregroundStyle(.ink)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            status
+        }
+        .frame(height: 55)
+        .overlay(alignment: .bottom) { Rectangle().fill(.line).frame(height: 1) }
+        .onChange(of: motionSignal) { _, newValue in
+            if newValue > 0 { startMotion() }
+        }
+        .onDisappear {
+            motionTask?.cancel()
+            motionTask = nil
+            showHand = false
+            motionPlaying = false
+            avatarScale = 1
+        }
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        if member.isDone {
+            HStack(spacing: 4) {
+                HIconView(icon: .check, size: 16)
+                Text("완료").font(.plex(13, .semibold)).foregroundStyle(.ink)
+            }
+        } else if member.isMe {
+            Text("아직 안 했어요").font(.caption13).foregroundStyle(.textSecondary)
+        } else {
+            HStack(spacing: 6) {
+                ForEach(PokeKind.allCases, id: \.self) { kind in
+                    PokeButton(kind: kind, nickname: member.profile.nickname,
+                        sent: member.poked.contains(kind), busy: busy || motionPlaying) {
+                        switch MissionFormat.pokeTapAction(sent: member.poked.contains(kind),
+                            busy: busy, motionPlaying: motionPlaying) {
+                        case .send: onPoke(kind)
+                        case .replayMotion: startMotion()
+                        case .ignore: break
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func startMotion() {
+        guard !motionPlaying else { return }
+        motionPlaying = true
+        showHand = true
+        motionTask = Task {
+            defer { showHand = false; motionPlaying = false; avatarScale = 1; motionTask = nil }
+            if reduceMotion {
+                try? await Task.sleep(for: .milliseconds(300))
+            } else {
+                handOffset = 28
+                withAnimation(.easeOut(duration: 0.25)) { avatarScale = 0.9; handOffset = -3 }
+                try? await Task.sleep(for: .milliseconds(330))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.27)) { avatarScale = 1; handOffset = 28 }
+                try? await Task.sleep(for: .milliseconds(270))
+            }
+        }
+    }
+}
+
+/// 콕 버튼. 보내면 체크와 강조색으로 바뀌고 다시 누르면 모션만 재생해요.
 private struct PokeButton: View {
     let kind: PokeKind
     let nickname: String
@@ -466,7 +526,8 @@ private struct PokeButton: View {
         let color: Color = sent ? .accentPressed : .ink
         Button(action: action) {
             HStack(spacing: 4) {
-                HIconView(icon: sent ? .checkSmall : .pokeTemp, size: 16, color: color)
+                if sent { HIconView(icon: .checkSmall, size: 16, color: color) }
+                else { Text("👆").font(.system(size: 16)).frame(width: 16, height: 16) }
                 Text(MissionFormat.pokeButtonLabel(kind))
                     .font(.plex(13, .semibold))
                     .foregroundStyle(color)
@@ -480,7 +541,7 @@ private struct PokeButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(sent || busy)
+        .disabled(busy)
         .accessibilityLabel(MissionFormat.pokeButtonDescription(kind, nickname: nickname, sent: sent))
     }
 }

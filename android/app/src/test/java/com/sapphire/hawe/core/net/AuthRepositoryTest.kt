@@ -4,13 +4,61 @@ import com.sapphire.hawe.core.model.AvatarContent
 import com.sapphire.hawe.core.model.Profile
 import com.sapphire.hawe.designsystem.assets.ProfileCharacter
 import java.time.Instant
+import java.io.IOException
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
 class AuthRepositoryTest {
+    @Test fun restoreRetriesNetworkFailureAndReturnsAccount() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(me()))
+            val tokens = InMemoryTokenStore().apply { save("a", "r") }
+            var attempts = 0
+            val http = OkHttpClient.Builder().addInterceptor { chain ->
+                if (++attempts == 1) throw IOException("offline")
+                chain.proceed(chain.request())
+            }.build()
+            val repo = AuthRepository(ApiClient(server.url("/").toString(), tokens, http = http), tokens)
+            assertEquals("Ada", repo.restoreWithRetry(listOf(0, 0)).profile.nickname)
+            assertEquals(2, attempts)
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun restoreRetriesServerErrorsAndReturnsAccount() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(503).setBody("bad"))
+            server.enqueue(MockResponse().setBody(me()))
+            val account = fixture(server, InMemoryTokenStore().apply { save("a", "r") })
+                .restoreWithRetry(listOf(0, 0))
+            assertEquals("Ada", account.profile.nickname)
+            assertEquals(2, server.requestCount)
+        }
+    }
+
+    @Test fun restoreStopsAfterThreeTemporaryFailures() = runBlocking {
+        MockWebServer().use { server ->
+            repeat(3) { server.enqueue(MockResponse().setResponseCode(503).setBody("bad")) }
+            val repo = fixture(server, InMemoryTokenStore().apply { save("a", "r") })
+            assertThrows(ApiException::class.java) { runBlocking { repo.restoreWithRetry(listOf(0, 0)) } }
+            assertEquals(3, server.requestCount)
+        }
+    }
+
+    @Test fun restoreDoesNotRetryUnauthorized() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(401)
+                .setBody("""{"code":"INVALID_TOKEN","message":"invalid"}"""))
+            val repo = fixture(server, InMemoryTokenStore().apply { save("a", "r") })
+            assertThrows(ApiException::class.java) { runBlocking { repo.restoreWithRetry(listOf(0, 0)) } }
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test fun passwordChangeRotatesTokensAndFailureKeepsOldTokens() = runBlocking {
         MockWebServer().use { server ->
             val store = InMemoryTokenStore().apply { save("old", "oldRefresh") }

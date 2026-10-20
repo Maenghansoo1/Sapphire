@@ -146,6 +146,8 @@ struct GroupMemberDTO: Decodable {
     let role: String
     /// 이 그룹에서만 쓰는 프로필이 있으면 위 닉네임·캐릭터가 그 프로필이에요.
     let hasGroupProfile: Bool?
+    let submissionCountThisMonth: Int?
+    let stampedToday: Bool?
 }
 
 struct CreateGroupRequestDTO: Encodable {

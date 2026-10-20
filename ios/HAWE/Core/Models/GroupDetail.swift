@@ -15,6 +15,8 @@ struct GroupMember: Identifiable, Hashable {
     var groupProfile: Profile?
     var isMe = false
     var isOwner = false
+    var monthlySubmissionCount: Int? = nil
+    var stampedToday: Bool? = nil
 
     var displayed: Profile { groupProfile ?? defaultProfile }
 }

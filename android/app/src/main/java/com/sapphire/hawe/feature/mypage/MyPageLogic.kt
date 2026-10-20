@@ -24,19 +24,6 @@ fun NotificationPrefs.with(key: NotificationKey, enabled: Boolean): Notification
 }
 fun individualEnabled(prefs: NotificationPrefs) = prefs.all
 
-fun canUnlink(account: MyAccount, provider: LoginProvider) =
-    provider in account.linkedProviders && account.linkedProviders.size > 1
-fun MyAccount.linking(provider: LoginProvider) = copy(linkedProviders = linkedProviders + provider)
-fun MyAccount.unlinking(provider: LoginProvider) =
-    if (canUnlink(this, provider)) copy(linkedProviders = linkedProviders - provider) else this
-sealed interface ProviderRowState {
-    data class Linked(val canUnlink: Boolean) : ProviderRowState
-    data object NotLinked : ProviderRowState
-}
-fun providerRowState(account: MyAccount, provider: LoginProvider): ProviderRowState =
-    if (provider in account.linkedProviders) ProviderRowState.Linked(canUnlink(account, provider))
-    else ProviderRowState.NotLinked
-
 data class ChangePasswordState(val current: String = "", val new: String = "", val confirm: String = "") {
     val isNewValid get() = new.length >= 8 && new.any { it in 'a'..'z' || it in 'A'..'Z' } &&
         new.any { it in '0'..'9' }

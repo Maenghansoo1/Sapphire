@@ -22,6 +22,7 @@ import com.sapphire.hawe.core.AppLinks
 import com.sapphire.hawe.core.AppSession
 import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.dev.DevMode
+import com.sapphire.hawe.core.dev.DevFaults
 import com.sapphire.hawe.core.model.ActivityStats
 import com.sapphire.hawe.core.model.MissionType
 import com.sapphire.hawe.core.net.CalendarRepository
@@ -51,6 +52,7 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
     val account = session.account
     val version = rememberAppVersionName()
     var confirmLogout by remember { mutableStateOf(false) }
+    var confirmDevOff by remember { mutableStateOf(false) }
     val toast = rememberHToastState()
     var devUsers by remember { mutableStateOf<List<DevUser>?>(null) }
     var usersError by remember { mutableStateOf(false) }
@@ -106,6 +108,7 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
                 // 임시 UI: 개발자 모드에서만 계정을 한 번 눌러 전환한다.
                 Column(Modifier.padding(top = 18.dp)) {
                     HListRow("개발자 도구", height = 48.dp, onClick = onDevTools)
+                    HListRow("개발자 모드 해제", height = 48.dp) { confirmDevOff = true }
                     Text("유저 전환", style = HType.plex(15, FontWeight.SemiBold), color = HColors.ink)
                     if (usersError) HListRow("목록을 불러오지 못했어요 · 다시 시도", height = 48.dp) { userRetry++ }
                     DevUserChips(devUsers.orEmpty(), account.userId, switchBusy, onSwitchUser)
@@ -129,6 +132,14 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
     }
     if (confirmLogout) HAlert("로그아웃할까요?", "다시 로그인하면 그룹과 기록은\n그대로 남아 있어요.",
         "로그아웃", onCancel = { confirmLogout = false }, onConfirm = { session.signOut() })
+    if (confirmDevOff) HAlert("개발자 모드를 해제할까요?",
+        "개발자 도구와 유저 전환이 사라져요.\n서버 시계는 개발자 도구에서 초기화하세요.", "해제",
+        onCancel = { confirmDevOff = false }, onConfirm = {
+            DevFaults.clear()
+            DevMode.changeEnabled(false)
+            confirmDevOff = false
+            toast.show("개발자 모드를 껐어요")
+        })
     HToastHost(toast)
     }
 }

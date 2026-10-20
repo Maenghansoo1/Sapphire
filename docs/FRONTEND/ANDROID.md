@@ -38,8 +38,8 @@
 ### 하지 않는 것 (iOS 도 아직 안 된 것)
 
 - Spring 백엔드(`/api/...`) 연결, 실제 로그인·토큰 저장
-- 간편 로그인(카카오·Apple·Google) 실제 연동 — 버튼 모양만 (MVP 범위 밖, `docs/FEATURE/PROJECT_OVERVIEW.md`)
-- FCM 서버 푸시 수신 (아래 §8 결정 필요), 초대 링크 App Links 도메인 검증 (도메인 미정)
+- 간편 로그인(카카오·Apple·Google) 실제 연동 및 버튼 표시 (MVP 범위 밖, `docs/FEATURE/PROJECT_OVERVIEW.md`)
+- FCM 서버 푸시 수신 (아래 §8 결정 필요). 초대는 링크 없이 코드로 진행
 - 백엔드 설계(21개 미션 틀, 하루 여러 미션)와 iOS 모델(유형 4개, 하루 1미션)의 차이 맞추기 — iOS 를 먼저 맞춘 뒤 따라가요
 
 ---
@@ -94,7 +94,7 @@ android/app/src/main/java/com/sapphire/hawe/
     MainFlow.kt                ← App/MainFlowView.swift (MainRoute → NavHost)
   core/
     AppSession.kt              ← Core/AppSession.swift
-    AppLinks.kt                ← Core/AppLinks.swift (약관·개인정보 URL, 초대 링크)
+    AppLinks.kt                ← Core/AppLinks.swift (약관·개인정보 URL)
     data/DataStore.kt          ← Core/Data/DataStore.swift (+ TopicPool)
     data/DemoSeed.kt           ← Core/Data/DemoSeed.swift
     model/*.kt                 ← Core/Models/*.swift (6개)
@@ -113,7 +113,7 @@ android/app/src/main/java/com/sapphire/hawe/
     records/    ← Features/Records (RecordCalendar)
     mypage/     ← Features/MyPage (MyPage, NotificationSettings, ProfileEdit, UserInfo+ChangePassword, AppInfo+Licenses, Withdraw)
 android/app/src/main/res/
-  drawable/   ← SVG → VectorDrawable (ic_*, character_*, decor_*, logo_*, social_*)
+  drawable/   ← SVG → VectorDrawable (ic_*, character_*, decor_*, logo_*)
   font/       ← TTF 5개 (파일 이름은 소문자_밑줄)
   mipmap-*/   ← 앱 아이콘 (adaptive icon)
 ```
@@ -150,7 +150,6 @@ android/app/src/main/res/
 | ~~`AVAudioPlayer` (미리 듣기, 13 재생·이어 듣기)~~ 제거됨                                      | `MediaPlayer`                                                                                                                                  | 한 번에 하나만 재생, 화면 떠나면 정지. 파일 없는 목업은 길이만큼 '재생하는 척'(iOS 와 같음)                                         |
 | `Timer` (녹음 진행, 05 카운트다운)                                                 | `LaunchedEffect` + `delay` 루프                                                                                                                  |                                                                                                   |
 | `openSettingsURLString`                                                   | `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` 인텐트                                                                                             |                                                                                                   |
-| `ShareLink` (초대 링크 공유)                                                    | `Intent.ACTION_SEND` + `createChooser`                                                                                                         |                                                                                                   |
 | `UIPasteboard` (초대 코드 복사)                                                 | `ClipboardManager.setPrimaryClip`                                                                                                              | Android 13+ 는 시스템이 복사 알림을 띄우므로 그 버전에서는 앱 토스트를 생략                                                  |
 | `SafariView` (약관·개인정보)                                                    | Custom Tabs                                                                                                                                    |                                                                                                   |
 | `mailto:` (문의하기)                                                          | `Intent.ACTION_SENDTO`, `Uri.parse("mailto:…")`                                                                                                | 메일 앱 없을 때 예외 처리                                                                                   |
@@ -195,7 +194,7 @@ android/app/src/main/res/
 
 ### 3단계 — 인증 흐름 (A1 · A2 · A3 · 비밀번호 찾기)
 
-- `AuthRoute` → 별도 NavHost. 간편 로그인 신규 가입은 A2 를 건너뛰고 A3
+- `AuthRoute` → 별도 NavHost. 현재 A1 은 이메일 로그인만 표시하며, 이메일 가입은 A2 를 거쳐 A3 로 이동
 - A2 입력 검사·약관 체크(전체 동의 포함)·약관 Custom Tabs, A3 `CharacterPicker`(캐릭터 7 + 내 사진, 기본 몽실이, 닉네임 2–10자)
 - 완료 기준: 로그인/가입 후 그룹 0개 → 01 시작으로 진입
 
@@ -236,7 +235,7 @@ android/app/src/main/res/
 
 - `PushCenter`: 로그인 후 첫 진입에 권한 요청, 알림 채널 3개(topic/poke/comment — friend_done 채널은 2026-10-19 삭제, 설치된 기기에서도 지움), 알림 눌림 → 화면 이동
 - 테스트 수단: 디버그 빌드 전용으로 로컬 알림을 띄우는 방법(예: `adb shell am start` 로 extras 넣어 실행) — `ios/PushSamples/*.apns` 의 payload 와 같은 키 사용
-- 초대 링크 `https://hawe.app/invite/{code}` 인텐트 필터는 도메인 확정 전까지 보류 (iOS 도 아직 링크 수신 처리 없음, 03 의 `initialCode` 파라미터만 지원)
+- 초대 링크는 제공하지 않고 초대 코드 표시·복사·재발급·코드 참여만 지원
 - 완료 기준: 알림 4종을 눌렀을 때 iOS `MainFlowView.open()` 과 같은 화면으로 이동
 
 ---

@@ -18,7 +18,7 @@ import kotlinx.serialization.Serializable
 @Serializable internal data class GroupMemberDto(val userId: Long, val nickname: String,
     val characterKey: String? = null, val profileImageUrl: String? = null, val role: String,
     val hasGroupProfile: Boolean = false,
-    val submissionCountThisMonth: Int = 0, val stampedToday: Boolean = false)
+    val submissionCountThisMonth: Int? = null, val stampedToday: Boolean? = null)
 @Serializable internal data class CreateGroupRequestDto(val name: String, val relationType: String,
     val startDate: String? = null)
 @Serializable internal data class InvitePreviewDto(val groupId: Long, val name: String,

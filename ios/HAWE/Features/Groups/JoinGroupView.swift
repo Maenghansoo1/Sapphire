@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 03 초대 코드로 참여 (Figma 1:418)
 /// 6자리 코드(영문 대문자+숫자). 6자리가 채워지면 그룹 미리보기, 정원 초과·잘못된 코드는 오류 표시.
-/// 초대 링크(Universal Link)로 열면 `initialCode` 로 코드가 자동 입력돼요.
+/// 전달받은 초대 코드가 있으면 `initialCode` 로 자동 입력돼요.
 struct JoinGroupView: View {
     var initialCode = ""
     var onJoined: () -> Void = {}

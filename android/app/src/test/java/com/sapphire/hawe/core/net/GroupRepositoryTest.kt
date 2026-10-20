@@ -20,7 +20,7 @@ class GroupRepositoryTest {
                 override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
                     "/api/groups/7" -> response(detail)
                     "/api/groups/7/members?page=0&size=100" -> response("""{"content":[
-                        {"userId":5,"nickname":"owner","characterKey":"gamja","role":"owner","hasGroupProfile":true},
+                        {"userId":5,"nickname":"owner","characterKey":"gamja","role":"owner","hasGroupProfile":true,"submissionCountThisMonth":4,"stampedToday":true},
                         {"userId":8,"nickname":"me","characterKey":"mongsil","role":"member","hasGroupProfile":false}]}""")
                     else -> MockResponse().setResponseCode(404)
                 }
@@ -28,6 +28,10 @@ class GroupRepositoryTest {
             val group = GroupRepository(ApiClient(server.url("/").toString(), InMemoryTokenStore())).detail(7L, 8L)
             assertEquals(group.members.first().defaultProfile, group.members.first().groupProfile)
             assertNull(group.members.last().groupProfile)
+            assertEquals(4, group.members.first().monthlySubmissionCount)
+            assertEquals(true, group.members.first().stampedToday)
+            assertNull(group.members.last().monthlySubmissionCount)
+            assertNull(group.members.last().stampedToday)
         }
     }
 

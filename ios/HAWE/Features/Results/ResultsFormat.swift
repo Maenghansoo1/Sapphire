@@ -42,6 +42,13 @@ enum ResultsFormat {
         picked.filter { text.contains("@\($0.value)") }.keys.sorted()
     }
 
+    static func stickerToggleSequence(mine: [Sticker], pressed: Sticker) -> [Sticker] {
+        var selected: [Sticker] = []
+        for sticker in mine where !selected.contains(sticker) { selected.append(sticker) }
+        if !selected.contains(pressed) { selected.append(pressed) }
+        return selected
+    }
+
     static func socialErrorMessage(_ error: Error) -> String {
         if error is NetworkError { return "네트워크 연결을 확인해 주세요" }
         switch error.apiCode {
