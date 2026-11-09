@@ -358,7 +358,7 @@ fun DevToolsScreen(session: AppSession, store: DataStore, dev: DevRepository,
 }
 
 private val templates = listOf("PHOTO_NOW", "PHOTO_GALLERY", "PHOTO_COLOR", "TEXT_ACROSTIC",
-    "TEXT_ONE_WORD", "TEXT_REVIEW", "TEXT_BALANCE", "TEXT_FILL_BLANK", "DRAW_SKETCH",
+    "TEXT_ONE_WORD", "TEXT_REVIEW", "TEXT_BALANCE", "TEXT_FILL_BLANK",
     "DRAW_A_TO_B")
 private val stickers = listOf("heart", "laugh", "wow", "sad", "fire")
 

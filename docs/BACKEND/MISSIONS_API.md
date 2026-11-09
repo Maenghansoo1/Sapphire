@@ -61,7 +61,7 @@
 | 글 | 한 줄 후기 | `TEXT_REVIEW` | S | 없음 | `number`(별점 1~5), `text`(한 줄) | 1차 |
 | 글 | 밸런스 게임 | `TEXT_BALANCE` | V | `optionA`, `optionB` | `choice`(`A`/`B`), `caption`(이유, 선택) | 1차 |
 | 글 | 빈칸 채우기 | `TEXT_FILL_BLANK` | T | `sentence`(`___` 1개 포함), `targetUserId` | `text` | 1차 ⚠ §8 |
-| 그림 | 30초 스케치 | `DRAW_SKETCH` | S/T | `subject` 또는 `targetUserId`, `seconds` | `file`(이미지) | 1차 |
+| 그림 | 30초 스케치 | `DRAW_SKETCH` | S/T | `subject` 또는 `targetUserId`, `seconds` | `file`(이미지) | 1차 · **2026-10-19 발행 중단**(예전 미션 표시만) |
 | 그림 | A를 B로 | `DRAW_A_TO_B` | S/T | `a`(또는 `targetUserId`), `b` | `file`(이미지) | 1차 |
 | 글 | 끝말 이어쓰기 | `TEXT_RELAY` | R | `startSentence` | 2차 | 2차 |
 | 그림 | 이어 그리기 | `DRAW_RELAY` | R | 시작 그림 | 2차 | 2차 |
@@ -352,9 +352,9 @@ AI 응답에 대한 서버 검증 (`GeneratedMissionValidator`, AI가 규칙을 
 
 ### 6-1. 틀 선택 규칙 (서버가 정함, AI 개입 없음)
 
-MVP 발행 풀은 `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_SKETCH`, `DRAW_A_TO_B`, `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`의 7종이다. 매체는 PHOTO/TEXT/DRAW 3종이다. `GET /mission-templates`는 1차 틀 10종 전체를 반환한다(슬라이더 3종 삭제 전에는 13종). (2026-10-12 음성 제거 전에는 풀 8종·매체 4종·목록 16종이었다.)
+MVP 발행 풀은 `PHOTO_NOW`, `PHOTO_GALLERY`, `PHOTO_COLOR`, `DRAW_A_TO_B`, `TEXT_ACROSTIC`, `TEXT_FILL_BLANK`의 6종이다(2026-10-19 시간 제한이 있는 `DRAW_SKETCH`를 팀 결정으로 뺌. 그림 매체는 틀이 하나라 하루 미션이 4개 이상이면 같은 날 `DRAW_A_TO_B`가 다시 나올 수 있다). 매체는 PHOTO/TEXT/DRAW 3종이다. `GET /mission-templates`는 1차 틀 10종 전체를 반환한다(슬라이더 3종 삭제 전에는 13종). (2026-10-12 음성 제거 전에는 풀 8종·매체 4종·목록 16종이었다.)
 
-**발행 풀 설정 (B5, 2026-10-13):** 발행 풀은 `hawe.mission.enabled-templates`(쉼표로 구분한 틀 이름)로 정한다. 기본값은 위 MVP 7종이고, 비어 있으면 서버가 시작하지 않는다.
+**발행 풀 설정 (B5, 2026-10-13):** 발행 풀은 `hawe.mission.enabled-templates`(쉼표로 구분한 틀 이름)로 정한다. 기본값은 위 MVP 6종이고, 비어 있으면 서버가 시작하지 않는다.
 - 새 틀 3종(`TEXT_ONE_WORD`, `TEXT_REVIEW`, `TEXT_BALANCE`)은 서버가 제출·결과를 받을 수 있다. 하지만 **앱(A4)이 그 화면을 배포한 뒤에** 이 설정에 추가한다. 그 전에 켜면 구 앱이 미션을 열 수 없다.
 - 매체는 풀에 틀이 있는 것만 돈다. 순서는 `PHOTO, TEXT, DRAW` 고정 목록에서 거른 뒤 섞는다.
 - 풀은 설정에 쓴 순서·중복과 상관없이 틀 정의 순서로 쓴다. 그래서 기본 설정에서는 B5 이전과 **같은 틀**이 골라진다(회귀 테스트로 고정).

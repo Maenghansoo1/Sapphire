@@ -19,7 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MissionTemplateSelectorTests {
     @Test void poolAndSelectionAreStable() {
-        assertEquals(7, MissionTemplateSelector.MVP_POOL.size());
+        assertEquals(6, MissionTemplateSelector.MVP_POOL.size());
+        assertFalse(MissionTemplateSelector.MVP_POOL.contains(DRAW_SKETCH));  // 시간 제한 그리기는 내지 않는다(2026-10-19)
         assertEquals(Set.of("PHOTO", "TEXT", "DRAW"), MissionTemplateSelector.MVP_POOL.stream()
                 .map(MissionTemplate::media).collect(java.util.stream.Collectors.toSet()));
         LocalDate date = LocalDate.of(2026, 10, 12);
@@ -42,11 +43,12 @@ class MissionTemplateSelectorTests {
         // B7 전 코드로 기록한 값. 하루 1개, 그리고 하루 여러 개의 첫 바퀴(슬롯 ≤ 매체 수)는 고르는 틀이 바뀌지 않아야 한다
         // (B5 전 값을 고정하던 지문의 하루 1개 부분도 여기에 들어 있다)
         List<MissionTemplate> all = List.of(MissionTemplate.values());
-        assertEquals(-4145052931149490977L, single(MissionTemplateSelector.MVP_POOL));
-        assertEquals(3092926919537925442L, firstRound(MissionTemplateSelector.MVP_POOL));
+        // 2026-10-19 기본 풀에서 30초 스케치를 빼서 기본 풀 값만 다시 기록했다. 스케치 자리만 A를 B로 바뀌고 매체 순서는 같다
+        assertEquals(1252476401242372528L, single(MissionTemplateSelector.MVP_POOL));
+        assertEquals(1447420503076334194L, firstRound(MissionTemplateSelector.MVP_POOL));
         assertEquals(4940000468824773898L, single(all));
         assertEquals(-7350718843695646376L, firstRound(all));
-        assertEquals(List.of(TEXT_FILL_BLANK, TEXT_FILL_BLANK, PHOTO_NOW, DRAW_SKETCH, PHOTO_COLOR, DRAW_SKETCH,
+        assertEquals(List.of(TEXT_FILL_BLANK, TEXT_FILL_BLANK, PHOTO_NOW, DRAW_A_TO_B, PHOTO_COLOR, DRAW_A_TO_B,
                 PHOTO_COLOR, TEXT_ACROSTIC), java.util.stream.LongStream.rangeClosed(1, 8).mapToObj(groupId ->
                 MissionTemplateSelector.select(groupId, LocalDate.of(2026, 10, 12), 1, 1, Set.of())).toList());
         // 설정의 순서·중복은 결과에 영향이 없다
@@ -67,8 +69,11 @@ class MissionTemplateSelectorTests {
                     for (int count = 2; count <= 5; count++) {
                         List<MissionTemplate> day = day(groupId, date, count, pool);
                         assertEquals(day, day(groupId, date, count, pool));
-                        // 두 풀 모두 매체마다 틀이 2개 이상이라 같은 날 같은 틀이 나오지 않는다
-                        assertEquals(count, new HashSet<>(day).size(), pool.size() + "개 풀, 그룹 " + groupId);
+                        // 같은 날 같은 틀은 그 매체에 틀이 하나뿐일 때만 다시 나온다(기본 풀의 그림 = A를 B로)
+                        for (MissionTemplate template : new HashSet<>(day))
+                            if (java.util.Collections.frequency(day, template) > 1)
+                                assertEquals(1, pool.stream().distinct().filter(t -> t.media().equals(template.media())).count(),
+                                        pool.size() + "개 풀, 그룹 " + groupId + ", " + template);
                         for (int slot = mediaCount + 1; slot <= count; slot++)
                             assertEquals(day.get(slot - 1 - mediaCount).media(), day.get(slot - 1).media());
                         assertEquals(Math.min(count, mediaCount),

@@ -11,10 +11,13 @@ import java.util.Set;
 public final class MissionTemplateSelector {
 
     public static final double DRAW_TARGET_PROBABILITY = 0.3;
-    /** 기본 발행 풀 ({@code hawe.mission.enabled-templates} 를 설정하지 않았을 때). */
+    /**
+     * 기본 발행 풀 ({@code hawe.mission.enabled-templates} 를 설정하지 않았을 때).
+     * 30초 스케치(DRAW_SKETCH)는 시간 제한이 있는 그리기라 2026-10-19 팀 결정으로 뺐다. 예전 미션을 보여 주려고 틀은 남긴다.
+     */
     public static final List<MissionTemplate> MVP_POOL = List.of(
             MissionTemplate.PHOTO_NOW, MissionTemplate.PHOTO_GALLERY, MissionTemplate.PHOTO_COLOR,
-            MissionTemplate.DRAW_SKETCH, MissionTemplate.DRAW_A_TO_B,
+            MissionTemplate.DRAW_A_TO_B,
             MissionTemplate.TEXT_ACROSTIC, MissionTemplate.TEXT_FILL_BLANK);
     // 매체 순서는 고정한다 — 섞는 시드가 같으면 풀에 같은 매체가 있을 때 같은 순서가 나온다
     private static final List<String> MEDIA = List.of("PHOTO", "TEXT", "DRAW");
