@@ -1,0 +1,89 @@
+# ============================================================
+# 이미지 자동 빌드·push (GHCR)
+#   PR      → 두 이미지가 빌드되는지만 확인한다(push 안 함).
+#   main    → 빌드해서 GHCR 에 push: 태그 = 커밋 번호 7자리 + latest
+#   수동    → Actions 탭에서 "Run workflow" (main 에서 실행하면 push)
+# EC2 배포는 자동이 아니다: EC2 에서 docker compose -f compose.prod.yaml pull && up -d
+# (docs/INFRA/DEPLOY_RUNBOOK.md §3-3)
+# ============================================================
+name: images
+
+on:
+  # 이미지 내용에 영향을 주는 파일이 바뀐 경우에만 돈다(문서만 고치면 안 돈다).
+  pull_request:
+    paths:
+      - "src/main/**"
+      - "pom.xml"
+      - ".mvn/**"
+      - "mvnw"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "ml/vision-service/**"
+      - ".github/workflows/images.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/main/**"
+      - "pom.xml"
+      - ".mvn/**"
+      - "mvnw"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "ml/vision-service/**"
+      - ".github/workflows/images.yml"
+  workflow_dispatch:
+
+# 같은 브랜치에서 새 커밋이 오면 이전 빌드는 취소한다.
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write   # GHCR push (GITHUB_TOKEN 사용, 개인 토큰 불필요)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: hawe-api
+            context: .
+          - name: hawe-vision
+            context: ml/vision-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # main 에 push 할 때만 GHCR 에 로그인한다(PR 은 빌드 확인만).
+      - name: GHCR 로그인
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 태그: 커밋 번호 7자리(PC 에서 쓰던 git rev-parse --short 와 같은 형식) + main 일 때 latest
+      - name: 태그 계산
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/maenghansoo1/${{ matrix.name }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 빌드 (main 이면 push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 층 캐시를 GitHub 에 저장해서 다음 빌드에서 바뀐 층만 다시 만든다.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

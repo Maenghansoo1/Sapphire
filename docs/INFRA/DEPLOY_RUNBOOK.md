@@ -196,7 +196,14 @@ systemctl is-enabled hawe.service hawe-vision.service   # disabled, disabled
 
 ### 3-3. 배포할 때마다 (GHCR)
 
-**① 내 PC — 커밋 → 빌드 → push (PowerShell)**
+**① 이미지 올리기 — 자동 (GitHub Actions, `.github/workflows/images.yml`)**
+
+- **main 에 머지(push)되면** Actions 가 두 이미지를 빌드해 GHCR 에 `커밋번호 7자리` + `latest` 태그로 올린다. 서버 코드·Dockerfile·vision 코드가 바뀐 경우에만 돈다(문서만 바뀌면 안 돎).
+- **PR 을 올리면** 빌드가 되는지만 확인한다(push 안 함). PR 화면의 체크가 초록이어야 머지한다.
+- 진행 상황: GitHub 저장소 → **Actions** 탭 → `images`. 끝나면 ②(EC2 pull)로 간다.
+- 최초 1회 설정: 두 패키지 각각 **Package settings → Manage Actions access → Add repository → `Sapphire`, Role: Write**. 이게 없으면 push 단계가 `denied` 로 실패한다.
+
+**①-수동 (Actions 를 못 쓸 때) — 내 PC 에서 커밋 → 빌드 → push (PowerShell)**
 
 push 용 토큰으로 한 번 로그인해 두면 다시 하지 않아도 된다(`docker login ghcr.io -u Maenghansoo1`).
 ```powershell
@@ -389,7 +396,7 @@ EC2를 다시 켜면 컨테이너는 자동으로 다시 뜬다(§3-1).
 | 8 | SNS 푸시 | Firebase 프로젝트 먼저 필요 |
 | 9 | 사진 제출 전체 흐름 확인 | 앱에서 사진 미션 제출 → S3 저장 → vision 판정 → 별이 점수 댓글 |
 | 10 | 예전 배포 파일 정리 | 컨테이너가 며칠 안정적이면 EC2 `~/vision-service`, `~/hawe-0.0.1-SNAPSHOT.jar`, systemd 서비스 파일 삭제 (롤백 수단이 사라짐) |
-| 11 | 자동 배포(CI/CD) | GitHub Actions 로 테스트 → 이미지 빌드 → GHCR push(§3-3 ① 대체) → EC2 pull. 레지스트리(GHCR)는 준비됨 |
+| 11 | 자동 배포 나머지 | 이미지 빌드·push 는 Actions 로 자동화됨(§3-3 ①). 남은 것: CI 에서 테스트 실행(MariaDB 서비스 컨테이너 필요), EC2 자동 pull(탄력적 IP·SSH 허용 범위 문제로 보류) |
 | 12 | GHCR 토큰 만료 관리 | push·pull 토큰 모두 90일. 만료 전에 새로 만들어 PC·EC2 에서 `docker login ghcr.io` |
 
 > `docs/INFRA/AWS_SERVICES.md`는 초기 초안(MariaDB·Bedrock IAM 기준)이라 실제 구성과 다르다. 이 문서를 기준으로 본다.
