@@ -10,6 +10,10 @@
 # → 내 PC에 Python이 없어도, 어느 컴퓨터에서든 같은 버전으로 실행된다.
 FROM python:3.12-slim
 
+# GHCR 패키지를 GitHub 저장소와 연결한다(팀원 권한 이어받기).
+LABEL org.opencontainers.image.source=https://github.com/Maenghansoo1/Sapphire
+
+
 # [환경변수]
 # PYTHONDONTWRITEBYTECODE=1 : .pyc 캐시 파일을 만들지 않는다(이미지를 깔끔하게).
 # PYTHONUNBUFFERED=1        : 로그를 모아두지 않고 바로 출력한다(docker logs에 즉시 보이게).

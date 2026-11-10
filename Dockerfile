@@ -43,6 +43,11 @@ RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q package -DskipTests
 # → 이미지가 작아지고, 컨테이너 안에 공격에 쓰일 도구가 줄어든다.
 FROM eclipse-temurin:25-jre
 
+# GHCR 패키지를 GitHub 저장소와 연결한다.
+# → 저장소에 접근 권한이 있는 팀원이 이 이미지도 pull 할 수 있게 권한을 이어받는다(G-5).
+LABEL org.opencontainers.image.source=https://github.com/Maenghansoo1/Sapphire
+
+
 # root가 아닌 일반 계정 app으로 실행하기 위해 계정을 만든다(vision과 같은 이유).
 RUN groupadd --system app && useradd --system --gid app --home /app app
 WORKDIR /app
