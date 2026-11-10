@@ -58,3 +58,6 @@ ml/vision-service/models/
 
 #old files
 frontend/
+
+### Docker 배포 산출물 (docker save 결과, 수백 MB) ###
+hawe-images.tar*
