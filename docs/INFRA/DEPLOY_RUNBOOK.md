@@ -1,6 +1,6 @@
 # HA'WE AWS 배포 작업 정리 (다시 따라 하기용)
 
-> 최종 정리: 2026-11-10 (컨테이너 배포로 전환. 이전 jar 직접 실행 방식은 §3-8 롤백에만 남김)
+> 최종 정리: 2026-11-10 (컨테이너 배포로 전환, 이미지는 GHCR 로 주고받음. 이전 jar 직접 실행 방식은 §3-8 롤백에만 남김)
 > 출품·실습용 배포. 서버 1대(EC2) + DB(RDS MySQL) + 파일(S3) + AI(운영 측 Bedrock 게이트웨이).
 > 비밀번호·API 키는 이 문서에 적지 않는다. 모두 각자의 `.env`에만 둔다.
 
@@ -34,6 +34,20 @@
 | `ml/vision-service/Dockerfile`, `.dockerignore` | vision 이미지 (모델은 이미지에 넣지 않고 `/models` 볼륨) |
 | `compose.yaml` | 로컬 개발: db(MariaDB) + vision + api |
 | `compose.prod.yaml` | EC2: vision + api (DB 는 RDS) |
+
+| 이미지 (GHCR, 비공개) | 태그 |
+|---|---|
+| `ghcr.io/maenghansoo1/hawe-api` | `latest` + 커밋 번호(예: `2fcad56`) |
+| `ghcr.io/maenghansoo1/hawe-vision` | `latest` + 커밋 번호 |
+
+GHCR 토큰(GitHub classic PAT, 90일 만료):
+
+| 토큰 | 권한 | 쓰는 곳 |
+|---|---|---|
+| push 용 | `write:packages`, `read:packages`, `delete:packages` | 배포하는 사람의 PC 에서만 |
+| pull 용 | `read:packages` 만 | EC2, 팀원 PC |
+
+토큰은 git·`.env`·메신저에 올리지 않는다. 만료되면 새로 만들어 `docker login ghcr.io` 를 다시 한다.
 
 **계정 제약 (운영 측 정책)**
 - RDS는 MySQL 또는 PostgreSQL, 프리 티어만 생성 가능 (MariaDB 불가)
@@ -160,6 +174,12 @@ docker compose version                  # Docker Compose version v2.39.2
 mkdir -p ~/hawe/models
 cp ~/.env ~/hawe/.env && chmod 600 ~/hawe/.env     # 내용은 §3-4
 ```
+
+**GHCR 로그인 (pull 용 토큰)**
+```bash
+docker login ghcr.io -u Maenghansoo1     # Password: 에 read:packages 토큰 붙여넣기(PuTTY 는 오른쪽 클릭)
+```
+`-p 토큰` 으로 쓰지 않는다(쉘 기록에 남음). 토큰은 `~/.docker/config.json`(권한 600)에 암호화 없이 저장되므로 EC2 에는 읽기 전용 토큰만 둔다.
 모델과 compose 파일 업로드(내 PC PowerShell):
 ```powershell
 $KEY = "C:\경로\키.ppk"; $EC2 = "ec2-user@<EC2 IP>"
@@ -174,33 +194,37 @@ systemctl is-enabled hawe.service hawe-vision.service   # disabled, disabled
 ```
 서비스 파일은 롤백용으로 남겨 둔다(§3-8).
 
-### 3-3. 배포할 때마다
+### 3-3. 배포할 때마다 (GHCR)
 
-**① 내 PC — 이미지 빌드·저장 (Git Bash 에서. PowerShell 5.1 의 `|` 는 바이너리를 깨뜨린다)**
-```bash
-cd /c/Sapphire
-docker compose build                                   # hawe-api, hawe-vision 이미지
-docker save hawe-api:latest hawe-vision:latest | gzip > hawe-images.tar.gz   # 약 300MB
-```
-vision 코드가 그대로면 `docker save hawe-api:latest | gzip > ...` 로 api 만 보내도 된다.
+**① 내 PC — 커밋 → 빌드 → push (PowerShell)**
 
-**② 업로드 (PowerShell)**
+push 용 토큰으로 한 번 로그인해 두면 다시 하지 않아도 된다(`docker login ghcr.io -u Maenghansoo1`).
 ```powershell
-pscp -i $KEY C:\Sapphire\hawe-images.tar.gz "${EC2}:/home/ec2-user/hawe/"
-# compose.prod.yaml 을 고쳤으면 그것도 올린다
+cd C:\Sapphire
+git status                                   # 커밋 안 된 변경이 없어야 한다(태그 = 커밋 번호)
+$TAG = git rev-parse --short HEAD; $env:TAG = $TAG
+docker compose build api vision              # ghcr.io/maenghansoo1/hawe-*:<커밋번호>
+docker compose push api vision               # 바뀐 층만 올라간다(보통 api 의 jar 층 수십 MB)
+foreach ($n in "hawe-api","hawe-vision") {   # 같은 이미지에 latest 이름표도 붙인다
+  docker tag "ghcr.io/maenghansoo1/${n}:$TAG" "ghcr.io/maenghansoo1/${n}:latest"
+  docker push "ghcr.io/maenghansoo1/${n}:latest"
+}
+Remove-Item Env:TAG
 ```
+- 확인: `docker manifest inspect ghcr.io/maenghansoo1/hawe-api:$TAG` 가 오류 없이 나오면 올라간 것.
+- push 가 중간에 끊기면 층만 올라가고 태그가 안 생길 수 있다(`manifest unknown`). 같은 push 를 다시 하면 층은 `Layer already exists` 로 건너뛰고 몇 초 만에 끝난다.
 
-**③ EC2 — 이전 이미지 보관 → 불러오기 → 교체**
+**② EC2 — pull → 교체**
 ```bash
 cd ~/hawe
-docker tag hawe-api:latest hawe-api:prev && docker tag hawe-vision:latest hawe-vision:prev   # 롤백용
-docker load -i hawe-images.tar.gz
-docker compose -f compose.prod.yaml up -d      # 바뀐 이미지의 컨테이너만 다시 만든다(20~30초 끊김)
+docker compose -f compose.prod.yaml pull     # latest 를 받는다(없는 층만)
+docker compose -f compose.prod.yaml up -d    # 바뀐 서비스의 컨테이너만 다시 만든다(api 는 20~30초 끊김)
 docker compose -f compose.prod.yaml ps
-rm hawe-images.tar.gz && docker image prune -f # 디스크 정리(8GB 중 80% 이상 사용 중)
+docker image prune -f                        # 이름표 없는 예전 이미지 정리(디스크 8GB 중 80% 이상 사용 중)
 ```
-
-> `hawe-images.tar.gz` 는 git 에 올리지 않는다. PC 에서도 업로드 후 지운다.
+- `compose.prod.yaml` 을 고쳤으면 먼저 올린다: `pscp -i $KEY C:\Sapphire\compose.prod.yaml "${EC2}:/home/ec2-user/hawe/"`
+- 한쪽만 바꾸려면 서비스 이름을 붙인다: `pull api` / `up -d api`.
+- GHCR 무료 비공개 용량이 작다. 오래된 커밋 번호 태그는 GitHub → Packages → 패키지 → Package settings 에서 지운다(롤백용으로 최근 2~3개는 남긴다).
 
 ### 3-4. EC2 `.env` (`~/hawe/.env`, 권한 600)
 
@@ -280,12 +304,13 @@ mysql -h sgu-sapphire-db.cdqgkoym8aye.ap-northeast-2.rds.amazonaws.com -u admin 
 
 ### 3-8. 롤백
 
-**이전 이미지로**
+**이전 버전으로** (GHCR 에 남아 있는 커밋 번호 태그)
 ```bash
 cd ~/hawe
-docker tag hawe-api:prev hawe-api:latest      # vision 도 같은 방식
-docker compose -f compose.prod.yaml up -d
+TAG=2fcad56 docker compose -f compose.prod.yaml up -d        # 그 커밋의 이미지를 받아 실행
+TAG=2fcad56 docker compose -f compose.prod.yaml up -d api    # api 만
 ```
+태그 목록: GitHub → Packages → `hawe-api` → 버전 목록. 문제가 고쳐지면 다시 `docker compose -f compose.prod.yaml up -d`(latest).
 
 **예전 jar 직접 실행 방식으로** (컨테이너 자체에 문제가 있을 때)
 ```bash
@@ -310,6 +335,7 @@ EC2를 다시 켜면 컨테이너는 자동으로 다시 뜬다(§3-1).
 | `.env.example`에 들어간 실제 API 키 삭제 | .env.example | 커밋됨 |
 | S3 파일 저장소 (`STORAGE_TYPE=s3`일 때 S3, 기본은 로컬 `./uploads`) | S3FileStorage, StorageProperties, LocalFileStorage, WebMvcConfig, application.properties, pom.xml(AWS SDK 2.55.16), 테스트 | EC2 연결·업로드 확인 완료 (2026-10-16) |
 | 컨테이너 배포 (api·vision 이미지, 로컬/운영 Compose) | Dockerfile, .dockerignore, ml/vision-service/Dockerfile·.dockerignore, compose.yaml, compose.prod.yaml | EC2 배포·재부팅 자동 시작 확인 (2026-11-10). 애플리케이션 코드는 바꾸지 않음 |
+| 이미지 레지스트리 GHCR (비공개) | Dockerfile 2개(`org.opencontainers.image.source` 라벨), compose.yaml·compose.prod.yaml(`image: ghcr.io/maenghansoo1/...:${TAG:-latest}`) | EC2 가 GHCR 에서 pull 해 실행 확인 (2026-11-10) |
 
 **AI 키 동작**: 서버 시작 시 `LLM_API_KEY`가 있으면 게이트웨이, 없으면 `ANTHROPIC_API_KEY`를 사용. AI 호출이 실패하면 다른 곳으로 넘어가지 않고 미리 적어 둔 예비 문장을 쓴다(`generation_source=AI_FALLBACK`).
 
@@ -342,7 +368,9 @@ EC2를 다시 켜면 컨테이너는 자동으로 다시 뜬다(§3-1).
 | `port is already allocated` (8080) | 예전 jar 나 IDE 로 켠 서버가 8080 사용 | 예전 서비스 끄기 / IDE 서버 종료 |
 | api 가 vision 을 못 부름, 사진 판정 없음 | vision 이 healthy 가 아니거나 모델 없음 | `logs vision` 확인. `~/hawe/models` 에 ONNX 3개가 있어야 함 |
 | 사진 업로드만 실패 (S3 권한 오류) | 컨테이너가 IMDS 에서 자격 증명을 못 받음(hop limit 1) | §3-6 IMDS 확인. 200 이 아니면 hop limit 을 2로 (`aws ec2 modify-instance-metadata-options --http-put-response-hop-limit 2`, 권한 없으면 운영 측 요청) |
-| PowerShell 에서 `docker save ... \| gzip` 결과 파일이 깨짐 | PowerShell 5.1 파이프는 바이너리를 변환함 | Git Bash 에서 실행 |
+| push 했는데 Packages 에 안 보임, `manifest unknown` | push 가 층만 올리고 끊김(태그 등록 전) | 같은 `docker push` 를 다시 실행 (§3-3 ①) |
+| `denied`, `unauthorized` (push·pull) | 로그인 안 함 / 토큰 만료 / 토큰 권한 부족 / 패키지 접근 권한 없음 | 토큰 다시 만들어 `docker login ghcr.io`. 팀원은 패키지 Manage access 에 Read 로 초대돼 있어야 함 |
+| pull 후에도 예전 버전이 돎 | `compose.prod.yaml` 의 `image:` 가 예전 이름이거나 `up -d` 를 안 함 | `grep image: compose.prod.yaml` 로 두 줄 모두 `ghcr.io/...` 인지 확인 후 `up -d` |
 | `.env` 를 고쳤는데 반영이 안 됨 | `restart` 는 `env_file` 을 다시 읽지 않음 | `up -d --force-recreate api` |
 
 ---
@@ -361,6 +389,7 @@ EC2를 다시 켜면 컨테이너는 자동으로 다시 뜬다(§3-1).
 | 8 | SNS 푸시 | Firebase 프로젝트 먼저 필요 |
 | 9 | 사진 제출 전체 흐름 확인 | 앱에서 사진 미션 제출 → S3 저장 → vision 판정 → 별이 점수 댓글 |
 | 10 | 예전 배포 파일 정리 | 컨테이너가 며칠 안정적이면 EC2 `~/vision-service`, `~/hawe-0.0.1-SNAPSHOT.jar`, systemd 서비스 파일 삭제 (롤백 수단이 사라짐) |
-| 11 | 자동 배포(CI/CD) | GitHub Actions 로 테스트 → 이미지 빌드 → 레지스트리 → EC2. 지금의 `docker save`/`pscp` 를 대체 |
+| 11 | 자동 배포(CI/CD) | GitHub Actions 로 테스트 → 이미지 빌드 → GHCR push(§3-3 ① 대체) → EC2 pull. 레지스트리(GHCR)는 준비됨 |
+| 12 | GHCR 토큰 만료 관리 | push·pull 토큰 모두 90일. 만료 전에 새로 만들어 PC·EC2 에서 `docker login ghcr.io` |
 
 > `docs/INFRA/AWS_SERVICES.md`는 초기 초안(MariaDB·Bedrock IAM 기준)이라 실제 구성과 다르다. 이 문서를 기준으로 본다.
