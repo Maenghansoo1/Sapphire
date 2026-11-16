@@ -84,6 +84,7 @@ sealed interface MainRoute {
     @Serializable data object MyPage : MainRoute
     @Serializable data object ProfileEdit : MainRoute
     @Serializable data object NotificationSettings : MainRoute
+    @Serializable data object PhotoSettings : MainRoute
     @Serializable data object UserInfo : MainRoute
     @Serializable data object ChangePassword : MainRoute
     @Serializable data object AppInfo : MainRoute
@@ -371,6 +372,7 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
                 onUserInfo = { nav.navigate(MainRoute.UserInfo) { launchSingleTop = true } },
                 onAppInfo = { nav.navigate(MainRoute.AppInfo) { launchSingleTop = true } },
                 onWithdraw = { nav.navigate(MainRoute.Withdraw) { launchSingleTop = true } },
+                onPhotoSettings = { nav.navigate(MainRoute.PhotoSettings) { launchSingleTop = true } },
                 dev = dev, onDevTools = { nav.navigate(MainRoute.DevTools) { launchSingleTop = true } },
                 onSwitchUser = onSwitchUser, switchBusy = switchBusy,
                 switchMessage = switchMessage, onSwitchMessageShown = onSwitchMessageShown)
@@ -387,6 +389,9 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
         }
         composable<MainRoute.NotificationSettings> {
             NotificationSettingsScreen(session, onBack = { nav.popBackStack() })
+        }
+        composable<MainRoute.PhotoSettings> {
+            PhotoSettingsScreen(onBack = { nav.popBackStack() })
         }
         composable<MainRoute.UserInfo> {
             UserInfoScreen(session, onBack = { nav.popBackStack() },

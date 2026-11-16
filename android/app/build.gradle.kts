@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
     implementation(libs.litert)  // 그림 인식(A8): TFLite 의 새 이름. 기기 안에서만 추론
+    implementation(libs.mlkit.face.detection)  // 얼굴 가리기(TODO_2/C3): 모델이 앱에 들어 있는 번들 방식. 사진은 기기 밖으로 나가지 않음
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
