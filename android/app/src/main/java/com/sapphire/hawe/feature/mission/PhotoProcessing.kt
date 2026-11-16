@@ -25,15 +25,31 @@ fun sampleSizeFor(width: Int, height: Int, maxSide: Int = 2048): Int {
 }
 
 fun loadCroppedPhoto(context: Context, uri: Uri): Bitmap? = runCatching {
+    val upright = loadUprightPhoto(context, uri) ?: return null
+    val rect = centerCropRect(upright.width, upright.height)
+    Bitmap.createBitmap(upright, rect.x, rect.y, rect.width, rect.height).also {
+        if (it !== upright) upright.recycle()
+    }
+}.getOrNull()
+
+/** 사진을 긴 변 [maxSide] 이하로 줄여 불러오고 EXIF 방향대로 세워요(자르지 않음). */
+private fun loadUprightPhoto(context: Context, uri: Uri, maxSide: Int = 2048): Bitmap? {
     val resolver = context.contentResolver
-    val orientation = resolver.openInputStream(uri)?.use { ExifInterface(it).getAttributeInt(
-        ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) } ?: return null
+    // PNG 등 EXIF 를 못 읽는 형식은 방향 정보가 없는 걸로 봐요
+    val orientation = resolver.openInputStream(uri)?.use { stream ->
+        runCatching { ExifInterface(stream).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
+            .getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    } ?: return null
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     val boundsStream = resolver.openInputStream(uri) ?: return null
     boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-    val options = BitmapFactory.Options().apply { inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight) }
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, maxSide) }
     val original = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) } ?: return null
+    return uprightBitmap(original, orientation)
+}
+
+private fun uprightBitmap(original: Bitmap, orientation: Int): Bitmap {
     val angle = when (orientation) {
         ExifInterface.ORIENTATION_ROTATE_90 -> 90f
         ExifInterface.ORIENTATION_ROTATE_180 -> 180f
@@ -51,13 +67,29 @@ fun loadCroppedPhoto(context: Context, uri: Uri): Bitmap? = runCatching {
             else -> angle
         })
     }
-    val upright = if (angle != 0f || flip) Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true).also {
+    return if (angle != 0f || flip) Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true).also {
         if (it !== original) original.recycle()
     } else original
-    val rect = centerCropRect(upright.width, upright.height)
-    Bitmap.createBitmap(upright, rect.x, rect.y, rect.width, rect.height).also {
-        if (it !== upright) upright.recycle()
-    }
+}
+
+/** 고른 파일 형식이 PNG 면 PNG 로(투명한 부분 유지), 아니면 JPEG 로 다시 저장해요. 서버는 jpg·png·webp 만 받아요. */
+internal fun reencodeAsPng(mimeType: String?): Boolean = mimeType.equals("image/png", ignoreCase = true)
+
+/**
+ * 고른 사진을 **새로 인코딩한** 바이트와 확장자(댓글 첨부용). 원본 파일을 그대로 올리면 EXIF(기기 모델·촬영 시각,
+ * 기기에 따라 위치)가 따라가서, 방향만 바로잡아 다시 저장해요. 긴 변은 [maxSide] 이하로 줄여요.
+ * HEIC 처럼 서버가 받지 않는 형식도 JPEG 로 바뀌어 올라가요. 읽거나 변환하지 못하면 null.
+ */
+fun reencodedPhotoBytes(context: Context, uri: Uri, maxSide: Int = 2048): Pair<ByteArray, String>? = runCatching {
+    val png = reencodeAsPng(context.contentResolver.getType(uri))
+    val upright = loadUprightPhoto(context, uri, maxSide) ?: return null
+    try {
+        ByteArrayOutputStream().use { output ->
+            val format = if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+            if (!upright.compress(format, if (png) 100 else 90, output)) return null
+            output.toByteArray() to if (png) "png" else "jpg"
+        }
+    } finally { upright.recycle() }
 }.getOrNull()
 
 fun photoJpegBytes(bitmap: Bitmap): ByteArray = ByteArrayOutputStream().use { output ->
