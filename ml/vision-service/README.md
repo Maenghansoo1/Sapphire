@@ -51,6 +51,8 @@ python export_onnx.py
 | `HAWE_VISION_MODEL_DIR` | `models/` | ONNX 파일 위치 |
 | `HAWE_VISION_ONNX_VARIANT` | 비움 | `fp16` 또는 빈 값(fp32). 비우면 있는 파일 중 fp16 → fp32 순서 |
 | `HAWE_VISION_BACKEND` | `auto` | `auto`(ONNX 있으면 ONNX), `onnx`, `torch` |
+| `HAWE_VISION_S3_BUCKET` | 비움 | 있으면 `imageKey` 로 받은 사진을 이 버킷에서 읽는다(Lambda 배포). 비우면 `imageKey` 를 거절한다 |
+| `HAWE_VISION_API_KEY` | 비움 | 있으면 `/v1/*` 요청에 같은 값의 `X-Hawe-Vision-Key` 헤더가 있어야 한다(없거나 다르면 401). `/healthz` 는 열려 있다 |
 
 응답과 `/healthz` 의 `version` 은 fp16 일 때 `1-fp16`, fp32·PyTorch 일 때 `1` 이다(백엔드는 기록만 한다).
 
@@ -60,7 +62,8 @@ python export_onnx.py
 
 | 필드 | 필수 | 설명 |
 |---|---|---|
-| `image` | 예 | 사진 파일 (jpg/png/webp/heic, ≤ 10MB). 휴대폰 회전 정보는 서비스가 반영한다 |
+| `image` | 둘 중 하나 | 사진 파일 (jpg/png/webp/heic, ≤ 10MB). 휴대폰 회전 정보는 서비스가 반영한다 |
+| `imageKey` | 둘 중 하나 | 사진 대신 S3 키(`submissions/<UUID>.jpg` 모양). `HAWE_VISION_S3_BUCKET` 에서 읽는다. Lambda Function URL 의 요청 크기 한도(6MB) 때문에 쓴다 |
 | `topic` | 예 | 주제 명사구, 1~60자. `PHOTO_NOW` 는 `params.subject`(예: `창밖 풍경`), `PHOTO_COLOR` 는 `params.color`(예: `파란색` 또는 `파랑`) |
 | `template` | 아니오 | `PHOTO_NOW`(기본) 또는 `PHOTO_COLOR` |
 
@@ -74,8 +77,13 @@ python export_onnx.py
 | 400 | `INVALID_TOPIC` | topic 이 비었거나 60자 초과 |
 | 400 | `UNSUPPORTED_TEMPLATE` | template 이 두 가지가 아님 |
 | 400 | `INVALID_IMAGE` | 사진을 읽을 수 없음 |
-| 400 | `VALIDATION_ERROR` | image 나 topic 이 없음 |
+| 400 | `VALIDATION_ERROR` | topic 이 없거나, image·imageKey 가 둘 다 없거나 둘 다 있음 |
+| 400 | `IMAGE_KEY_UNSUPPORTED` | imageKey 를 보냈는데 `HAWE_VISION_S3_BUCKET` 이 없음 |
+| 400 | `INVALID_IMAGE_KEY` | imageKey 모양이 다름 |
+| 401 | `UNAUTHORIZED` | `HAWE_VISION_API_KEY` 가 있는데 헤더가 없거나 다름 |
+| 404 | `IMAGE_NOT_FOUND` | 버킷에 imageKey 가 없음 |
 | 413 | `FILE_TOO_LARGE` | 10MB 초과 |
+| 502 | `IMAGE_LOAD_FAILED` | S3 에서 읽지 못함(권한·네트워크) |
 
 `GET /healthz` → `{ "status": "ok", "model": "...", "version": "1-fp16", "backend": "onnx.fp16" }`
 
@@ -84,6 +92,20 @@ curl -F "image=@photo.jpg" -F "topic=창밖 풍경" http://localhost:8001/v1/top
 ```
 
 > Windows Git Bash 의 `curl` 은 명령줄의 한글을 깨뜨려 보낸다(모든 주제가 같은 점수로 나옴). 한글 주제는 UTF-8 파일로 보내거나(`-F "topic=<topic.txt"`) Postman·Java·Python 클라이언트로 보낸다.
+
+## AWS Lambda 배포 (`Dockerfile.lambda`)
+
+EC2 에 상시 띄우는 대신 Lambda 컨테이너 이미지로 올릴 수 있다. 코드는 같고 [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) 가 Lambda 호출을 HTTP 요청으로 바꿔 준다. 모델 3개는 이미지에 들어간다(볼륨이 없으므로).
+
+```bat
+docker build -f Dockerfile.lambda -t hawe-vision-lambda .
+docker run --rm -p 8001:8001 -e HAWE_VISION_API_KEY=dev hawe-vision-lambda   :: Lambda 밖에서는 일반 서버로 뜬다
+```
+
+- Lambda: 컨테이너 이미지(ECR), 메모리 3008MB, 타임아웃 30초, x86_64, Function URL.
+- 환경변수: `HAWE_VISION_S3_BUCKET`(사진 버킷), `HAWE_VISION_API_KEY`(백엔드 `HAWE_VISION_API_KEY` 와 같은 값).
+- 실행 역할: CloudWatch Logs 쓰기 + 사진 버킷 `s3:GetObject`. DB 에는 접근하지 않아 VPC 가 필요 없다.
+- 백엔드: `HAWE_VISION_BASE_URL`=Function URL, `HAWE_VISION_SEND_IMAGE_KEY=true`, `HAWE_VISION_API_KEY`, `HAWE_VISION_READ_TIMEOUT=30s`(첫 호출은 모델 로딩으로 몇 초 걸린다).
 
 ## 점수와 임계값 (`EVAL.md`)
 

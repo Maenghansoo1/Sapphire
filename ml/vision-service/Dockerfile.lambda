@@ -1,0 +1,41 @@
+# ============================================================
+# HA'WE vision 서비스 — AWS Lambda(컨테이너 이미지)용
+# FastAPI 코드는 그대로 두고 Lambda Web Adapter 가 Lambda 호출을 HTTP 요청으로 바꿔 준다.
+#
+# 빌드(ml/vision-service 에서, models/ 에 ONNX 파일 3개가 있어야 함):
+#   docker build -f Dockerfile.lambda -t hawe-vision-lambda .
+# 로컬 실행(일반 컨테이너처럼 동작, Lambda 밖에서는 어댑터가 꺼져 있음):
+#   docker run --rm -p 8001:8001 -e HAWE_VISION_API_KEY=dev hawe-vision-lambda
+#
+# Lambda 환경변수: HAWE_VISION_S3_BUCKET(사진 버킷), HAWE_VISION_API_KEY(백엔드와 같은 값)
+# 권장 설정: 메모리 3008MB, 타임아웃 30초, x86_64
+# ============================================================
+
+FROM python:3.12-slim
+
+LABEL org.opencontainers.image.source=https://github.com/Maenghansoo1/Sapphire
+
+# Lambda Web Adapter: /opt/extensions 에 두면 Lambda 가 확장으로 실행한다.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+# PYTHONDONTWRITEBYTECODE: Lambda 는 /tmp 말고는 읽기 전용이라 .pyc 를 쓰지 않는다.
+# AWS_LWA_*: 어댑터가 8001 포트로 요청을 넘기고, /healthz 가 200 이 되면 준비된 것으로 본다.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HAWE_VISION_MODEL_DIR=/models \
+    AWS_LWA_PORT=8001 \
+    AWS_LWA_READINESS_CHECK_PATH=/healthz
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 모델은 EC2 처럼 볼륨으로 붙일 수 없어서 이미지에 넣는다(약 429MB).
+COPY models/image_encoder.fp16.onnx models/text_encoder.fp16.onnx models/tokenizer.json /models/
+
+COPY app.py scoring.py distractors.ko.txt ./
+
+# Lambda 는 컨테이너를 root 가 아닌 임의 사용자로 실행한다. 위 파일은 모두 읽기만 하면 된다.
+EXPOSE 8001
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]

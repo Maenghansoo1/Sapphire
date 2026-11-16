@@ -20,6 +20,8 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @EnableConfigurationProperties(VisionProperties.class)
 public class VisionClient {
+    static final String API_KEY_HEADER = "X-Hawe-Vision-Key";
+
     private final VisionProperties properties;
     private final ObjectMapper json;
     private final RestClient rest;
@@ -40,11 +42,25 @@ public class VisionClient {
         parts.add("image", new ByteArrayResource(image) {
             @Override public String getFilename() { return filename; }
         });
+        return post(parts, template, topic);
+    }
+
+    /** 사진 바이트 대신 저장소 키를 보낸다. 비전 서비스가 S3 에서 직접 읽는다(Lambda 배포). */
+    public TopicFitResult callWithKey(String template, String topic, String imageKey) {
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        parts.add("imageKey", imageKey);
+        return post(parts, template, topic);
+    }
+
+    private TopicFitResult post(MultiValueMap<String, Object> parts, String template, String topic) {
         parts.add("topic", topic);
         parts.add("template", template);
         String body;
         try {
             body = rest.post().uri(properties.baseUrl() + "/v1/topic-fit")
+                    .headers(headers -> {
+                        if (!properties.apiKey().isEmpty()) headers.set(API_KEY_HEADER, properties.apiKey());
+                    })
                     .contentType(MediaType.MULTIPART_FORM_DATA).body(parts).retrieve().body(String.class);
         } catch (RestClientResponseException e) {
             throw new VisionException("Vision HTTP " + e.getStatusCode().value());

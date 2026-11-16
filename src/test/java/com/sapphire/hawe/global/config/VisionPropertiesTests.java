@@ -20,4 +20,14 @@ class VisionPropertiesTests {
         assertThrows(IllegalArgumentException.class, () -> new VisionProperties(false, null,
                 Duration.ZERO, null, null, null, null));
     }
+
+    @Test void apiKeyDefaultsEmptyAndIsHiddenFromToString() {
+        var defaults = new VisionProperties(false, null, null, null, null, null, null);
+        assertEquals("", defaults.apiKey());
+        assertFalse(defaults.sendImageKey());
+        var keyed = new VisionProperties(true, null, null, null, null, null, null, " secret ", true);
+        assertEquals("secret", keyed.apiKey());
+        assertTrue(keyed.sendImageKey());
+        assertFalse(keyed.toString().contains("secret"));
+    }
 }

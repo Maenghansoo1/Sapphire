@@ -54,8 +54,10 @@ public class TopicFitService {
             for (int attempt = 1; attempt <= 2; attempt++) {
                 TopicFitResult result;
                 try {
-                    byte[] image = storage.load(row.getMediaUrl());
-                    result = client.call(row.getTemplate(), topic, image, filename);
+                    // mediaUrl 은 저장소 키다. 키 방식이면 비전 서비스가 S3 에서 직접 읽는다.
+                    result = properties.sendImageKey()
+                            ? client.callWithKey(row.getTemplate(), topic, row.getMediaUrl())
+                            : client.call(row.getTemplate(), topic, storage.load(row.getMediaUrl()), filename);
                 } catch (RuntimeException e) {
                     log.warn("Vision attempt {} failed for submission {} ({})", attempt, submissionId, e.getClass().getSimpleName());
                     if (attempt == 2) {

@@ -71,6 +71,17 @@ class TopicFitServiceTests {
         verify(reviews, never()).complete(eq(1L), eq("FAILED"), any(), any(), any(), any(), anyInt());
     }
 
+    @Test void keyModeSendsStorageKeyWithoutLoadingImage() {
+        VisionProperties keyed = new VisionProperties(true, null, null, null, Duration.ZERO, null, null, "", true);
+        TopicFitService keyService = new TopicFitService(submissions, missions, reviews, storage, client, keyed, new ObjectMapper(), mascot);
+        when(client.callWithKey("PHOTO_NOW", "창밖 풍경", "submissions/photo.jpg"))
+                .thenReturn(new TopicFitResult(0.5, "model", "1"));
+        keyService.review(1L);
+        verify(reviews).complete(eq(1L), eq("DONE"), eq(0.5), eq("PERFECT_FIT"), anyString(), eq("model/1"), eq(1));
+        verify(storage, never()).load(anyString());
+        verify(client, never()).call(anyString(), anyString(), any(), anyString());
+    }
+
     @Test void invalidTopicSkipsWithoutCallingVision() {
         mission.setParams("{\"subject\":\"x\"}");
         service.review(1L);

@@ -8,4 +8,6 @@ numpy==2.5.4
 pillow==12.3.0
 pillow_heif==1.8.1
 httpx==0.28.1
+# S3 imageKey mode (Lambda). Imported only when HAWE_VISION_S3_BUCKET is set.
+boto3==1.44.3
 pytest==9.1.1

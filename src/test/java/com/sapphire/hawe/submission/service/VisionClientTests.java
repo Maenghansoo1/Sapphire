@@ -41,6 +41,33 @@ class VisionClientTests {
         server.verify();
     }
 
+    @Test void omitsApiKeyHeaderByDefault() {
+        server.expect(requestTo("http://localhost:8001/v1/topic-fit"))
+                .andExpect(headerDoesNotExist(VisionClient.API_KEY_HEADER))
+                .andRespond(withSuccess("{\"fit\":0.19,\"model\":\"clip\",\"version\":\"1\"}", MediaType.APPLICATION_JSON));
+        client.call("PHOTO_NOW", "topic", new byte[] {1}, "photo.jpg");
+        server.verify();
+    }
+
+    @Test void sendsImageKeyAndApiKeyHeader() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer keyServer = MockRestServiceServer.bindTo(builder).build();
+        VisionClient keyed = new VisionClient(new VisionProperties(true, "https://vision.example", null, null, null,
+                null, null, "secret", true), new ObjectMapper(), builder.build());
+        keyServer.expect(requestTo("https://vision.example/v1/topic-fit"))
+                .andExpect(header(VisionClient.API_KEY_HEADER, "secret"))
+                .andExpect(request -> {
+                    String body = ((org.springframework.mock.http.client.MockClientHttpRequest) request).getBodyAsString();
+                    assertTrue(body.contains("name=\"imageKey\""));
+                    assertTrue(body.contains("submissions/photo.jpg"));
+                    assertFalse(body.contains("name=\"image\";"));
+                    assertTrue(body.contains("PHOTO_COLOR"));
+                })
+                .andRespond(withSuccess("{\"fit\":0.3,\"model\":\"clip\",\"version\":\"1\"}", MediaType.APPLICATION_JSON));
+        assertEquals(0.3, keyed.callWithKey("PHOTO_COLOR", "빨강", "submissions/photo.jpg").fit());
+        keyServer.verify();
+    }
+
     @Test void realClientStaysOnHttp11() throws Exception {
         // 실제 JDK 클라이언트로 보낸다. h2c 업그레이드 헤더가 붙으면 uvicorn 이 400 으로 거절한다.
         HttpServer http = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

@@ -31,10 +31,19 @@ no negative assessment or emoji.
 | `hawe.vision.enabled` | `false` (`HAWE_VISION_ENABLED`) |
 | `hawe.vision.base-url` | `http://localhost:8001` (`HAWE_VISION_BASE_URL`) |
 | `hawe.vision.connect-timeout` | `3s` |
-| `hawe.vision.read-timeout` | `10s` |
+| `hawe.vision.read-timeout` | `10s` (`HAWE_VISION_READ_TIMEOUT`) |
 | `hawe.vision.retry-delay` | `2s` |
 | `hawe.vision.photo-now.perfect-threshold` / `good-threshold` | `0.024` / `0.017` |
 | `hawe.vision.photo-color.perfect-threshold` / `good-threshold` | `0.132` / `0.104` |
+| `hawe.vision.api-key` | empty (`HAWE_VISION_API_KEY`) |
+| `hawe.vision.send-image-key` | `false` (`HAWE_VISION_SEND_IMAGE_KEY`) |
+
+When `api-key` is set, requests carry it in the `X-Hawe-Vision-Key` header. When `send-image-key` is
+`true`, the backend sends the stored S3 key (`imageKey`) instead of the image bytes, and the vision
+service reads the object from its own `HAWE_VISION_S3_BUCKET`. Use this only with S3 storage and the
+Lambda deployment (`ml/vision-service/Dockerfile.lambda`): Lambda Function URLs cap request bodies at
+6MB while photos may be up to 10MB. Raise `read-timeout` to about `30s` there, because the first call
+after an idle period loads the models.
 
 The listener stops immediately when disabled, so no review row or vision request is created.
 The review claims one row with `INSERT IGNORE`; duplicate events do not rerun it. Invalid mission

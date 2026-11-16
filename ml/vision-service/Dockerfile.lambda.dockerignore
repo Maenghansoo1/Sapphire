@@ -1,0 +1,9 @@
+# Dockerfile.lambda 전용. 이미지에는 requirements.txt, 코드 3개, 서비스가 쓰는 모델 3개만 들어간다.
+*
+!requirements.txt
+!app.py
+!scoring.py
+!distractors.ko.txt
+!models/image_encoder.fp16.onnx
+!models/text_encoder.fp16.onnx
+!models/tokenizer.json
