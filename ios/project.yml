@@ -42,7 +42,7 @@ targets:
           - IBMPlexSansKR-Bold.ttf
           - Fredoka-SemiBold.ttf
         API_BASE_URL: $(API_BASE_URL)
-        # EC2 서버(http://43.202.49.179:8080)는 IP 주소라 예외 도메인을 쓸 수 없어 http 를 전부 허용해요. (localhost 포함)
+        # EC2 서버(http://3.38.34.23:8080, 탄력적 IP)는 IP 주소라 예외 도메인을 쓸 수 없어 http 를 전부 허용해요. (localhost 포함)
         # NSAllowsLocalNetworking 을 같이 두면 iOS 가 NSAllowsArbitraryLoads 를 무시하니 넣지 마세요.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true

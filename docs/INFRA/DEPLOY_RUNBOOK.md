@@ -25,6 +25,7 @@
 | RDS 엔드포인트 | sgu-sapphire-db.cdqgkoym8aye.ap-northeast-2.rds.amazonaws.com |
 | RDS 사용자 / DB | admin / hawe |
 | LLM 게이트웨이 | https://52.78.77.90 (모델: bedrock-haiku) |
+| EC2 주소 | 3.38.34.23 (탄력적 IP, 고정). API `http://3.38.34.23:8080` |
 | EC2 접속 | PuTTY, 사용자 `ec2-user`, `.ppk` 키 |
 | EC2 배포 폴더 | `~/hawe` (`compose.prod.yaml`, `.env`, `models/`) |
 
@@ -141,7 +142,7 @@ FLUSH PRIVILEGES;
 ### 3-1. 켜기 (항상 이 순서)
 
 1. AWS 콘솔에서 **RDS 시작** → "사용 가능"까지 대기 (5~10분)
-2. **EC2 시작** → 새 퍼블릭 IP 확인 (중지 후 켜면 IP가 바뀜)
+2. **EC2 시작** → 주소는 탄력적 IP `3.38.34.23` 로 고정이라 껐다 켜도 바뀌지 않는다
 3. 컨테이너는 **자동으로 다시 뜬다**(`docker.service` enabled + `restart: unless-stopped`). 확인만 한다:
    ```bash
    cd ~/hawe && docker compose -f compose.prod.yaml ps
@@ -182,7 +183,7 @@ docker login ghcr.io -u Maenghansoo1     # Password: 에 read:packages 토큰 �
 `-p 토큰` 으로 쓰지 않는다(쉘 기록에 남음). 토큰은 `~/.docker/config.json`(권한 600)에 암호화 없이 저장되므로 EC2 에는 읽기 전용 토큰만 둔다.
 모델과 compose 파일 업로드(내 PC PowerShell):
 ```powershell
-$KEY = "C:\경로\키.ppk"; $EC2 = "ec2-user@<EC2 IP>"
+$KEY = "C:\경로\키.ppk"; $EC2 = "ec2-user@3.38.34.23"
 pscp -i $KEY C:\Sapphire\compose.prod.yaml "${EC2}:/home/ec2-user/hawe/"
 pscp -i $KEY C:\Sapphire\ml\vision-service\models\* "${EC2}:/home/ec2-user/hawe/models/"
 ```
@@ -285,7 +286,7 @@ docker compose -f compose.prod.yaml exec -T api timeout 5 bash -c '</dev/tcp/vis
 docker run --rm curlimages/curl -s -m 3 -o /dev/null -w '%{http_code}\n' -X PUT \
   http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60'
 ```
-브라우저: `http://<EC2 IP>:8080/actuator/health`, `http://<EC2 IP>:8080/swagger-ui/index.html`
+브라우저: `http://3.38.34.23:8080/actuator/health`, `http://3.38.34.23:8080/swagger-ui/index.html`
 
 **AI 미션 생성 확인** (발행 시각 00:00 그룹을 만들어 바로 발행시킴)
 ```bash
@@ -391,12 +392,12 @@ EC2를 다시 켜면 컨테이너는 자동으로 다시 뜬다(§3-1).
 | 3 | 로컬 DB 초기화 | 팀원 V1 수정으로 로컬 테스트도 `checksum mismatch` → HeidiSQL에서 DROP/CREATE + GRANT |
 | 4 | ~~미션 프롬프트 파일 EC2에 올리기~~ | 해결. 프롬프트가 jar(이미지)에 포함됨 |
 | 5 | ~~systemd 등록~~ | 컨테이너(`restart: unless-stopped`)로 대체. 재부팅 자동 시작 확인(2026-11-10) |
-| 6 | 앱(iOS·Android)에 서버 주소 연결 | `http://<EC2 IP>:8080`. HTTP라 iOS ATS 예외 / Android cleartext 허용 필요 |
-| 7 | 탄력적 IP | IP 고정 (권한 확인 필요). 지금은 EC2 를 켤 때마다 IP 가 바뀜 |
+| 6 | 앱(iOS·Android)에 서버 주소 연결 | `http://3.38.34.23:8080`. Android 는 빌드 시 `HAWE_API_BASE_URL`, iOS 는 `ios/Config.xcconfig` 의 `API_BASE_URL`. HTTP라 iOS ATS 예외 / Android cleartext 허용 필요 |
+| 7 | ~~탄력적 IP~~ | 완료. `3.38.34.23` 을 EC2 에 연결(2026-11-17). EC2 에서 떼거나 서버를 지우면 IP 만 남아 과금되니 그때는 운영 측에 반납 요청 |
 | 8 | SNS 푸시 | Firebase 프로젝트 먼저 필요 |
 | 9 | 사진 제출 전체 흐름 확인 | 앱에서 사진 미션 제출 → S3 저장 → vision 판정 → 별이 점수 댓글 |
 | 10 | 예전 배포 파일 정리 | 컨테이너가 며칠 안정적이면 EC2 `~/vision-service`, `~/hawe-0.0.1-SNAPSHOT.jar`, systemd 서비스 파일 삭제 (롤백 수단이 사라짐) |
-| 11 | 자동 배포 나머지 | 이미지 빌드·push 는 Actions 로 자동화됨(§3-3 ①). 남은 것: CI 에서 테스트 실행(MariaDB 서비스 컨테이너 필요), EC2 자동 pull(탄력적 IP·SSH 허용 범위 문제로 보류) |
+| 11 | 자동 배포 나머지 | 이미지 빌드·push 는 Actions 로 자동화됨(§3-3 ①). 남은 것: CI 에서 테스트 실행(MariaDB 서비스 컨테이너 필요), EC2 자동 pull(탄력적 IP 는 해결, SSH 허용 범위 문제로 보류) |
 | 12 | GHCR 토큰 만료 관리 | push·pull 토큰 모두 90일. 만료 전에 새로 만들어 PC·EC2 에서 `docker login ghcr.io` |
 
 > `docs/INFRA/AWS_SERVICES.md`는 초기 초안(MariaDB·Bedrock IAM 기준)이라 실제 구성과 다르다. 이 문서를 기준으로 본다.
