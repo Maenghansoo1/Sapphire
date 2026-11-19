@@ -166,3 +166,27 @@ def test_api_key_required_when_configured(keyed_client):
 def test_healthz_is_open_with_api_key(keyed_client):
     client = keyed_client(FakeLoader(data=png()), api_key="secret")
     assert client.get("/healthz").status_code == 200
+
+
+def test_event_reads_image_key(keyed_client):
+    loader = FakeLoader(data=png())
+    response = keyed_client(loader).post("/events", json={"imageKey": KEY, "topic": "하늘", "template": "PHOTO_COLOR"})
+    assert response.status_code == 200 and response.json()["fit"] == 0.812346
+    assert loader.calls == [(KEY, service.MAX_IMAGE_BYTES)]
+
+
+def test_event_ignores_api_key(keyed_client):
+    # Lambda 직접 호출은 IAM 이 막으므로 헤더가 없어도 된다.
+    client = keyed_client(FakeLoader(data=png()), api_key="secret")
+    assert client.post("/events", json={"imageKey": KEY, "topic": "하늘"}).status_code == 200
+
+
+@pytest.mark.parametrize("body, code", [
+    ({"topic": "하늘"}, "VALIDATION_ERROR"),
+    ({"imageKey": KEY}, "VALIDATION_ERROR"),
+    ({"imageKey": "../x", "topic": "하늘"}, "INVALID_IMAGE_KEY"),
+    ({"imageKey": KEY, "topic": "하늘", "template": "DRAW_SKETCH"}, "UNSUPPORTED_TEMPLATE"),
+])
+def test_bad_events_are_400(keyed_client, body, code):
+    response = keyed_client(FakeLoader(data=png())).post("/events", json=body)
+    assert response.status_code == 400 and response.json()["code"] == code

@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 import scoring
 
@@ -35,6 +36,13 @@ class ServiceError(Exception):
 
 class ImageNotFound(Exception):
     pass
+
+
+class TopicFitEvent(BaseModel):
+    """/events 로 들어오는 Lambda 호출 내용."""
+    imageKey: str
+    topic: str
+    template: str = "PHOTO_NOW"
 
 
 class S3ImageLoader:
@@ -128,12 +136,21 @@ def create_app(scorer=None, image_loader=None, api_key=None):
     @app.post("/v1/topic-fit")
     def topic_fit(topic: str = Form(...), template: str = Form("PHOTO_NOW"),
                   image: UploadFile | None = File(None), imageKey: str | None = Form(None)):
+        return evaluate(topic, template, lambda: read_image(image, imageKey))
+
+    @app.post("/events")
+    def topic_fit_event(event: TopicFitEvent):
+        """Lambda 를 SDK 로 직접 호출(Invoke)할 때 Lambda Web Adapter 가 호출 내용(JSON)을 여기로 넘긴다.
+        Lambda 호출 권한(IAM)으로 보호되므로 API 키를 따로 보지 않는다. 사진은 imageKey 로만 받는다."""
+        return evaluate(event.topic, event.template, lambda: read_image(None, event.imageKey))
+
+    def evaluate(topic, template, load_image):
         topic = topic.strip()
         if not 1 <= len(topic) <= scoring.MAX_TOPIC_LENGTH:
             raise ServiceError(400, "INVALID_TOPIC", f"topic 은 1~{scoring.MAX_TOPIC_LENGTH}자여야 합니다")
         if template not in scoring.TEMPLATES:
             raise ServiceError(400, "UNSUPPORTED_TEMPLATE", f"template 은 {', '.join(scoring.TEMPLATES)} 중 하나여야 합니다")
-        data = read_image(image, imageKey)
+        data = load_image()
         if len(data) > MAX_IMAGE_BYTES:
             raise ServiceError(413, "FILE_TOO_LARGE", "이미지는 10MB 이하여야 합니다")
         try:

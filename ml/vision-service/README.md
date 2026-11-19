@@ -95,17 +95,25 @@ curl -F "image=@photo.jpg" -F "topic=창밖 풍경" http://localhost:8001/v1/top
 
 ## AWS Lambda 배포 (`Dockerfile.lambda`)
 
-EC2 에 상시 띄우는 대신 Lambda 컨테이너 이미지로 올릴 수 있다. 코드는 같고 [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) 가 Lambda 호출을 HTTP 요청으로 바꿔 준다. 모델 3개는 이미지에 들어간다(볼륨이 없으므로).
+EC2 에 상시 띄우는 대신 Lambda 컨테이너 이미지로 올린다. 코드는 같고 [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) 가 Lambda 호출을 HTTP 요청으로 바꿔 준다. 모델 3개는 이미지에 들어간다(볼륨이 없으므로).
 
 ```bat
 docker build -f Dockerfile.lambda -t hawe-vision-lambda .
-docker run --rm -p 8001:8001 -e HAWE_VISION_API_KEY=dev hawe-vision-lambda   :: Lambda 밖에서는 일반 서버로 뜬다
+docker run --rm -p 8001:8001 hawe-vision-lambda   :: Lambda 밖에서는 일반 서버로 뜬다
 ```
 
-- Lambda: 컨테이너 이미지(ECR), 메모리 3008MB, 타임아웃 30초, x86_64, Function URL.
-- 환경변수: `HAWE_VISION_S3_BUCKET`(사진 버킷), `HAWE_VISION_API_KEY`(백엔드 `HAWE_VISION_API_KEY` 와 같은 값).
-- 실행 역할: CloudWatch Logs 쓰기 + 사진 버킷 `s3:GetObject`. DB 에는 접근하지 않아 VPC 가 필요 없다.
-- 백엔드: `HAWE_VISION_BASE_URL`=Function URL, `HAWE_VISION_SEND_IMAGE_KEY=true`, `HAWE_VISION_API_KEY`, `HAWE_VISION_READ_TIMEOUT=30s`(첫 호출은 모델 로딩으로 몇 초 걸린다).
+**호출 방식: 백엔드가 AWS SDK 로 직접 호출(Invoke).** Function URL 은 만들지 않는다(주소만 알면 누구나 호출할 수 있어서). 호출 권한은 EC2 IAM 역할이 갖고 있다.
+- 백엔드는 `{"imageKey": "...", "topic": "...", "template": "PHOTO_NOW"}` JSON 을 보낸다. HTTP 형식이 아닌 호출이라 어댑터가 이 JSON 을 그대로 `POST /events` 로 넘기고, 응답 JSON(`fit` 등, 오류면 `code`)을 돌려준다.
+- `/events` 는 API 키를 보지 않는다(IAM 이 막는다). 사진은 `imageKey` 로만 받는다(Invoke 요청 한도 6MB).
+
+| 항목 | 값 |
+|---|---|
+| Lambda | 컨테이너 이미지(ECR `hawe-vision-lambda`), x86_64, 메모리 3008MB, 타임아웃 30초 |
+| 실행 역할 | 기존 `SafeRole-sgu-sapphire` (로그 쓰기, S3 `sgu-sapphire` 읽기, ECR 가져오기 포함). 새로 만들지 않는다 |
+| Lambda 환경변수 | `HAWE_VISION_S3_BUCKET=sgu-sapphire` |
+| 백엔드 환경변수 | `HAWE_VISION_LAMBDA_FUNCTION=<함수 이름>`, `HAWE_VISION_READ_TIMEOUT=30s`(첫 호출은 모델 로딩으로 몇 초 걸린다) |
+
+Function URL 로 열어야 한다면 Lambda 에 `HAWE_VISION_API_KEY` 를 두고, 백엔드는 `HAWE_VISION_BASE_URL`=URL, `HAWE_VISION_SEND_IMAGE_KEY=true`, `HAWE_VISION_API_KEY`(같은 값)를 쓴다.
 
 ## 점수와 임계값 (`EVAL.md`)
 

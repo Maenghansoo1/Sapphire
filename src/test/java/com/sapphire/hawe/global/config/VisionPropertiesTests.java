@@ -30,4 +30,15 @@ class VisionPropertiesTests {
         assertTrue(keyed.sendImageKey());
         assertFalse(keyed.toString().contains("secret"));
     }
+
+    @Test void lambdaFunctionImpliesImageKeyAndDefaultsRegion() {
+        var http = new VisionProperties(true, null, null, null, null, null, null, null, false);
+        assertFalse(http.usesLambda());
+        assertFalse(http.sendsImageKey());
+        var lambda = new VisionProperties(true, null, null, null, null, null, null, null, false, " hawe-vision ", "");
+        assertTrue(lambda.usesLambda());
+        assertTrue(lambda.sendsImageKey());
+        assertEquals("hawe-vision", lambda.lambdaFunction());
+        assertEquals("ap-northeast-2", lambda.lambdaRegion());
+    }
 }

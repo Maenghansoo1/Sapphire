@@ -55,7 +55,7 @@ public class TopicFitService {
                 TopicFitResult result;
                 try {
                     // mediaUrl 은 저장소 키다. 키 방식이면 비전 서비스가 S3 에서 직접 읽는다.
-                    result = properties.sendImageKey()
+                    result = properties.sendsImageKey()
                             ? client.callWithKey(row.getTemplate(), topic, row.getMediaUrl())
                             : client.call(row.getTemplate(), topic, storage.load(row.getMediaUrl()), filename);
                 } catch (RuntimeException e) {

@@ -7,7 +7,8 @@
 # 로컬 실행(일반 컨테이너처럼 동작, Lambda 밖에서는 어댑터가 꺼져 있음):
 #   docker run --rm -p 8001:8001 -e HAWE_VISION_API_KEY=dev hawe-vision-lambda
 #
-# Lambda 환경변수: HAWE_VISION_S3_BUCKET(사진 버킷), HAWE_VISION_API_KEY(백엔드와 같은 값)
+# Lambda 환경변수: HAWE_VISION_S3_BUCKET(사진 버킷). Function URL 로 열 때만 HAWE_VISION_API_KEY(백엔드와 같은 값)
+# 호출: 백엔드가 AWS SDK 로 직접 호출(Invoke)하면 {"imageKey","topic","template"} JSON 이 /events 로 들어온다.
 # 권장 설정: 메모리 3008MB, 타임아웃 30초, x86_64
 # ============================================================
 
@@ -20,11 +21,13 @@ COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt
 
 # PYTHONDONTWRITEBYTECODE: Lambda 는 /tmp 말고는 읽기 전용이라 .pyc 를 쓰지 않는다.
 # AWS_LWA_*: 어댑터가 8001 포트로 요청을 넘기고, /healthz 가 200 이 되면 준비된 것으로 본다.
+#            SDK 직접 호출(Invoke)처럼 HTTP 형식이 아닌 호출은 JSON 그대로 /events 로 넘긴다.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HAWE_VISION_MODEL_DIR=/models \
     AWS_LWA_PORT=8001 \
-    AWS_LWA_READINESS_CHECK_PATH=/healthz
+    AWS_LWA_READINESS_CHECK_PATH=/healthz \
+    AWS_LWA_PASS_THROUGH_PATH=/events
 
 WORKDIR /app
 

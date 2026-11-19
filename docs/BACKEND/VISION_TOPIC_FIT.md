@@ -37,6 +37,13 @@ no negative assessment or emoji.
 | `hawe.vision.photo-color.perfect-threshold` / `good-threshold` | `0.132` / `0.104` |
 | `hawe.vision.api-key` | empty (`HAWE_VISION_API_KEY`) |
 | `hawe.vision.send-image-key` | `false` (`HAWE_VISION_SEND_IMAGE_KEY`) |
+| `hawe.vision.lambda-function` | empty (`HAWE_VISION_LAMBDA_FUNCTION`) |
+| `hawe.vision.lambda-region` | `ap-northeast-2` (`HAWE_VISION_LAMBDA_REGION`) |
+
+When `lambda-function` is set, the backend skips HTTP and invokes that Lambda with the AWS SDK, using the
+server's IAM role (the EC2 instance role). The payload is `{"imageKey","topic","template"}` JSON, so the image
+always travels as its S3 key. Lambda Web Adapter forwards this non-HTTP event to the vision service's
+`POST /events`. A function error or an error body (`code`) counts as a failed attempt, the same as an HTTP error.
 
 When `api-key` is set, requests carry it in the `X-Hawe-Vision-Key` header. When `send-image-key` is
 `true`, the backend sends the stored S3 key (`imageKey`) instead of the image bytes, and the vision

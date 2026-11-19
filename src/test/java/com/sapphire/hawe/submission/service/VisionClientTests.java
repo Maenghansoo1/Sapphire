@@ -11,8 +11,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.mockito.ArgumentCaptor;
+import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.lambda.LambdaClient;
+import software.amazon.awssdk.services.lambda.model.InvokeRequest;
+import software.amazon.awssdk.services.lambda.model.InvokeResponse;
 import tools.jackson.databind.ObjectMapper;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
@@ -66,6 +73,42 @@ class VisionClientTests {
                 .andRespond(withSuccess("{\"fit\":0.3,\"model\":\"clip\",\"version\":\"1\"}", MediaType.APPLICATION_JSON));
         assertEquals(0.3, keyed.callWithKey("PHOTO_COLOR", "빨강", "submissions/photo.jpg").fit());
         keyServer.verify();
+    }
+
+    @Test void invokesLambdaWithJsonPayload() {
+        LambdaClient lambda = mock(LambdaClient.class);
+        when(lambda.invoke(any(InvokeRequest.class))).thenReturn(InvokeResponse.builder().statusCode(200)
+                .payload(SdkBytes.fromUtf8String("{\"fit\":0.42,\"model\":\"clip\",\"version\":\"1-fp16\"}")).build());
+        VisionClient viaLambda = new VisionClient(lambdaProperties(), new ObjectMapper(), RestClient.create(), lambda);
+
+        TopicFitResult result = viaLambda.callWithKey("PHOTO_NOW", "창밖 풍경", "submissions/photo.jpg");
+
+        assertEquals(0.42, result.fit());
+        ArgumentCaptor<InvokeRequest> request = ArgumentCaptor.forClass(InvokeRequest.class);
+        verify(lambda).invoke(request.capture());
+        assertEquals("hawe-vision", request.getValue().functionName());
+        String payload = request.getValue().payload().asUtf8String();
+        assertTrue(payload.contains("\"imageKey\":\"submissions/photo.jpg\""));
+        assertTrue(payload.contains("창밖 풍경") && payload.contains("PHOTO_NOW"));
+    }
+
+    @Test void lambdaFunctionErrorAndErrorBodyBecomeVisionException() {
+        LambdaClient lambda = mock(LambdaClient.class);
+        VisionClient viaLambda = new VisionClient(lambdaProperties(), new ObjectMapper(), RestClient.create(), lambda);
+        when(lambda.invoke(any(InvokeRequest.class))).thenReturn(InvokeResponse.builder().statusCode(200)
+                .functionError("Unhandled").payload(SdkBytes.fromUtf8String("{}")).build());
+        assertThrows(VisionException.class, () -> viaLambda.callWithKey("PHOTO_NOW", "topic", "submissions/photo.jpg"));
+        when(lambda.invoke(any(InvokeRequest.class))).thenReturn(InvokeResponse.builder().statusCode(200)
+                .payload(SdkBytes.fromUtf8String("{\"code\":\"IMAGE_NOT_FOUND\",\"message\":\"x\"}")).build());
+        VisionException error = assertThrows(VisionException.class,
+                () -> viaLambda.callWithKey("PHOTO_NOW", "topic", "submissions/photo.jpg"));
+        assertTrue(error.getMessage().contains("IMAGE_NOT_FOUND"));
+        when(lambda.invoke(any(InvokeRequest.class))).thenThrow(SdkClientException.create("timeout"));
+        assertThrows(VisionException.class, () -> viaLambda.callWithKey("PHOTO_NOW", "topic", "submissions/photo.jpg"));
+    }
+
+    private static VisionProperties lambdaProperties() {
+        return new VisionProperties(true, null, null, null, null, null, null, null, false, "hawe-vision", null);
     }
 
     @Test void realClientStaysOnHttp11() throws Exception {

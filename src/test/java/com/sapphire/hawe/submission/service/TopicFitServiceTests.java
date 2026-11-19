@@ -13,6 +13,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 class TopicFitServiceTests {
@@ -80,6 +81,18 @@ class TopicFitServiceTests {
         verify(reviews).complete(eq(1L), eq("DONE"), eq(0.5), eq("PERFECT_FIT"), anyString(), eq("model/1"), eq(1));
         verify(storage, never()).load(anyString());
         verify(client, never()).call(anyString(), anyString(), any(), anyString());
+    }
+
+    @Test void lambdaModeAlwaysSendsStorageKey() {
+        VisionProperties viaLambda = new VisionProperties(true, null, null, null, Duration.ZERO, null, null, null, false,
+                "hawe-vision", null);
+        assertTrue(viaLambda.sendsImageKey());
+        TopicFitService lambdaService = new TopicFitService(submissions, missions, reviews, storage, client, viaLambda, new ObjectMapper(), mascot);
+        when(client.callWithKey("PHOTO_NOW", "창밖 풍경", "submissions/photo.jpg"))
+                .thenReturn(new TopicFitResult(0.5, "model", "1"));
+        lambdaService.review(1L);
+        verify(storage, never()).load(anyString());
+        verify(reviews).complete(eq(1L), eq("DONE"), eq(0.5), eq("PERFECT_FIT"), anyString(), eq("model/1"), eq(1));
     }
 
     @Test void invalidTopicSkipsWithoutCallingVision() {
