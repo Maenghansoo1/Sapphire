@@ -45,7 +45,7 @@ fun rememberAppVersionName(): String {
 @Composable
 fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarRepository, onBack: () -> Unit,
     onProfileEdit: () -> Unit, onNotifications: () -> Unit, onUserInfo: () -> Unit,
-    onAppInfo: () -> Unit, onWithdraw: () -> Unit, dev: DevRepository? = null,
+    onAppInfo: () -> Unit, onWithdraw: () -> Unit, onPhotoSettings: () -> Unit = {}, dev: DevRepository? = null,
     onDevTools: () -> Unit = {}, onSwitchUser: (Long) -> Unit = {}, switchBusy: Boolean = false,
     switchMessage: String? = null, onSwitchMessageShown: () -> Unit = {}) {
     val context = LocalContext.current
@@ -116,6 +116,7 @@ fun MyPageScreen(session: AppSession, store: DataStore, calendar: CalendarReposi
             }
             Column(Modifier.padding(top = 18.dp)) {
                 HListRow("알림 설정", height = 48.dp, onClick = onNotifications)
+                HListRow("사진 설정", height = 48.dp, onClick = onPhotoSettings)
                 HListRow("유저 정보", height = 48.dp, onClick = onUserInfo)
                 HListRow("앱 정보", height = 48.dp, onClick = onAppInfo)
                 HListRow("이용약관", height = 48.dp, onClick = {
