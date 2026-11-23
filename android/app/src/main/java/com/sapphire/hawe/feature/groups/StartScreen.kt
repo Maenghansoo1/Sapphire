@@ -27,15 +27,11 @@ import com.sapphire.hawe.designsystem.layout.HCtaScaffold
 import com.sapphire.hawe.designsystem.tokens.*
 
 @Composable
-fun StartScreen(showsBack: Boolean = false, onBack: () -> Unit = {},
-    onCreateGroup: () -> Unit, onJoinGroup: () -> Unit, onMyPage: () -> Unit) {
+fun StartScreen(onCreateGroup: () -> Unit, onJoinGroup: () -> Unit, onMyPage: () -> Unit) {
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
         Column {
-            if (showsBack) Box(Modifier.padding(horizontal = HLayout.screenPadding)) {
-                HNavBar(leading = HNavLeading.BACK, onLeading = onBack)
-            }
             HCtaScaffold(content = {
-                Column(Modifier.padding(top = if (showsBack) 0.dp else HLayout.introTopInset),
+                Column(Modifier.padding(top = HLayout.introTopInset),
                     verticalArrangement = Arrangement.spacedBy(48.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         HLogoLockup()

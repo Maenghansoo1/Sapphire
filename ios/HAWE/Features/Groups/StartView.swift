@@ -1,21 +1,10 @@
 import SwiftUI
 
-/// 01 시작 (Figma 1:314) — 참여한 그룹이 하나도 없을 때, 또는 04 홈의 + 로 열었을 때
+/// 01 시작 (Figma 1:314) — 참여한 그룹이 하나도 없을 때
 struct StartView: View {
     @Binding var path: [MainRoute]
-    /// 04 홈에서 + 로 열면 왼쪽 위에 뒤로 가기를 둬요.
-    var showsBack = false
-
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
-        VStack(spacing: 0) {
-            if showsBack {
-                HNavBar(leading: .back { dismiss() })
-                    .padding(.horizontal, HLayout.screenPadding)
-            }
-            scaffold
-        }
+        scaffold
         .overlay(alignment: .topTrailing) {
             Button { path.append(.myPage(.home)) } label: {
                 HIconView(icon: .person, size: 22)
@@ -36,8 +25,7 @@ struct StartView: View {
                 intro
                 contentTypes
             }
-            // 헤더가 있으면 그 아래에 바로 붙여요.
-            .padding(.top, showsBack ? 0 : HLayout.introTopInset)
+            .padding(.top, HLayout.introTopInset)
         } cta: {
             VStack(spacing: 12) {
                 HButton("새 그룹 만들기") { path.append(.createGroup) }
@@ -136,11 +124,5 @@ private struct MissionPreviewCard: View {
 #Preview("그룹 없음") {
     NavigationStack {
         StartView(path: .constant([]))
-    }
-}
-
-#Preview("홈에서 + 로 열림") {
-    NavigationStack {
-        StartView(path: .constant([]), showsBack: true)
     }
 }

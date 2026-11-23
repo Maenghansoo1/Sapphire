@@ -1,10 +1,9 @@
 import SwiftUI
 
 /// 로그인 뒤 화면 흐름. 그룹이 하나도 없으면 01 시작, 있으면 04 홈이 첫 화면이에요.
-/// 04 홈의 + 는 01 시작을 (뒤로 가기와 함께) 띄워요.
+/// 04 홈의 메뉴 버튼은 02 그룹 만들기·03 초대 코드로 참여로 바로 가요.
 /// 화면 사이에는 그룹·미션 id(서버 id) 만 넘기고, 내용은 DataStore 에서 읽어요.
 enum MainRoute: Hashable {
-    case start
     case createGroup
     case joinGroup(code: String?)
     case groupInfo(groupID: Int)
@@ -35,8 +34,6 @@ struct MainFlowView: View {
                 .task(id: groupsReload) { await loadGroups() }
                 .navigationDestination(for: MainRoute.self) { route in
                     switch route {
-                    case .start:
-                        StartView(path: $path, showsBack: true)
                     case .createGroup:
                         CreateGroupView { id in
                             // 그룹을 만든 뒤에는 16 그룹 정보(초대 코드 공유)로 가요. 뒤로 가면 홈이에요. (CLAUDE.md §4)

@@ -68,7 +68,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface MainRoute {
     @Serializable data object Home : MainRoute
-    @Serializable data object Start : MainRoute
     @Serializable data object CreateGroup : MainRoute
     @Serializable data class JoinGroup(val code: String? = null) : MainRoute
     @Serializable data class GroupInfo(val groupId: Long) : MainRoute
@@ -166,10 +165,6 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
                         nav.navigate(MainRoute.Mission(groupId)) { launchSingleTop = true }
                     })
             }
-        }
-        composable<MainRoute.Start> {
-            StartScreen(showsBack = true, onBack = { nav.popBackStack() },
-                onCreateGroup = create, onJoinGroup = join, onMyPage = myPage)
         }
         composable<MainRoute.CreateGroup> {
             CreateGroupScreen(groups, store, session, onBack = { nav.popBackStack() }, onCreated = { id ->
