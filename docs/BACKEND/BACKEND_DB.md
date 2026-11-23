@@ -2,7 +2,7 @@
 
 ## 계층 구조
 - **Controller** (REST API 진입점) → **Service** (비즈니스 로직) → **DAO** (MariaDB 접근, MyBatis)
-- 부가 저장소: **로컬 파일 시스템**(이미지, 개발 환경) / **S3**(이미지, 운영 환경 전환 예정), **LLM**(미션 생성 전용, Claude API — B8, 기본 꺼짐), **Qdrant**(벡터 검색, 도입 시 - 필수 X), **SNS/EventBridge**(알림·스케줄)
+- 부가 저장소: **로컬 파일 시스템**(이미지, 개발 환경) / **S3**(이미지, 운영 환경 전환 예정), **LLM**(미션 생성 전용, Claude API — B8, 기본 꺼짐), **Qdrant**(벡터 검색, 도입 시 - 필수 X), **SNS/EventBridge**(알림·스케줄 — 설계만, 현재는 Spring `@Scheduled`)
 
 ---
 
@@ -32,6 +32,8 @@ erDiagram
   MISSIONS ||--o{ POKES : scopes
   USERS ||--o{ NOTIFICATIONS : sends
   USERS ||--o{ NOTIFICATIONS : receives
+  SUBMISSIONS ||--o{ SUBMISSION_AI_REVIEWS : "reviewed by AI"
+  GROUPS ||--o{ GROUP_INSIGHTS : caches
 
   USERS {
     bigint id PK
@@ -41,6 +43,7 @@ erDiagram
     bigint character_id FK
     string profile_image_url
     int token_version
+    boolean is_ai
     datetime terms_agreed_at
     datetime privacy_agreed_at
     datetime created_at
@@ -107,6 +110,7 @@ erDiagram
     bigint user_id FK
     string content
     string image_url
+    json ai_detail
     datetime created_at
   }
   COMMENT_MENTIONS {
@@ -154,7 +158,34 @@ erDiagram
     string name
     string svg_key
   }
+  SUBMISSION_AI_REVIEWS {
+    bigint id PK
+    bigint submission_id FK
+    string kind
+    string status
+    double fit_score
+    string badge
+    string comment
+    string model_version
+    int attempts
+    datetime created_at
+    datetime updated_at
+  }
+  GROUP_INSIGHTS {
+    bigint id PK
+    bigint group_id FK
+    string month
+    string status
+    json payload
+    datetime generated_at
+    datetime expires_at
+    int attempts
+    datetime created_at
+    datetime updated_at
+  }
 ```
+
+> 기준: `src/main/resources/db/migration` V1~V4 (V1 초기 스키마, V2 캐릭터 시드, V3 알림 참조 컬럼, V4 AI 마스코트). 마지막 대조 2026-11-19.
 
 **비고**
 - `USERS.profile_image_url` — 기본 프로필 사진 파일 key(`profiles/uuid.jpg`), 없으면 NULL. API 응답에서는 공개 URL로 변환한다.
@@ -163,7 +194,9 @@ erDiagram
 - `USERS` 인증 방식 — 소셜 로그인 대신 **이메일/비밀번호 자체 로그인**(`email` + `password_hash`) 사용. 필수 약관 동의 시각을 저장
 - `POKES.type` — `poke`(콕찌르기). 예전 `fling`(똥뿌리기) 행이 남아 있어도 조회에서 무시한다 (2026-10-19 삭제)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
-- `submission_ai_reviews` — 사진 주제 적합도 비동기 결과. `(submission_id, kind)` UNIQUE, `submissions.id` FK. `fit_score`는 DB에만 저장하고 API에는 배지·칭찬 문구만 보낸다. 그룹 삭제·탈퇴 시 제출물보다 먼저 삭제한다 (`VISION_TOPIC_FIT.md`).
+- `submission_ai_reviews` — 사진 주제 적합도 비동기 결과(`kind` 기본 `TOPIC_FIT`, `status` 최대 10자, `attempts`, `model_version`). `(submission_id, kind)` UNIQUE, `submissions.id` FK. `fit_score`는 DB에만 저장하고 API에는 `badge`·`comment`(배지·칭찬 문구, 100자)만 보낸다. 그룹 삭제·탈퇴 시 제출물보다 먼저 삭제한다 (`VISION_TOPIC_FIT.md`).
+- `USERS.is_ai` (V4) — `TINYINT(1) NOT NULL DEFAULT 0`. AI 마스코트 계정 표시. V4가 마스코트 `별이`(`byeol@hawe.invalid`, 비밀번호 해시 `!`라 로그인 불가, `is_ai = 1`) 한 명을 시드한다.
+- `COMMENTS.ai_detail` (V4) — `LONGTEXT`(JSON 검사), NULL 허용. 마스코트 댓글의 부가 정보(점수·추측 후보 등)이며 일반 댓글은 NULL.
 - `SUBMISSIONS.media_url` — 이미지 파일 위치(음성은 2026-10-12 제거). 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글)에서는 NULL
 - `COMMENTS.image_url` — 첨부 이미지의 저장 키. API에는 공개 파일 URL을 내려준다. 이미지만 있는 댓글은 `content = ''`로 저장한다.
 - `REACTIONS` — `(submission_id, user_id, sticker_type)` 유니크 키로 같은 멤버의 같은 스티커 중복을 막는다. 서로 다른 스티커는 각각 누를 수 있다.
@@ -175,13 +208,13 @@ erDiagram
 - `MISSIONS.published_at` / `deadline_at` — 발행 시점의 실제 발행·마감 시각을 고정 저장. 이후 그룹 설정이 바뀌어도 이미 열린 미션의 시각과 지각 판정(`SUBMISSIONS.is_late`)은 바뀌지 않는다
 - 유일성 제약 — `GROUP_MISSION_SLOTS (group_id, slot_no)`: 슬롯 재정의는 슬롯당 1행, `MISSIONS (group_id, mission_date, slot_no)`: 그룹·날짜·슬롯당 미션 1개(중복 발행 방지), `SUBMISSIONS (mission_id, user_id)`: 미션당 1인 1회 제출(`ALREADY_SUBMITTED`)
 - `NOTIFICATIONS`는 `from_user_id`(발신자, 시스템 알림은 NULL) / `to_user_id`(수신자)로 분리한다. V3에서 알림의 `group_id`, `mission_id`, `submission_id`(NULL 가능, FK 없음)와 목록·미읽음 인덱스를 추가했다. `payload`는 새 앱 안 알림에서 사용하지 않는다.
-- 도장(참잘했어요/벌점)은 별도 테이블 없이 `SUBMISSIONS` 존재 여부로 계산 (해당 그룹·날짜에 제출 기록이 있으면 참잘했어요, 없으면 벌점). 하루 미션이 여러 개면 **미션별 도장**이다 (B7 결정, `MISSIONS_API.md` §11-8)
+- 도장(참잘했어요/지각/벌점)은 별도 테이블 없이 `SUBMISSIONS` 존재 여부와 `is_late`, 미션 마감·발행 당시 멤버 여부로 계산한다 (`Stamp.of`). 하루 미션이 여러 개면 **미션별 도장**이다 (B7 결정, `MISSIONS_API.md` §11-8)
 
 ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경 상세"를 참고.
 
-### 미션/제출/그룹 스케줄 스키마 변경 상세 (V3 마이그레이션 기준)
+### 미션/제출/그룹 스케줄 스키마 상세 (현재 V1에 통합됨)
 
-근거: `docs/BACKEND/MISSIONS_API.md` §2 (그룹 설정 연동), §9. 현재 상태는 `V1__initial_schema.sql`, `V2__unique_group_members.sql`이다.
+근거: `docs/BACKEND/MISSIONS_API.md` §2 (그룹 설정 연동), §9. 아래 컬럼·테이블은 모두 **`V1__initial_schema.sql`에 이미 합쳐져 있다** (개발 DB를 재초기화하는 방식으로 통합). 표의 "추가/삭제/이름 변경"은 설계 당시의 변경 이력이다. `V2`는 캐릭터 시드, `V3`는 알림 참조 컬럼, `V4`는 AI 마스코트다.
 
 **`groups`**
 
@@ -235,7 +268,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | `caption` | 변경 없음 | `TEXT` | NULL | 보조 설명. 길이 제한(200자)은 서비스에서 수행 |
 | `(mission_id, user_id)` | UNIQUE 추가 | - | - | 미션당 1인 1회. 제약명 제안: `uk_submissions_mission_user` |
 
-**제출 답 저장 방식 (하이브리드)** — 앞으로 만들 V3 기준의 결정.
+**제출 답 저장 방식 (하이브리드)** — V1에 반영된 결정.
 
 기존 설계의 `text_value`, `guess_value` 컬럼은 만들지 않고 `answer_data JSON` 하나로 합친다. `number_value`, `choice_value`는 컬럼으로 둔다.
 
@@ -267,18 +300,8 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - 정답을 맞혔는지는 `is_correct = TRUE`인 행이 있는지로 판단한다.
 - 시도 횟수 상한은 설정 `hawe.mission.guess-max-attempts`(초안 3)로 서비스가 검사한다 (DB 제약 아님). 동시에 겹친 요청이 상한을 한 번 더 넘길 수 있으나 영향이 작아 허용한다 (초안).
 
-**마이그레이션 시 확인할 것**
-- **전제:** 현재 개발 DB에는 데이터가 전혀 없다. 따라서 V3는 백필·이전·중복 정리 없이 단순하게 쓸 수 있다.
-  - `missions`의 NOT NULL 컬럼(`template`, `params`, `published_at`, `deadline_at`)을 바로 추가한다 (`slot_no`는 DEFAULT 1).
-  - `groups.mission_publish_time`, `mission_deadline_time`을 이전 없이 바로 `DROP COLUMN` 한다.
-  - `submissions.image_url` → `media_url` 변경에 값 채우기가 필요 없다 (`media_type` 포함).
-  - UNIQUE 제약(`missions`, `submissions`) 추가 전 중복 정리가 필요 없다.
-- **V3 적용 전에 확인:** 데이터가 없다는 것은 현재 개발 DB 기준이다. V1/V2가 적용된 다른 DB(팀원 로컬, 서버 등)가 있다면 그곳도 비어 있는지 확인한다. 데이터가 있다면 NOT NULL 컬럼 값 채우기(`template='PHOTO_NOW'`, `params='{}'`, 그룹 시각 기반 `published_at`/`deadline_at`), 기존 그룹 시각의 슬롯 1번 행 이전, UNIQUE 중복 정리(가장 작은 `id` 유지)를 `groups` 컬럼 삭제 **전에** 해야 한다.
-- 이미 적용된 `V1`/`V2` 파일은 수정하지 않는다 (Flyway 체크섬 불일치). 변경은 새 `V3` 파일로 한다.
-- 코드 영향
-  - 메인 코드의 `GroupMapper.findSummariesByUserId`, `GroupMemberMapper.findMembersByGroupId`는 `submissions`/`missions`를 `mission_id`, `user_id`, `group_id`, `mission_date`로만 읽으므로 컬럼 변경에는 영향이 없다. `submissionCountThisMonth`는 B7에서 제출 행 수 대신 이번 달 제출한 날 수로 바꿨다 (`MISSIONS_API.md` §11-9).
-  - **`GroupMapperTests`(`summariesAndMembersMapSubmissionValues`)가 `submissions`에 `image_url`로, `missions`에 `template`/`params`/`published_at`/`deadline_at` 없이 직접 INSERT하므로 V3 적용 후 실패한다.** V3와 함께 테스트의 INSERT를 새 컬럼 기준으로 고쳐야 한다. (`comments.image_url`은 다른 테이블이라 이번 변경 대상이 아니다.)
-  - 그룹 모듈(`Group` 도메인, `GroupMapper`의 INSERT/UPDATE/SELECT, `GroupCreateRequest`, `GroupSettingsUpdateRequest`, `GroupResponse`, `GroupService`)은 삭제되는 `missionPublishTime`/`missionDeadlineTime` 대신 `daily_mission_count`와 슬롯 지정을 다루도록 별도 수정이 필요하다. `relation_type`도 생성·수정·조회 DTO에 포함해야 한다. `GroupMapperTests`의 `insertGroup`도 시각 세팅을 제거해야 한다.
+**마이그레이션 규칙**
+- 이미 공유 DB(서버 등)에 적용된 `V*` 파일은 수정하지 않는다 (Flyway 체크섬 불일치). 변경은 새 `V5` 이후 파일로 한다. 초기 개발 단계에서 V1을 직접 고치고 DB를 재생성한 적이 있으므로, 공유 DB에는 baseline 정리 후 적용한다.
 - 추가 인덱스는 필요 없다. `missions`의 UNIQUE 제약이 그룹별 날짜 조회의 인덱스 역할을 하고, `submissions`의 UNIQUE 제약이 피드 조회(`mission_id`)의 인덱스 역할을 하며, `user_id`와 `group_mission_slots.group_id`는 FK 인덱스가 있다.
 
 ---
@@ -290,19 +313,22 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | `AuthService` | 회원가입/로그인(자체 인증), 비밀번호 해싱, JWT 발급·검증 |
 | `GroupService` | 그룹 생성/초대/설정(하루 미션 수, 슬롯별 시각)/멤버 관리 |
 | `MissionService` | 슬롯별 미션 발행(스케줄러 트리거 → 서버가 틀 선택 → LLM으로 문장·빈칸 생성 → 서버 검증 → 저장, 실패 시 예비 미션), 오늘 열린 미션 목록·단건 조회 |
-| `MissionScheduleService` | 그룹의 슬롯별 유효 발행·마감 시각 계산(지정 없으면 설정 파일의 기본 시각), 설정 변경 시 스케줄 재등록, 다음 발행 예정 시각 계산 |
-| `MissionTemplateValidator` | 틀별 `params` 검증(미션 생성 시)과 제출 필드 검증(제출 시). 틀마다 검증기 1개 |
+| `MissionScheduler` / `MissionPublisher` | 매 분(Asia/Seoul) 그룹별 `publishIfDue` 호출, 슬롯별 발행 시각이 지났고 미션이 없으면 `REQUIRES_NEW` 트랜잭션으로 발행. 유효 발행·마감 시각 계산은 `MissionTiming`(domain) |
+| `GeneratedMissionValidator` | LLM이 만든 `{content, category, params}`의 서버 재검증(길이·금지어·형식·최근 미션 유사도). 제출 필드 검증은 `SubmissionService`가 틀별로 수행 |
 | `MissionTemplateSelector` | 슬롯별 틀 선택(하루 내 매체 중복 방지, 하루 1개일 때 어제와 매체 중복 방지, 후보 부족 시 예외 허용, 관계별 선호 없음)과 대상 멤버 지정(빈칸 채우기는 항상, 그림 틀은 설정된 확률). 어제 미션만 조회하고 시드 기반으로 계산 (`MISSIONS_API.md` §6-1) |
 | `SubmissionService` | 제출 처리(지각 판정, 중복 제출 차단), 잠금 해제 여부 판단 |
 | `MissionResultService` | 집계 틀(밸런스 게임)의 그룹 결과 계산 (슬라이더 3종은 2026-10-19 삭제) |
 | ~~`GuessService`~~ | 폐기됨 (음성 제거로 정답 맞히기 없음, `MISSIONS_API.md` §4-1) |
-| `FileStorageService` | 이미지 파일 저장/조회 (개발=로컬, 운영=S3로 전환), 형식·크기 검증 |
-| `FeedService` | 그룹 피드 조회 (제출자만 열람 가능하도록 필터링) |
+| `FileStorage` (`LocalFileStorage` / `S3FileStorage`) | 이미지 파일 저장/조회 (설정으로 로컬/S3 전환), 형식·크기 검증 |
+| 피드 조회 | 별도 `FeedService` 없이 `SubmissionService.feed`가 제출자만 열람하도록 필터링(미제출 423) |
 | `CommentService` | 댓글 작성, @멘션 파싱, 사진 첨부 |
 | `ReactionService` | 스티커 반응 등록/집계 |
 | `PokeService` | 콕찌르기 전송 → 알림 트리거 |
-| `NotificationService` | 알림 생성·조회·읽음 처리, SNS 푸시 발송 |
-| `CalendarService` | 마이페이지 달력/기록 집계 (사용자 기준 전체 그룹 통합) |
+| `NotificationService` / `NotificationListener` | 알림 생성·조회·읽음 처리 (커밋 후 이벤트로 DB 기록, 원격 푸시는 미구현) |
+| `CalendarService` | **그룹별** 달력(미션별 도장)과 내 활동 요약(`/me/stats`) 집계 |
+| `GroupInsightService` / `InsightScheduler` | 그룹 월간 인사이트 비동기 생성·캐시 (`GROUP_INSIGHTS.md`) |
+| `TopicFitService` / `MascotService` | 사진 주제 적합도 비동기 평가, AI 마스코트 `별이` 댓글·반응 |
+| `ProfileService` / `GroupProfileService` / `WithdrawService` | 기본·그룹 내 프로필, 회원 탈퇴 |
 | `CharacterService` | 캐릭터 목록 조회, 프로필 캐릭터 선택 |
 | `RecallService` (선택) | Qdrant 기반 — 과거 비슷한 감정의 게시물 찾기 |
 
@@ -314,7 +340,10 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - `POST /api/auth/register` — 회원가입 (`email`, `password`, `nickname`, `agreeTerms`, `agreePrivacy`)
 - `POST /api/auth/login` — 로그인 (`email`, `password`) → JWT 발급
 - `POST /api/auth/refresh` — 토큰 갱신
+- `POST /api/auth/email-check` — 이메일 중복 확인
 - `GET /api/me` — 내 계정 정보
+- `GET /api/me/stats` — 활동 요약(완료 수·연속 참여·그룹 수 등)
+- `PUT/PATCH /api/me/profile`, `PUT/DELETE /api/me/profile-image`, `PATCH /api/me/password`, `DELETE /api/me`(탈퇴) — 프로필·비밀번호·탈퇴
 
 ### 그룹
 - `GET /api/groups` — 내 그룹 목록 (오늘 제출 여부 포함)
@@ -323,13 +352,16 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 - `PATCH /api/groups/{groupId}/settings` — 그룹명/관계(`relationType`)/COUPLE 시작일(`startDate`)/하루 미션 수/슬롯별 시각 변경
 - `GET /api/invites/{code}` — 6자리 코드로 그룹 미리보기
 - `POST /api/groups/join` — 코드로 그룹 참여
+- `POST /api/groups/{groupId}/invite-code` — 초대 코드 재발급
+- `GET /api/groups/{groupId}` — 그룹 상세
 - `DELETE /api/groups/{groupId}/members/me` — 그룹 나가기(그룹장은 `successorUserId` 지정, 마지막 멤버는 그룹 삭제)
+- `PUT /api/groups/{groupId}/members/me/profile`, `PUT /…/profile-image`, `DELETE /…/profile` — 그룹 내 닉네임·캐릭터·사진
 
 ### 미션 & 제출 (상세 명세: `docs/BACKEND/MISSIONS_API.md`)
 - `GET /api/groups/{groupId}/missions/today` — 오늘 열린 미션 목록(슬롯 순서, 틀 `template` + 빈칸 `params` 포함) + 내 제출 여부 + 다음 발행 예정 시각
 - `GET /api/missions/{missionId}` — 미션 단건
 - `GET /api/mission-templates` — 틀 목록과 빈칸/제출 형식
-- `POST /api/missions/{missionId}/submissions` — 미션 제출 (`multipart/form-data`: `file`, `text`, `number`, `guess`, `choice`, `caption` 중 틀이 요구하는 필드만)
+- `POST /api/missions/{missionId}/submissions` — 미션 제출 (`multipart/form-data`: `file`, `text`, `number`, `choice`, `caption` 중 틀이 요구하는 필드만)
   - 개발/운영 환경 공통으로 서버가 파일을 직접 받음 (API 계약 동일)
   - 저장 위치만 환경별로 다름: 개발 환경은 로컬 디스크, 운영 환경은 내부적으로 S3 업로드 (presigned URL 방식은 사용하지 않음 — 클라이언트 변경 없이 저장소만 전환)
 - `GET /api/missions/{missionId}/submissions` — 그룹 피드 (내가 제출했을 때만 200, 아니면 423 Locked)
@@ -339,15 +371,17 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ### 게시물 & 댓글
 - `GET /api/submissions/{id}` — 게시물 상세 (미션에 제출한 사람만)
-- `POST /api/submissions/{id}/comments` — 댓글 작성 (`@멘션`, `imageUrl` 포함)
+- `GET /api/submissions/{id}/comments` — 댓글 목록
+- `POST /api/submissions/{id}/comments` — 댓글 작성 (`multipart/form-data`, `@멘션`, 사진 첨부)
+- `DELETE /api/comments/{id}` — 댓글 삭제
 - `POST /api/submissions/{id}/reactions` — 스티커 반응
 
 ### 재촉 기능
-- `POST /api/groups/{groupId}/pokes` — 콕찌르기 (`toUserId`, `type`, 선택 `missionId` — 없으면 첫 슬롯의 현재 미션). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별한다. `pokes.mission_id`는 현재 미션 FK이며 `(from_user_id, to_user_id, mission_id, type)`에 UNIQUE 제약을 둔다. 응답은 `missionId`를 포함하고 현재 미션의 `members[].pokedByMe`는 요청자가 보낸 종류를 표시한다. 알림 발송은 9단계에서 연결한다.
+- `POST /api/groups/{groupId}/pokes` — 콕찌르기 (`toUserId`, `type`, 선택 `missionId` — 없으면 첫 슬롯의 현재 미션). 보내는 사람(`fromUserId`)은 인증 토큰에서 식별한다. `pokes.mission_id`는 현재 미션 FK이며 `(from_user_id, to_user_id, mission_id, type)`에 UNIQUE 제약을 둔다. 응답은 `missionId`를 포함하고 현재 미션의 `members[].pokedByMe`는 요청자가 보낸 종류를 표시한다.  `type`은 `poke`만 허용한다. 알림은 커밋 후 이벤트로 기록한다.
 
-### 마이페이지
-- `GET /api/me/calendar?month=2026-09` — 이번 달 도장 현황 (그룹 통합)
-- `GET /api/me/calendar/{date}` — 특정 날짜의 그룹별 미션/제출 상세
+### 기록 (그룹별)
+- `GET /api/groups/{groupId}/calendar?month=2026-09` — 그룹 달력(날짜별 미션 도장). 그룹별 달력으로 결정 (`CONTRACT_DECISIONS.md` §9)
+- `GET /api/groups/{groupId}/insights?month=2026-09` — 월간 인사이트 (`202 GENERATING` / `200 READY`)
 
 ### 알림
 - `GET /api/notifications` — 모든 그룹의 내 알림 목록 (`topic`의 `fromUser`는 NULL)
@@ -361,15 +395,15 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ---
 
-### Group insights cache
+### 그룹 인사이트 캐시
 
-`group_insights` has one row per `(group_id, month)` with `GENERATING`, `READY`, or `FAILED` status, structured JSON payload, generation/expiration timestamps, attempts, and an updated timestamp for five minute abandoned job recovery. It references `groups` and is deleted before group deletion. Results expire through the second day of the following month; after that, they become permanent only when all missions from the month have closed. See [GROUP_INSIGHTS.md](GROUP_INSIGHTS.md).
+`group_insights`는 `(group_id, month)`당 1행이며 상태는 `GENERATING`/`READY`/`FAILED`, 결과는 JSON `payload`, 생성·만료 시각, 시도 횟수, 5분 넘게 멈춘 작업을 복구하기 위한 `updated_at`을 가진다. `groups`를 참조하므로 그룹 삭제 전에 먼저 지운다. 결과는 다음 달 2일까지 유효하고, 그 뒤에는 그달 미션이 모두 마감된 경우에만 영구 보관된다. 제출 원문은 캐시에 저장하지 않는다. [GROUP_INSIGHTS.md](GROUP_INSIGHTS.md) 참고.
 
 ## 4. 비동기·스케줄 처리
-- **EventBridge Scheduler** → 매일 그룹별·슬롯별 발행 시각(지정이 없으면 설정 파일의 기본 발행 시각)에 `MissionService.publishDailyMission(groupId, date, slotNo)` 호출
+- **Spring `@Scheduled`**(매 분, Asia/Seoul) `MissionScheduler` → 그룹별·슬롯별 발행 시각(지정이 없으면 설정 파일의 기본 발행 시각)이 지났으면 `MissionPublisher`가 발행. (EventBridge는 설계만 있었고 사용하지 않는다)
   - 같은 그룹·날짜·슬롯의 미션이 이미 있으면 중단 → 서버가 틀 선택 → LLM으로 `{content, category, params}` 생성 → 서버 검증(`MissionTemplateValidator`) → 대상 지정 틀이면 멤버 1명 무작위 선택 → 저장(`published_at`, `deadline_at` 고정) → `topic` 알림
   - LLM 실패/검증 실패가 반복되면 예비 미션으로 대체 (상세: `docs/BACKEND/MISSIONS_API.md` §6)
-- 미션 발행/댓글/멘션/콕찌르기 커밋 뒤 `NotificationService`가 앱 안 알림을 `NOTIFICATIONS` 테이블에 기록한다. 푸시 발송은 아직 구현하지 않았다.
+- 미션 발행/댓글/멘션/콕찌르기 커밋 뒤 `NotificationService`가 앱 안 알림을 `NOTIFICATIONS` 테이블에 기록한다. 푸시 발송(FCM/APNs/SNS)은 아직 구현하지 않았다. 사진 적합도 평가·마스코트 댓글은 커밋 후 `@Async`로 처리한다.
 
 ## 5. Qdrant(VectorDB) 활용 (선택 기능)
 - 제출 캡션을 임베딩하여 저장

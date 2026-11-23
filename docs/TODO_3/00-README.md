@@ -94,6 +94,10 @@ BLOCKCHAIN_BADGES.md §15 의 순서(1. 오프체인 업적, 2. 컨트랙트, 3.
 - 디자인(Figma) 없는 UI 는 임시 에셋 + `임시` 주석.
 - 빌드/테스트: 백엔드 `./mvnw test`(Java 25), Android `android\gradlew.bat :app:testDebugUnitTest --offline`(JDK 21, `set JAVA_HOME=C:\Users\kimch\.jdks\ms-21.0.10`).
 
+## 후속 과제 (이번 범위 밖)
+
+- **메인넷 이전**: 이 TODO 는 테스트넷까지다. 이전 조건·절차·결정은 [`BLOCKCHAIN_BADGES.md` §17](../FEATURE/BLOCKCHAIN_BADGES.md) 에 정리했고, 필요해지면 그 절을 근거로 별도 TODO 로 쪼갠다.
+
 ## 사용자가 직접 해야 하는 일 (코드 밖)
 
 - 결정 1~11 확정.
