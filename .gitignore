@@ -52,6 +52,10 @@ ml/**/.pytest_cache/
 ml/**/runs/
 ml/**/dist/
 ml/vision-service/models/
+# 밴딧 시뮬레이션 결과(CSV·PNG)와 실행 기록, 합성 시드 원시 응답. 요약은 REPORT.md, 출발값은 seed/synthetic_prior.json 만 커밋
+ml/bandit-sim/out/
+ml/bandit-sim/out_run.log
+ml/bandit-sim/seed/raw/
 
 # macOS
 .DS_Store
