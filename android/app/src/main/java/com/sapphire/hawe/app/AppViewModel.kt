@@ -19,6 +19,7 @@ import com.sapphire.hawe.core.net.InsightRepository
 import com.sapphire.hawe.core.net.MissionRepository
 import com.sapphire.hawe.core.net.NotificationRepository
 import com.sapphire.hawe.core.net.PokeRepository
+import com.sapphire.hawe.core.net.SearchRepository
 import com.sapphire.hawe.core.net.SubmissionRepository
 import com.sapphire.hawe.core.net.KeystoreTokenStore
 import com.sapphire.hawe.core.push.PushCenter
@@ -52,6 +53,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val calendar = CalendarRepository(api)
     val insights = InsightRepository(api)
     val notifications = NotificationRepository(api)
+    val search = SearchRepository(api)
     val appSession: AppSession = AppSession(initialState = if (auth.hasSession) AppSession.State.RESTORING else AppSession.State.SIGNED_OUT,
         onCleared = { auth.clearSession(); dataStore.reset() })
     val push = PushCenter()

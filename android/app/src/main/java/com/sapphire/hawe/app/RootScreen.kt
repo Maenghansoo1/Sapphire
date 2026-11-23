@@ -52,7 +52,7 @@ fun RootScreen(viewModel: AppViewModel) {
                 AppSession.State.SIGNED_IN -> MainNavHost(viewModel.appSession, viewModel.dataStore, viewModel.auth, viewModel.push,
                     viewModel.groups, viewModel.missions, viewModel.pokes, viewModel.submissions, viewModel.calendar,
                     viewModel.insights, viewModel.notifications, viewModel.dev, viewModel::switchUser, viewModel.switchBusy,
-                    viewModel.switchMessage, viewModel::clearSwitchMessage)
+                    viewModel.switchMessage, viewModel::clearSwitchMessage, search = viewModel.search)
                 AppSession.State.RESTORING -> Box(Modifier.fillMaxSize().background(HColors.bg))
             }
             // 전환하는 동안(RESTORING)에도 남겨 둬야 옮겨 둔 위치가 유지돼요.
