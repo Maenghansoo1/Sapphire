@@ -44,8 +44,11 @@ import com.sapphire.hawe.designsystem.tokens.HType
 import com.sapphire.hawe.feature.draw.AiGuessDialog
 import com.sapphire.hawe.feature.draw.AiShowButton
 import com.sapphire.hawe.feature.draw.DrawSubjectMatcher
+import com.sapphire.hawe.feature.draw.LiveGuessBubble
+import com.sapphire.hawe.feature.draw.LiveInk
 import com.sapphire.hawe.feature.draw.rememberAiGuessAvailable
 import com.sapphire.hawe.feature.draw.rememberAiGuessRunner
+import com.sapphire.hawe.feature.draw.rememberLiveGuess
 import com.sapphire.hawe.feature.draw.strokeInkImage
 import com.sapphire.hawe.feature.draw.guessForUpload
 import com.sapphire.hawe.core.model.AiGuessEntry
@@ -83,6 +86,15 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
     val scope = rememberCoroutineScope()
     val aiAvailable = rememberAiGuessAvailable()
     val aiGuess = rememberAiGuessRunner()
+    val liveGuess = rememberLiveGuess(template, topic, spec)
+    // 그림이 바뀔 때마다 그리는 중 AI 추측을 요청해요(간격 제한은 LiveGuessRunner 가). 그림은 추론을 시작할 때 떠요
+    fun requestLiveGuess(strokeEnded: Boolean) {
+        liveGuess.request(strokeEnded, hasInk = !model.isEmpty) {
+            canvasSize.takeIf { it.width > 0 && it.height > 0 }?.let {
+                LiveInk(model.strokes + listOfNotNull(model.activeStroke), it.width / density, it.height / density)
+            }
+        }
+    }
     val bottom = ctaBottomPadding(32.dp)
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = 20.dp)) {
@@ -90,14 +102,18 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (timer != null) Text("0:${remaining.toString().padStart(2, '0')}",
                     style = HType.caption13, color = HColors.textSecondary)
-                DrawHistoryButton(HIcon.UNDO, "되돌리기", canUndo) { model.undo(); version++ }
-                DrawHistoryButton(HIcon.REDO, "다시 실행", canRedo) { model.redo(); version++ }
+                DrawHistoryButton(HIcon.UNDO, "되돌리기", canUndo) { model.undo(); version++; requestLiveGuess(strokeEnded = true) }
+                DrawHistoryButton(HIcon.REDO, "다시 실행", canRedo) { model.redo(); version++; requestLiveGuess(strokeEnded = true) }
             }
         })
         Spacer(Modifier.height(16.dp))
         MissionTitle(MissionType.DRAW, topic)
         templateGuideText(template, spec)?.let { Text(it, style = HType.caption13, color = HColors.textSecondary) }
         Spacer(Modifier.height(16.dp))
+        if (aiAvailable && liveGuess.available) {
+            LiveGuessBubble(liveGuess.state, liveGuess.judged)
+            Spacer(Modifier.height(8.dp))
+        }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val canvasHeight = minOf(maxHeight, 400.dp)
             Box(Modifier.fillMaxWidth().height(canvasHeight)
@@ -110,6 +126,7 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
                             val down = awaitFirstDown(requireUnconsumed = false)
                             if (timer?.expired == true) return@awaitEachGesture
                             timer?.start()
+                            if (model.tool == DrawTool.PEN) liveGuess.onStrokeStart()
                             model.begin(StrokePoint(down.position.x / density, down.position.y / density))
                             version++
                             down.consume()
@@ -117,11 +134,13 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
                                 if (timer?.expired != true) {
                                     model.append(StrokePoint(change.position.x / density, change.position.y / density))
                                     version++
+                                    requestLiveGuess(strokeEnded = false)
                                 }
                                 change.consume()
                             }
                             model.end()
                             version++
+                            requestLiveGuess(strokeEnded = true)
                         }
                     }) {
                     @Suppress("UNUSED_VARIABLE") val observed = drawVersion

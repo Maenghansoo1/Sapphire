@@ -40,6 +40,12 @@ import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HLayout
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
+import com.sapphire.hawe.feature.photo.FaceBlurControls
+import com.sapphire.hawe.feature.photo.FaceBlurPhoto
+import com.sapphire.hawe.feature.photo.PhotoPrefs
+import com.sapphire.hawe.feature.photo.blurModeFor
+import com.sapphire.hawe.feature.photo.faceBlurUploadBytes
+import com.sapphire.hawe.feature.photo.rememberFaceBlurEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -63,6 +69,9 @@ fun PhotoMissionScreen(topic: String, template: String, onClose: () -> Unit, onS
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     var photo by remember { mutableStateOf<Bitmap?>(null) }
+    // 얼굴 가리기(TODO_2/C3): 화면을 열 때의 "사진 설정"과 틀로 기본 모드를 정하고, 사진이 정해지면 기기 안에서 얼굴을 찾아요
+    val blurMode = remember(template) { PhotoPrefs.init(context); blurModeFor(template, PhotoPrefs.blurChoice) }
+    val faceBlur = rememberFaceBlurEditor(photo, blurMode)
     var submitted by remember { mutableStateOf(false) }
     var processing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -97,8 +106,9 @@ fun PhotoMissionScreen(topic: String, template: String, onClose: () -> Unit, onS
                 .clip(RoundedCornerShape(HRadius.largeCard)).background(HColors.surfaceStrong),
                 contentAlignment = Alignment.Center) {
                 when {
-                    photo != null -> Image(photo!!.asImageBitmap(), null, Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                    photo != null -> if (faceBlur != null && faceBlur.enabled) FaceBlurPhoto(photo!!, faceBlur, Modifier.fillMaxSize())
+                        else Image(photo!!.asImageBitmap(), null, Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                     controller.ready -> CameraPreviewView(controller)
                     else -> Column(horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -125,6 +135,7 @@ fun PhotoMissionScreen(topic: String, template: String, onClose: () -> Unit, onS
                 }
             }
         }
+        if (photo != null && faceBlur != null) FaceBlurControls(faceBlur, Modifier.fillMaxWidth().padding(top = 12.dp))
         Spacer(Modifier.height(16.dp))
         if (photo == null && gallery) HButton("갤러리 둘러보기", Modifier.fillMaxWidth(), enabled = !processing) { openGallery() }
         else if (photo == null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -155,12 +166,16 @@ fun PhotoMissionScreen(topic: String, template: String, onClose: () -> Unit, onS
                 photo = null
                 if (gallery) openGallery()
             }
-            HButton(if (submitted) "올리는 중..." else "올리기", Modifier.weight(1f), enabled = !submitted) {
+            // 얼굴을 찾는 동안은 못 올려요("모두 가리기"인데 찾기 전에 원본이 올라가지 않게)
+            val detecting = faceBlur?.detecting == true
+            HButton(when { submitted -> "올리는 중..."; detecting -> "얼굴 찾는 중..."; else -> "올리기" }, Modifier.weight(1f),
+                enabled = !submitted && !detecting) {
                 val current = photo ?: return@HButton
-                if (!submitted) {
+                if (!submitted && faceBlur?.detecting != true) {
                     submitted = true
+                    val hidden = faceBlur?.selected().orEmpty()
                     scope.launch {
-                        try { if (!onSubmit(withContext(Dispatchers.Default) { photoJpegBytes(current) })) submitted = false }
+                        try { if (!onSubmit(withContext(Dispatchers.Default) { faceBlurUploadBytes(current, hidden) })) submitted = false }
                         catch (error: Exception) { submitted = false }
                     }
                 }

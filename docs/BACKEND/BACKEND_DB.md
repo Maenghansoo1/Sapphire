@@ -24,6 +24,8 @@ erDiagram
   USERS ||--o{ COMMENT_MENTIONS : "mentioned in"
   SUBMISSIONS ||--o{ REACTIONS : has
   SUBMISSIONS ||--o{ SUBMISSION_GUESSES : receives
+  SUBMISSIONS ||--o{ SUBMISSION_AI_REVIEWS : "reviewed by"
+  GROUPS ||--o{ GROUP_INSIGHTS : caches
   USERS ||--o{ REACTIONS : reacts
   USERS ||--o{ SUBMISSION_GUESSES : guesses
   USERS ||--o{ POKES : sends
@@ -153,6 +155,31 @@ erDiagram
     boolean is_read
     datetime created_at
   }
+  SUBMISSION_AI_REVIEWS {
+    bigint id PK
+    bigint submission_id FK
+    string kind
+    string status
+    double fit_score
+    string badge
+    string comment
+    string model_version
+    int attempts
+    datetime created_at
+    datetime updated_at
+  }
+  GROUP_INSIGHTS {
+    bigint id PK
+    bigint group_id FK
+    string month
+    string status
+    json payload
+    datetime generated_at
+    datetime expires_at
+    int attempts
+    datetime created_at
+    datetime updated_at
+  }
   CHARACTERS {
     bigint id PK
     string name
@@ -191,6 +218,8 @@ erDiagram
 - `USERS.profile_image_url` — 기본 프로필 사진 파일 key(`profiles/uuid.jpg`), 없으면 NULL. API 응답에서는 공개 URL로 변환한다.
 - `USERS.token_version` — `INT NOT NULL DEFAULT 0`. 비밀번호 변경 시 1 증가하며, 액세스·리프레시 JWT의 `tv`와 비교한다. 클레임이 없는 기존 토큰은 0으로 읽는다.
 - `GROUP_MEMBERS.nickname_override`(`VARCHAR(50)`), `character_id_override`(`BIGINT`, `CHARACTERS.id` FK), `profile_image_url_override`(`VARCHAR(500)`) — 그룹별 닉네임과 캐릭터 또는 사진 파일 key. 모두 NULL이면 기본 프로필을 표시한다. 설정 시 닉네임과 아바타 값 중 정확히 하나를 서비스가 함께 저장한다. 그룹을 나간 작성자의 피드·댓글은 기본 프로필로 표시한다.
+- `USERS.is_ai` — `TINYINT(1) NOT NULL DEFAULT 0`(V4). 마스코트 "별이" 같은 AI 계정 표시. V4가 로그인 불가 계정(`password_hash = '!'`) 한 행을 시드한다.
+- `COMMENTS.ai_detail` — AI 댓글의 부가 정보(JSON, NULL 가능, V4).
 - `USERS` 인증 방식 — 소셜 로그인 대신 **이메일/비밀번호 자체 로그인**(`email` + `password_hash`) 사용. 필수 약관 동의 시각을 저장
 - `POKES.type` — `poke`(콕찌르기). 예전 `fling`(똥뿌리기) 행이 남아 있어도 조회에서 무시한다 (2026-10-19 삭제)
 - `SUBMISSIONS.is_late` — 해당 미션의 `MISSIONS.deadline_at`과 `submitted_at`을 비교해 제출 시점에 계산·저장 (정책 확정)
@@ -208,6 +237,7 @@ erDiagram
 - `MISSIONS.published_at` / `deadline_at` — 발행 시점의 실제 발행·마감 시각을 고정 저장. 이후 그룹 설정이 바뀌어도 이미 열린 미션의 시각과 지각 판정(`SUBMISSIONS.is_late`)은 바뀌지 않는다
 - 유일성 제약 — `GROUP_MISSION_SLOTS (group_id, slot_no)`: 슬롯 재정의는 슬롯당 1행, `MISSIONS (group_id, mission_date, slot_no)`: 그룹·날짜·슬롯당 미션 1개(중복 발행 방지), `SUBMISSIONS (mission_id, user_id)`: 미션당 1인 1회 제출(`ALREADY_SUBMITTED`)
 - `NOTIFICATIONS`는 `from_user_id`(발신자, 시스템 알림은 NULL) / `to_user_id`(수신자)로 분리한다. V3에서 알림의 `group_id`, `mission_id`, `submission_id`(NULL 가능, FK 없음)와 목록·미읽음 인덱스를 추가했다. `payload`는 새 앱 안 알림에서 사용하지 않는다.
+- `group_insights` — 그룹·월(`month`, `YYYY-MM`)당 1행(`(group_id, month)` UNIQUE)의 월간 요약 캐시. 상세는 아래 "Group insights cache"와 `GROUP_INSIGHTS.md`.
 - 도장(참잘했어요/지각/벌점)은 별도 테이블 없이 `SUBMISSIONS` 존재 여부와 `is_late`, 미션 마감·발행 당시 멤버 여부로 계산한다 (`Stamp.of`). 하루 미션이 여러 개면 **미션별 도장**이다 (B7 결정, `MISSIONS_API.md` §11-8)
 
 ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경 상세"를 참고.
@@ -224,8 +254,8 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 |---|---|---|---|---|
 | `relation_type` | 추가 | `VARCHAR(20)` | NOT NULL, DEFAULT 'CASUAL' | 그룹 관계 코드 `COUPLE`/`FAMILY`/`FRIEND`/`RIVAL`/`CASUAL`. 유효한 코드인지는 서비스에서 검증 (ENUM 대신 VARCHAR — 코드 추가 시 마이그레이션 불필요). 미션 생성 AI에게 톤·금지 주제를 알려주는 입력으로만 쓰이고 틀 선택에는 쓰지 않는다 |
 | `daily_mission_count` | 추가 | `TINYINT UNSIGNED` | NOT NULL, DEFAULT 1 | 하루에 열 미션 수. 허용 범위 1~5는 서비스에서 검증 (상한은 초안). DEFAULT 1이라 기존 그룹은 동작이 그대로다 |
-| `mission_publish_time` | **삭제** | `TIME` | - | 슬롯 테이블로 대체 (현재 데이터가 없어 이전 없이 삭제) |
-| `mission_deadline_time` | **삭제** | `TIME` | - | 위와 같음 |
+| `mission_publish_time` | 없음 (V1에 존재하지 않음) | `TIME` | - | 슬롯 테이블로 대체 |
+| `mission_deadline_time` | 없음 (V1에 존재하지 않음) | `TIME` | - | 위와 같음 |
 
 **`group_mission_slots` (신규 테이블)** — 슬롯별 시각 재정의. 재정의하지 않은 슬롯은 행이 없다.
 
@@ -258,7 +288,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 | 컬럼 | 변경 | 타입 | NULL | 설명 |
 |---|---|---|---|---|
-| `image_url` | `media_url`로 이름 변경, NULL 허용 | `VARCHAR(500)` | NULL | 글 제출은 파일이 없음 |
+| `media_url` | 처음부터 `media_url`로 정의, NULL 허용 | `VARCHAR(500)` | NULL | 글 제출은 파일이 없음 |
 | `media_type` | 추가 | `VARCHAR(10)` | NULL | `IMAGE` (음성 제거로 `AUDIO`는 더 이상 저장하지 않음). `media_url`이 있을 때만 값이 있음 |
 | `number_value` | 추가 | `TINYINT UNSIGNED` | NULL | 별점(1~5). 집계할 수 있게 컬럼으로 둔다 (슬라이더 위치 0~100은 2026-10-19 슬라이더 삭제로 새로 쓰지 않음) |
 | `choice_value` | 추가 | `CHAR(1)` | NULL | 밸런스 게임 선택 `A` / `B`. 비율을 집계하므로 컬럼으로 둔다 |
@@ -318,6 +348,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 | `MissionTemplateSelector` | 슬롯별 틀 선택(하루 내 매체 중복 방지, 하루 1개일 때 어제와 매체 중복 방지, 후보 부족 시 예외 허용, 관계별 선호 없음)과 대상 멤버 지정(빈칸 채우기는 항상, 그림 틀은 설정된 확률). 어제 미션만 조회하고 시드 기반으로 계산 (`MISSIONS_API.md` §6-1) |
 | `SubmissionService` | 제출 처리(지각 판정, 중복 제출 차단), 잠금 해제 여부 판단 |
 | `MissionResultService` | 집계 틀(밸런스 게임)의 그룹 결과 계산 (슬라이더 3종은 2026-10-19 삭제) |
+| `GroupInsightService` | 그룹 월간 요약(활동 지수·최다 반응 등) 계산과 `group_insights` 캐시 관리 (`GROUP_INSIGHTS.md`) |
 | ~~`GuessService`~~ | 폐기됨 (음성 제거로 정답 맞히기 없음, `MISSIONS_API.md` §4-1) |
 | `FileStorage` (`LocalFileStorage` / `S3FileStorage`) | 이미지 파일 저장/조회 (설정으로 로컬/S3 전환), 형식·크기 검증 |
 | 피드 조회 | 별도 `FeedService` 없이 `SubmissionService.feed`가 제출자만 열람하도록 필터링(미제출 423) |
@@ -338,6 +369,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ### 인증
 - `POST /api/auth/register` — 회원가입 (`email`, `password`, `nickname`, `agreeTerms`, `agreePrivacy`)
+- `POST /api/auth/email-check` — 이메일 중복 확인
 - `POST /api/auth/login` — 로그인 (`email`, `password`) → JWT 발급
 - `POST /api/auth/refresh` — 토큰 갱신
 - `POST /api/auth/email-check` — 이메일 중복 확인
@@ -347,6 +379,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ### 그룹
 - `GET /api/groups` — 내 그룹 목록 (오늘 제출 여부 포함)
+- `GET /api/groups/{groupId}` — 그룹 상세
 - `POST /api/groups` — 그룹 생성 (`name`, 선택: `relationType`, COUPLE의 `startDate`, `dailyMissionCount`, `missionSlots`)
 - `GET /api/groups/{groupId}/members` — 멤버 목록 + 이번 달 제출 횟수
 - `PATCH /api/groups/{groupId}/settings` — 그룹명/관계(`relationType`)/COUPLE 시작일(`startDate`)/하루 미션 수/슬롯별 시각 변경
@@ -392,6 +425,9 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 ### 캐릭터
 - `GET /api/characters` — 선택 가능한 캐릭터 목록
 - `PATCH /api/me/character` — 프로필 캐릭터 변경
+
+### 그룹 월간 요약
+- `GET /api/groups/{groupId}/insights?month=YYYY-MM` — 월간 요약 (캐시 생성 중이면 202). 상세는 `GROUP_INSIGHTS.md`
 
 ---
 

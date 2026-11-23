@@ -39,6 +39,7 @@ import com.sapphire.hawe.designsystem.components.HTextField
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
+import com.sapphire.hawe.feature.mission.reencodedPhotoBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -218,13 +219,8 @@ private fun CommentComposer(mentionable: List<GroupMember>,
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                runCatching {
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    val png = context.contentResolver.getType(uri) == "image/png"
-                    bytes?.let { it to if (png) "png" else "jpg" }
-                }.getOrNull()
-            }
+            // 원본 파일을 그대로 올리면 EXIF(기기·촬영 시각·위치)가 따라가서 새로 인코딩해요
+            val loaded = withContext(Dispatchers.IO) { reencodedPhotoBytes(context, uri) }
             when {
                 loaded == null -> imageError = "사진을 읽을 수 없어요"
                 loaded.first.size > MAX_IMAGE_BYTES -> imageError = "사진이 너무 커요 (10MB 이하)"

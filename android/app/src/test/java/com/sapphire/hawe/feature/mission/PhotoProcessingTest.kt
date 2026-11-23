@@ -12,6 +12,14 @@ class PhotoProcessingTest {
         assertEquals(CropRect(0, 0, 0, 0), centerCropRect(0, 100))
     }
 
+    @Test fun reencodeKeepsPngOnlyForPng() {
+        assertTrue(reencodeAsPng("image/png"))
+        assertTrue(reencodeAsPng("IMAGE/PNG"))
+        assertFalse(reencodeAsPng("image/jpeg"))
+        assertFalse(reencodeAsPng("image/heic"))  // 서버가 받지 않는 형식은 JPEG 로
+        assertFalse(reencodeAsPng(null))
+    }
+
     @Test fun sampleSizesArePowersOfTwo() {
         assertEquals(1, sampleSizeFor(1024, 768))
         assertEquals(2, sampleSizeFor(4096, 2048))
