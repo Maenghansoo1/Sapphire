@@ -100,4 +100,51 @@ class BadgeEvaluationServiceTests {
 		assertFalse(codes.contains("PERFECT_MONTH"));
 		verify(activity, never()).findPerfectMonthRows(1L, LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
 	}
+
+	@Test
+	void backfillFindsFirstQualifyingHistoricalMonthWithoutNotification() {
+		when(activity.findValidSubmissionsByUserId(1L)).thenReturn(List.of(
+			new ValidSubmission(1L, LocalDateTime.of(2025, 1, 5, 12, 0), false,
+					LocalDateTime.of(2025, 1, 5, 11, 30), "PHOTO_NOW")));
+		when(activity.findOnTimeSubmissionDays(1L)).thenReturn(List.of());
+		when(activity.findPerfectFitTimes(1L)).thenReturn(List.of());
+		when(activity.findMemberGroupBases(1L)).thenReturn(List.of());
+		when(activity.findPerfectMonthRows(1L, LocalDate.of(2025, 2, 1), LocalDate.of(2025, 2, 28)))
+			.thenReturn(List.of(new PerfectMonthRow(2L, 5, 5, 0, 2)));
+		when(awards.award(1L, "PERFECT_MONTH", LocalDateTime.of(2025, 3, 1, 0, 0)))
+			.thenReturn(true);
+		var result = service.evaluateForBackfill(1L, LocalDate.of(2025, 5, 1), false, false);
+		assertEquals(List.of("PERFECT_MONTH"), result.awarded());
+		verify(activity).findPerfectMonthRows(1L, LocalDate.of(2025, 1, 1), LocalDate.of(2025, 1, 31));
+		verify(activity).findPerfectMonthRows(1L, LocalDate.of(2025, 2, 1), LocalDate.of(2025, 2, 28));
+		verify(activity, never()).findPerfectMonthRows(1L, LocalDate.of(2025, 3, 1), LocalDate.of(2025, 3, 31));
+		verifyNoInteractions(events);
+	}
+
+	@Test
+	void backfillDryRunDoesNotAwardAndNotifyTruePublishes() {
+		when(activity.findValidSubmissionsByUserId(1L)).thenReturn(tenSubmissions());
+		when(activity.findOnTimeSubmissionDays(1L)).thenReturn(List.of());
+		when(activity.findPerfectFitTimes(1L)).thenReturn(List.of());
+		when(activity.findMemberGroupBases(1L)).thenReturn(List.of());
+		assertTrue(service.evaluateForBackfill(1L, LocalDate.of(2026, 1, 1), true, true)
+			.awarded().contains("FIRST_SUBMISSION"));
+		verifyNoInteractions(awards, events);
+		when(awards.award(1L, "FIRST_SUBMISSION", time.plusMinutes(1))).thenReturn(true);
+		assertTrue(service.evaluateForBackfill(1L, LocalDate.of(2026, 1, 1), false, true)
+			.awarded().contains("FIRST_SUBMISSION"));
+		verify(events).publishEvent(new BadgeAwardedEvent(1L, "FIRST_SUBMISSION"));
+	}
+
+	@Test
+	void backfillWithoutSubmissionsSkipsMonthsAndCapsHistoricalSearch() {
+		when(activity.findValidSubmissionsByUserId(1L)).thenReturn(List.of());
+		assertTrue(service.evaluateForBackfill(1L, LocalDate.of(2026, 4, 1), true, false).awarded().isEmpty());
+		verify(activity, never()).findPerfectMonthRows(anyLong(), any(), any());
+		when(activity.findValidSubmissionsByUserId(1L)).thenReturn(List.of(
+			new ValidSubmission(1L, LocalDateTime.of(1900, 1, 1, 12, 0), false,
+					LocalDateTime.of(1900, 1, 1, 11, 0), "PHOTO_NOW")));
+		service.evaluateForBackfill(1L, LocalDate.of(2026, 4, 1), true, false);
+		verify(activity, times(120)).findPerfectMonthRows(eq(1L), any(), any());
+	}
 }

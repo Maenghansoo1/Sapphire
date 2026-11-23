@@ -18,6 +18,9 @@ import com.sapphire.hawe.mission.dao.MissionMapper;
 
 @Mapper
 public interface UserActivityMapper {
+	@Select("SELECT id FROM users WHERE id > #{afterId} AND is_ai = 0 ORDER BY id LIMIT #{limit}")
+	List<Long> findUserIdsAfter(@Param("afterId") long afterId, @Param("limit") int limit);
+
 	String VALID_GROUP = "(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = m.group_id) >= 2";
 	String BASE_DATE = "CASE WHEN g.relation_type = 'COUPLE' AND g.start_date IS NOT NULL "
 			+ "THEN g.start_date ELSE DATE(g.created_at) END";

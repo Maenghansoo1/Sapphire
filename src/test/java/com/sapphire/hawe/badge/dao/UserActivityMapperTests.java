@@ -26,6 +26,15 @@ class UserActivityMapperTests {
 		return jdbc.queryForObject("SELECT id FROM users WHERE email = ?", Long.class, email);
 	}
 
+	@Test
+	void backfillUserPagingSkipsAiAndHonorsCursorAndLimit() {
+		Long first = user(), ai = user(), second = user(), third = user();
+		jdbc.update("UPDATE users SET is_ai = 1 WHERE id = ?", ai);
+		assertEquals(List.of(first, second), activity.findUserIdsAfter(first - 1, 2));
+		assertEquals(List.of(second, third), activity.findUserIdsAfter(first, 2));
+		assertTrue(activity.findUserIdsAfter(third, 2).isEmpty());
+	}
+
 	private Long group(Long owner) {
 		String invite = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 		jdbc.update("INSERT INTO `groups` (name, owner_id, invite_code) VALUES ('Badge test', ?, ?)", owner, invite);
