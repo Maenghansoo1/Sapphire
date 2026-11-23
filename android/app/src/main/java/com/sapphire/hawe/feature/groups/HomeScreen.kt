@@ -10,7 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -22,31 +22,31 @@ import com.sapphire.hawe.core.data.DataStore
 import com.sapphire.hawe.core.model.GroupSummary
 import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
+import com.sapphire.hawe.designsystem.components.HFabMenu
+import com.sapphire.hawe.designsystem.components.HFabMenuItem
 import com.sapphire.hawe.designsystem.components.MemberRow
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.*
 import java.time.Instant
 
 @Composable
-fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (Long) -> Unit,
+fun HomeScreen(store: DataStore, onCreateGroup: () -> Unit, onJoinGroup: () -> Unit, onGroup: (Long) -> Unit,
     onMyPage: () -> Unit, onNotifications: () -> Unit = {}) {
     val groups = store.summaries
     val bottom = ctaBottomPadding()
+    var menuOpen by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(HColors.bg)) {
         Column {
             Row(Modifier.fillMaxWidth().height(HLayout.headerHeight).padding(horizontal = HLayout.screenPaddingCompact),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("내 그룹", style = HType.screenTitle, color = HColors.ink)
                 Spacer(Modifier.weight(1f))
-                HeaderIcon(HIcon.PLUS, 24, "그룹 추가", onAdd)
-                Spacer(Modifier.width(16.dp))
                 HeaderIcon(HIcon.BELL, 22, "알림", onNotifications)
-                Spacer(Modifier.width(16.dp))
-                HeaderIcon(HIcon.PERSON, 22, "마이페이지", onMyPage)
             }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = HLayout.screenPaddingCompact)
-                .padding(bottom = bottom + 24.dp)) {
+                // 마지막 카드가 메뉴 버튼(56)에 가리지 않게 띄워요.
+                .padding(bottom = bottom + 24.dp + 56.dp)) {
                 Text("${homeDateText(AppClock.now())} · 그룹 ${groups.size}개",
                     Modifier.padding(top = 6.dp, bottom = 20.dp), style = HType.plex(14), color = HColors.textSecondary)
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -56,6 +56,12 @@ fun HomeScreen(store: DataStore, onAdd: () -> Unit, onGroup: (Long) -> Unit,
                 }
             }
         }
+        // 그룹 추가·마이페이지는 오른쪽 아래 메뉴 버튼으로 옮겼어요 (Figma 04 홈 · 메뉴 열림)
+        HFabMenu(menuOpen, { menuOpen = it }, bottomPadding = bottom, items = listOf(
+            HFabMenuItem("새 그룹 만들기", HIcon.PLUS, onCreateGroup),
+            HFabMenuItem("초대 코드로 참여하기", HIcon.ENTER, onJoinGroup),
+            HFabMenuItem("마이페이지", HIcon.PERSON, onMyPage),
+        ))
     }
 }
 

@@ -5,6 +5,7 @@ struct HomeView: View {
     @Binding var path: [MainRoute]
 
     @Environment(DataStore.self) private var store
+    @State private var isMenuOpen = false
 
     private var groups: [GroupSummary] { store.summaries }
 
@@ -32,9 +33,11 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, HLayout.screenPaddingCompact)
-                .padding(.bottom, 24)
+                // 마지막 카드가 메뉴 버튼(56)에 가리지 않게 띄워요.
+                .padding(.bottom, 24 + 56 + 8)
             }
         }
+        .overlay { menu }
         .background(.bg)
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -45,13 +48,18 @@ struct HomeView: View {
                 .font(.screenTitle)
                 .foregroundStyle(.ink)
             Spacer()
-            HStack(spacing: 16) {
-                headerButton(.plus, size: 24, label: "그룹 추가") { path.append(.start) }
-                headerButton(.bell, size: 22, label: "알림") { path.append(.notifications) }
-                headerButton(.person, size: 22, label: "마이페이지") { path.append(.myPage(.home)) }
-            }
+            headerButton(.bell, size: 22, label: "알림") { path.append(.notifications) }
         }
         .frame(height: HLayout.headerHeight)
+    }
+
+    /// 그룹 추가·마이페이지는 오른쪽 아래 메뉴 버튼으로 옮겼어요 (Figma 04 홈 · 메뉴 열림)
+    private var menu: some View {
+        HFabMenu(isOpen: $isMenuOpen, items: [
+            .init(title: "새 그룹 만들기", icon: .plus) { path.append(.createGroup) },
+            .init(title: "초대 코드로 참여하기", icon: .enter) { path.append(.joinGroup(code: nil)) },
+            .init(title: "마이페이지", icon: .person) { path.append(.myPage(.home)) },
+        ])
     }
 
     /// 아이콘은 Figma 크기 그대로 두고, 눌리는 영역만 44pt 로 넓혀요.

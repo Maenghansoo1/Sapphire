@@ -160,7 +160,7 @@ fun MainNavHost(session: AppSession, store: DataStore, auth: AuthRepository, pus
                     GroupsLoadFailed { retryGroups++ }
                 store.groups.isEmpty() -> StartScreen(onCreateGroup = create, onJoinGroup = join,
                     onMyPage = myPage)
-                else -> HomeScreen(store, onAdd = { nav.navigate(MainRoute.Start) },
+                else -> HomeScreen(store, onCreateGroup = create, onJoinGroup = join,
                     onNotifications = { nav.navigate(MainRoute.Notifications) { launchSingleTop = true } },
                     onMyPage = myPage, onGroup = { groupId ->
                         nav.navigate(MainRoute.Mission(groupId)) { launchSingleTop = true }

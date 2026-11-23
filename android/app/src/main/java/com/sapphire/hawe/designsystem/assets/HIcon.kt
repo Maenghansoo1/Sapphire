@@ -16,7 +16,7 @@ enum class HIcon(@DrawableRes val drawable: Int) {
     CALENDAR(R.drawable.ic_calendar), CAMERA(R.drawable.ic_camera), CHECK(R.drawable.ic_check),
     CHECK_SMALL(R.drawable.ic_check_small), CHEVRON_LEFT(R.drawable.ic_chevron_left),
     CHEVRON_RIGHT(R.drawable.ic_chevron_right), CLOSE(R.drawable.ic_close), COMMENT(R.drawable.ic_comment),
-    COPY(R.drawable.ic_copy), FLASH(R.drawable.ic_flash), FLIP(R.drawable.ic_flip),
+    COPY(R.drawable.ic_copy), ENTER(R.drawable.ic_enter), FLASH(R.drawable.ic_flash), FLIP(R.drawable.ic_flip),
     HEART(R.drawable.ic_heart), HEART_FILL(R.drawable.ic_heart_fill), IMAGE(R.drawable.ic_image),
     LOCK(R.drawable.ic_lock), MORE(R.drawable.ic_more),
     BELL(R.drawable.ic_bell), PENCIL(R.drawable.ic_pencil), PERSON(R.drawable.ic_person),
