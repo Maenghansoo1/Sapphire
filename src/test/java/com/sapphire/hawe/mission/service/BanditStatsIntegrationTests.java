@@ -83,6 +83,26 @@ class BanditStatsIntegrationTests {
         }
     }
 
+    @Test void decayHalvesAfterHalfLifeAndIsIdempotent() {
+        // 실제 그룹이 아닌 번호의 그룹 행(FK 없음)으로 감쇠 SQL 만 본다. 반감기 기본 30일
+        long fakeGroup = 9_000_000_000L + (long) (Math.random() * 1_000_000);
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        jdbc.update("INSERT INTO template_bandit_stats(scope,group_id,template,alpha_real,beta_real,n_missions,updated_at) "
+                + "VALUES ('GROUP',?,?,4,2,3,?)", fakeGroup, TEMPLATE, now.minusDays(30));
+        try {
+            assertTrue(service.decay(now) >= 1);
+            assertEquals(new BanditArmStats(2.0, 1.0, 0, 0, 3), round(service.snapshot(fakeGroup).group(TEMPLATE)));
+            service.decay(now);  // 같은 시각으로 다시 → 그대로
+            assertEquals(new BanditArmStats(2.0, 1.0, 0, 0, 3), round(service.snapshot(fakeGroup).group(TEMPLATE)));
+            service.decay(now.plusDays(15));  // 반감기의 절반 → ×0.707
+            assertEquals(2.0 * Math.pow(0.5, 0.5), service.snapshot(fakeGroup).group(TEMPLATE).alphaReal(), 1e-6);
+            service.decay(now.minusDays(1));  // 시계가 거꾸로 가도(개발자 시계) 되살아나지 않아요
+            assertEquals(2.0 * Math.pow(0.5, 0.5), service.snapshot(fakeGroup).group(TEMPLATE).alphaReal(), 1e-6);
+        } finally {
+            jdbc.update("DELETE FROM template_bandit_stats WHERE scope='GROUP' AND group_id=?", fakeGroup);
+        }
+    }
+
     private static List<BanditReward> mine(List<BanditReward> rewards, long... ids) {
         return rewards.stream().filter(r -> java.util.Arrays.stream(ids).anyMatch(id -> id == r.missionId())).toList();
     }

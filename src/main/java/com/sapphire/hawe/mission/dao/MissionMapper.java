@@ -59,9 +59,11 @@ public interface MissionMapper {
     boolean isCurrent(@Param("missionId") Long missionId);
 
     @Insert("INSERT INTO missions (group_id, content, category, mission_date, template, params, "
-            + "slot_no, published_at, deadline_at, generation_source, experiment_arm) VALUES (#{groupId}, #{content}, "
+            + "slot_no, published_at, deadline_at, generation_source, experiment_arm, template_policy, selection_prob) "
+            + "VALUES (#{groupId}, #{content}, "
             + "#{category}, #{missionDate}, #{template}, #{params}, #{slotNo}, #{publishedAt}, #{deadlineAt}, "
-            + "#{generationSource,jdbcType=VARCHAR}, #{experimentArm,jdbcType=VARCHAR})")
+            + "#{generationSource,jdbcType=VARCHAR}, #{experimentArm,jdbcType=VARCHAR}, "
+            + "#{templatePolicy,jdbcType=VARCHAR}, #{selectionProb,jdbcType=DOUBLE})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insert(MissionInsertRow mission);
 

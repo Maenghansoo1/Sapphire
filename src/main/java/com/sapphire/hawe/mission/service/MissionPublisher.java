@@ -18,6 +18,9 @@ import com.sapphire.hawe.mission.domain.RecentMission;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
 import com.sapphire.hawe.mission.domain.MissionTiming;
 import com.sapphire.hawe.mission.domain.MissionsPublishedEvent;
+import com.sapphire.hawe.mission.domain.TemplateChoice;
+import com.sapphire.hawe.mission.domain.TemplateSampler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -52,11 +55,23 @@ public class MissionPublisher {
     private final ExperimentAssigner experiments;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher events;
+    private final TemplatePolicy templatePolicy;
 
+    /** 늘 무작위로 틀을 고르는 발행기(테스트용). */
     public MissionPublisher(MissionMapper missions, GroupMapper groups, GroupMemberMapper members,
             GroupMissionSlotMapper slots, MissionProperties properties, MissionGenerator generator,
             GroupContextBuilder contexts, ExperimentAssigner experiments, ObjectMapper objectMapper,
             ApplicationEventPublisher events) {
+        this(missions, groups, members, slots, properties, generator, contexts, experiments, objectMapper, events,
+                TemplatePolicy.randomOnly());
+    }
+
+    @Autowired
+    public MissionPublisher(MissionMapper missions, GroupMapper groups, GroupMemberMapper members,
+            GroupMissionSlotMapper slots, MissionProperties properties, MissionGenerator generator,
+            GroupContextBuilder contexts, ExperimentAssigner experiments, ObjectMapper objectMapper,
+            ApplicationEventPublisher events, TemplatePolicy templatePolicy) {
+        this.templatePolicy = templatePolicy;
         this.missions = missions;
         this.groups = groups;
         this.members = members;
@@ -131,6 +146,8 @@ public class MissionPublisher {
             catch (IllegalArgumentException | NullPointerException ignored) { }
         }
         GenerationContext groupContext = null;  // 실제로 발행할 슬롯이 있을 때만 만든다
+        TemplateSampler sampler = null;  // 밴딧 정책이면 그룹·날짜마다 한 번 만든다(같은 날 슬롯은 같은 통계)
+        boolean samplerReady = false;
         for (int slotNo = 1; slotNo <= group.getDailyMissionCount(); slotNo++) {
             GroupMissionSlot slot = configured.get(slotNo);
             LocalTime publishTime = slot != null && slot.getPublishTime() != null
@@ -144,8 +161,13 @@ public class MissionPublisher {
             LocalDateTime publishedAt = forceThis ? now :
                     (scheduled.isBefore(group.getCreatedAt()) ? group.getCreatedAt() : scheduled);
             long seed = MissionTemplateSelector.seed(groupId, date, slotNo);
-            MissionTemplate template = requestedTemplate == null ? MissionTemplateSelector.select(groupId, date, slotNo,
-                    group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates()) : requestedTemplate;
+            if (requestedTemplate == null && !samplerReady) {
+                sampler = templatePolicy.samplerFor(groupId, date);  // 무작위 정책·통계 실패면 null → 예전 무작위 그대로
+                samplerReady = true;
+            }
+            TemplateChoice choice = requestedTemplate == null ? MissionTemplateSelector.choose(groupId, date, slotNo,
+                    group.getDailyMissionCount(), yesterdayMedia, properties.enabledTemplates(), sampler) : null;
+            MissionTemplate template = choice == null ? requestedTemplate : choice.template();
             boolean withTarget = MissionTemplateSelector.needsTarget(template, seed);
             // 실험 군은 (그룹, 날짜) 단위라 같은 날 슬롯은 모두 같은 군이다. 위의 틀·대상 선택은 군과 무관하다
             if (groupContext == null)
@@ -175,6 +197,8 @@ public class MissionPublisher {
             mission.setDeadlineAt(MissionTiming.deadlineAfter(publishedAt, deadlineTime));
             mission.setGenerationSource(generated.source().name());
             mission.setExperimentArm(groupContext.experimentArm() == null ? null : groupContext.experimentArm().name());
+            mission.setTemplatePolicy(TemplatePolicy.label(choice == null, sampler));
+            mission.setSelectionProb(choice == null ? null : choice.probability());
             try { missions.insert(mission); if (mission.getId() != null) created.add(mission.getId()); }
             catch (DuplicateKeyException ignored) { /* Another publisher already committed this slot. */ }
         }

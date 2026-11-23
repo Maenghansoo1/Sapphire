@@ -10,8 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** 밴딧 보상 계산(TODO_2/D2) — DB 없이 순수 계산만. */
 class BanditRewardCalculatorTests {
-    private static final BanditProperties DEFAULTS = new BanditProperties(null, null, null, null, null, null, null, null,
-            null, null, null);
+    private static final BanditProperties DEFAULTS = BanditProperties.defaults();
     private static final Threshold PHOTO_NOW = new Threshold(0.024, 0.017);
     private final BanditRewardCalculator calculator = new BanditRewardCalculator(DEFAULTS,
             template -> "PHOTO_NOW".equals(template) ? PHOTO_NOW : null);
@@ -83,8 +82,10 @@ class BanditRewardCalculatorTests {
         assertEquals(0.05, DEFAULTS.epsilon());
         assertEquals(0.6 + 0.2 + 0.2, DEFAULTS.rewardBase() + DEFAULTS.rewardEffort() + DEFAULTS.rewardEngage(), 1e-12);
         assertThrows(IllegalArgumentException.class,
-                () -> new BanditProperties(0.5, 0.2, 0.2, null, null, null, null, null, null, null, null));
+                () -> new BanditProperties(0.5, 0.2, 0.2, null, null, null, null, null, null, null, null, null, null, null, null));
         assertThrows(IllegalArgumentException.class,
-                () -> new BanditProperties(null, null, null, null, 11.0, null, null, null, null, null, null));
+                () -> new BanditProperties(null, null, null, null, 11.0, null, null, null, null, null, null, null, null, null, null));
+        assertFalse(DEFAULTS.enabled(), "반영 잡은 기본으로 꺼져 있어요");
+        assertEquals(500, DEFAULTS.batchSize());
     }
 }

@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /** 미션 틀 선택 밴딧 통계(TODO_2/D2). 닫힘·대상 인원 기준은 B9 실험 리포트({@link ExperimentMapper})와 같다. */
 @Mapper
@@ -46,6 +47,23 @@ public interface BanditMapper {
             + "beta_real = beta_real + VALUES(beta_real), n_missions = n_missions + 1, updated_at = VALUES(updated_at)")
     int addStats(@Param("scope") String scope, @Param("groupId") long groupId, @Param("template") String template,
             @Param("alpha") double alpha, @Param("beta") double beta, @Param("now") LocalDateTime now);
+
+    /**
+     * 시간 감쇠(TODO_2/D3): 모든 행의 실측 α·β 에 0.5^(지난 시간 / 반감기) 를 곱하고 updated_at 을 [now] 로 맞춘다.
+     * updated_at 은 "여기까지 감쇠를 맞춘 시각"이라 같은 [now] 로 두 번 돌려도 두 번째는 아무것도 안 바뀐다(멱등).
+     * 단일 테이블 UPDATE 는 왼쪽부터 계산하므로 updated_at 을 맨 마지막에 바꾼다. 미션 수(n_missions)는 감쇠하지 않는다.
+     */
+    @Update("UPDATE template_bandit_stats SET "
+            + "alpha_real = alpha_real * POW(0.5, TIMESTAMPDIFF(SECOND, updated_at, #{now}) / (#{halfLifeDays} * 86400.0)), "
+            + "beta_real = beta_real * POW(0.5, TIMESTAMPDIFF(SECOND, updated_at, #{now}) / (#{halfLifeDays} * 86400.0)), "
+            + "updated_at = #{now} WHERE updated_at < #{now}")
+    int decayAll(@Param("now") LocalDateTime now, @Param("halfLifeDays") double halfLifeDays);
+
+    /** 그룹의 [from] 이상 [to] 미만 날짜 미션 틀(오늘은 빼고 넘긴다 — 같은 날 슬롯끼리 같은 이력을 보게). */
+    @Select("SELECT mission_date, template FROM missions WHERE group_id = #{groupId} "
+            + "AND mission_date >= #{from} AND mission_date < #{to}")
+    List<BanditRecentRow> findTemplatesBetween(@Param("groupId") long groupId, @Param("from") java.time.LocalDate from,
+            @Param("to") java.time.LocalDate to);
 
     /** 전역 통계 + 그 그룹의 통계. */
     @Select("SELECT scope, group_id, template, alpha_real, beta_real, alpha_syn, beta_syn, n_missions AS mission_count "

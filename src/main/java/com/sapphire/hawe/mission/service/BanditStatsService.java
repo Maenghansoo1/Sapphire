@@ -32,11 +32,22 @@ public class BanditStatsService {
     public static final long GLOBAL_GROUP_ID = 0L;
 
     private final BanditMapper mapper;
+    private final BanditProperties properties;
     private final BanditRewardCalculator calculator;
 
     public BanditStatsService(BanditMapper mapper, BanditProperties properties, VisionProperties vision) {
         this.mapper = mapper;
+        this.properties = properties;
         this.calculator = new BanditRewardCalculator(properties, vision::thresholdFor);
+    }
+
+    /**
+     * 모든 통계에 시간 감쇠(반감기 {@code hawe.bandit.half-life-days})를 [now] 까지 적용한다. 같은 [now] 로 다시 불러도 바뀌지 않는다.
+     * 반영 잡(D3)이 보상을 더하기 <b>전에</b> 부른다 — 그래야 updated_at 이 늘 "감쇠를 맞춘 시각"과 같다. 바뀐 행 수를 돌려준다.
+     */
+    @Transactional
+    public int decay(LocalDateTime now) {
+        return mapper.decayAll(now, properties.halfLifeDays());
     }
 
     /** 아직 반영하지 않은 닫힌 미션의 보상(오래된 것부터 [limit] 건). */

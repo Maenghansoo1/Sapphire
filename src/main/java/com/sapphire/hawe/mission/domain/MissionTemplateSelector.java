@@ -48,23 +48,58 @@ public final class MissionTemplateSelector {
      */
     public static MissionTemplate select(long groupId, LocalDate date, int slotNo,
             int dailyMissionCount, Set<String> yesterdayMedia, Collection<MissionTemplate> pool) {
+        return choose(groupId, date, slotNo, dailyMissionCount, yesterdayMedia, pool, null).template();
+    }
+
+    /**
+     * {@link #select} 와 같은 규칙으로 고르되, [sampler] 가 있으면 후보 안의 "무작위 선택" 자리만 그것으로 바꾼다(TODO_2/D4 밴딧).
+     * [sampler] 가 null 이면 예전 무작위 선택과 비트 단위로 같고 확률은 1/후보 수다.
+     * <ul>
+     *   <li>하루 1개 — 무작위: 섞인 매체 순서에서 어제 쓰지 않은 첫 매체의 틀 중 하나.
+     *       밴딧: 어제 쓰지 않은 매체들의 틀 전체가 후보(남는 매체가 없으면 풀 전체) — 어제와 같은 매체 금지는 그대로.</li>
+     *   <li>하루 여러 개 — 슬롯이 매체를 정한다(규칙 2). 밴딧은 그 매체의 <b>시작 틀</b>만 고르고, 같은 날 같은 매체가 다시 오면
+     *       예전처럼 다음 틀을 쓴다. 시작 틀 시드는 매체가 처음 나오는 슬롯 시드라 슬롯마다 다시 계산해도 같다.</li>
+     * </ul>
+     */
+    public static TemplateChoice choose(long groupId, LocalDate date, int slotNo, int dailyMissionCount,
+            Set<String> yesterdayMedia, Collection<MissionTemplate> pool, TemplateSampler sampler) {
         List<MissionTemplate> templates = pool.stream().distinct().sorted().toList();
         if (templates.isEmpty()) throw new IllegalArgumentException("Mission template pool is empty");
         List<String> mediaOrder = new ArrayList<>(MEDIA.stream()
                 .filter(media -> templates.stream().anyMatch(template -> template.media().equals(media))).toList());
         Collections.shuffle(mediaOrder, new Random(seed(groupId, date, 0)));
         if (dailyMissionCount == 1) {
+            if (sampler != null) {
+                List<MissionTemplate> candidates = templates.stream()
+                        .filter(template -> !yesterdayMedia.contains(template.media())).toList();
+                return pick(candidates.isEmpty() ? templates : candidates, seed(groupId, date, slotNo), sampler);
+            }
             String media = mediaOrder.stream().filter(candidate -> !yesterdayMedia.contains(candidate))
                     .findFirst().orElse(mediaOrder.getFirst());
             List<MissionTemplate> candidates = ofMedia(templates, media);
-            return candidates.get(new Random(seed(groupId, date, slotNo)).nextInt(candidates.size()));
+            return new TemplateChoice(candidates.get(new Random(seed(groupId, date, slotNo)).nextInt(candidates.size())),
+                    1.0 / candidates.size());
         }
         int position = (slotNo - 1) % mediaOrder.size();
         int round = (slotNo - 1) / mediaOrder.size();
         List<MissionTemplate> candidates = ofMedia(templates, mediaOrder.get(position));
         // 시작 틀은 그 매체가 처음 나오는 슬롯의 시드로 정한다 → 첫 바퀴는 예전 결과와 같다
-        int start = new Random(seed(groupId, date, position + 1)).nextInt(candidates.size());
-        return candidates.get((start + round) % candidates.size());
+        long startSeed = seed(groupId, date, position + 1);
+        if (sampler != null) {
+            TemplateChoice start = pick(candidates, startSeed, sampler);
+            int index = candidates.indexOf(start.template());
+            return new TemplateChoice(candidates.get((index + round) % candidates.size()), start.probability());
+        }
+        int start = new Random(startSeed).nextInt(candidates.size());
+        return new TemplateChoice(candidates.get((start + round) % candidates.size()), 1.0 / candidates.size());
+    }
+
+    private static TemplateChoice pick(List<MissionTemplate> candidates, long seed, TemplateSampler sampler) {
+        if (candidates.size() == 1) return new TemplateChoice(candidates.getFirst(), 1.0);
+        TemplateChoice choice = sampler.choose(candidates, seed);
+        if (choice == null || !candidates.contains(choice.template()))
+            throw new IllegalStateException("Template sampler chose a template outside the candidates");
+        return choice;
     }
 
     private static List<MissionTemplate> ofMedia(List<MissionTemplate> templates, String media) {

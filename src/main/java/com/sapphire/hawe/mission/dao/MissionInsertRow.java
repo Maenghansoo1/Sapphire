@@ -41,4 +41,11 @@ public class MissionInsertRow {
     public void setGenerationSource(String generationSource) { this.generationSource = generationSource; }
     public String getExperimentArm() { return experimentArm; }
     public void setExperimentArm(String experimentArm) { this.experimentArm = experimentArm; }
+    /** 틀을 고른 정책 RANDOM / BANDIT / FORCED 와 그때의 선택 확률(TODO_2/D4, 정책 비교용). */
+    private String templatePolicy;
+    private Double selectionProb;
+    public String getTemplatePolicy() { return templatePolicy; }
+    public void setTemplatePolicy(String templatePolicy) { this.templatePolicy = templatePolicy; }
+    public Double getSelectionProb() { return selectionProb; }
+    public void setSelectionProb(Double selectionProb) { this.selectionProb = selectionProb; }
 }
