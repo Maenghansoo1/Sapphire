@@ -12,6 +12,7 @@
 - 마이그레이션: `src/main/resources/db/migration/` 에 `V1`~`V4`(`V4__ai_mascot.sql` 까지). 새 파일(`V5__user_badges.sql`, 번호는 최신 확인)을 기본으로 추가.
 - 상태 값: `EARNED | MINTING | CONFIRMED | FAILED | ISSUED_OFFCHAIN` (BLOCKCHAIN_BADGES.md §8). 체인이 꺼져 있으면(`hawe.chain.enabled=false`) 새 업적은 `ISSUED_OFFCHAIN` 으로 저장되고, 체인을 켜면 C3 가 이를 `EARNED` → 발급 큐로 이어서 처리한다.
 - 멱등: `UNIQUE (user_id, badge_code)`. 반복 가능 배지(월간 개근 등)는 1차 범위 밖(결정 9) — 스키마에 `period` 컬럼을 **넣지 않는다**(필요해지면 마이그레이션으로 확장).
+- **대표 배지(결정 8 확정)**: 같은 그룹 멤버에게 **대표 배지 1개**를 보여 준다. 사용자가 직접 고르고, 고르지 않았으면 서버가 **가장 높은 등급(EPIC>RARE>COMMON), 동점이면 가장 최근 획득**을 자동 선정한다. 선택값은 `users.featured_badge_code VARCHAR(40) NULL`(새 마이그레이션에서 `users` 에 컬럼 추가)에 저장한다. 다른 멤버에게는 코드·이름·등급·이미지 키만 보이고 상태·체인 정보·획득 일시는 내려가지 않는다.
 - 초안 카탈로그(BLOCKCHAIN_BADGES.md §7): `FIRST_SUBMISSION`, `SUBMISSIONS_10/50/100`, `STREAK_7/30`, `PERFECT_MONTH`, `EARLY_BIRD_10`, `PHOTO_PERFECT_5`, `CROWD_FAVORITE`, `GROUP_100_DAYS`, `GROUP_1_YEAR`, `ALL_TEMPLATES`.
 
 ## Key Implementation Points
@@ -29,9 +30,10 @@
      UNIQUE (user_id, badge_code),
      INDEX (user_id, earned_at))
    ```
+   같은 마이그레이션에서 `ALTER TABLE users ADD COLUMN featured_badge_code VARCHAR(40) NULL`(대표 배지; FK 없음, 카탈로그 코드 값).
    FK 는 `users(id)`; 삭제는 서비스가 순서를 지킨다(D1). `badge_mint_jobs`·`user_chain_accounts` 는 C 단계에서 만든다(여기서 만들지 않음).
 2. **카탈로그**: `BadgeCatalog`(domain) — 항목 `BadgeDefinition(code, nameKo, descriptionKo, tier(COMMON/RARE/EPIC), imageKey, target(진행도 목표값, 예: 7), kind(EVENT|SCHEDULED))`. 이름·설명은 한국어, 이미지 키는 앱이 해석(메타데이터는 B3). 조회: `all()`, `byCode(code)`.
-3. **매퍼** `BadgeMapper`(dao + XML): `insertIgnore(userId, code, status, earnedAt)`(`INSERT IGNORE` → 영향 행 수로 "새로 획득" 판정), `findByUserId`, `findByUserIdAndCode`, `countByUser`. MyBatis 설정·XML 위치는 기존 매퍼 규칙을 따른다.
+3. **매퍼** `BadgeMapper`(dao + XML): `insertIgnore(userId, code, status, earnedAt)`(`INSERT IGNORE` → 영향 행 수로 "새로 획득" 판정), `findByUserId`, `findByUserIdAndCode`, `countByUser`, `updateFeaturedBadge(userId, codeOrNull)`(`users.featured_badge_code`; 소유하지 않은 코드 검증은 A4 서비스), `findFeaturedBadgesByUserIds(userIds)`(멤버 목록용 일괄 조회 — 선택값 + 자동 선정 후보를 한 번에, N+1 금지). MyBatis 설정·XML 위치는 기존 매퍼 규칙을 따른다.
 4. **서비스 뼈대** `BadgeAwardService.award(userId, code, earnedAt)`: 카탈로그에 없는 코드 거부, `insertIgnore` 결과가 1이면 "신규 획득" 반환(알림은 A4 에서 연결), 상태는 `chainEnabled ? EARNED : ISSUED_OFFCHAIN`. 설정 `hawe.chain.enabled`(기본 false)를 읽는 프로퍼티 클래스 `ChainProperties` 는 C 단계에서 확장하므로 여기서는 `enabled` 만.
 5. 도메인 객체 `UserBadge`(MyBatis 매핑), 상태 enum `BadgeStatus`.
 
@@ -39,7 +41,7 @@
 
 | 파일 | 변경 |
 |---|---|
-| `src/main/resources/db/migration/V5__user_badges.sql` (신규, 번호 확인) | 스키마 |
+| `src/main/resources/db/migration/V5__user_badges.sql` (신규, 번호 확인) | 스키마 + `users.featured_badge_code` |
 | `.../badge/domain/{BadgeDefinition,BadgeCatalog,BadgeStatus,UserBadge}.java` (신규) | 도메인 |
 | `.../badge/dao/BadgeMapper.java` + `resources/.../BadgeMapper.xml` (신규; 기존 매퍼 XML 위치 규칙 확인) | 저장 |
 | `.../badge/service/BadgeAwardService.java` (신규) | 수여 |
@@ -47,7 +49,7 @@
 | `application.properties` | `hawe.chain.enabled=false` 주석 포함 |
 | 테스트 | 아래 |
 
-기존 코드 수정 없음(탈퇴 삭제는 D1).
+기존 코드 수정 없음(탈퇴 삭제는 D1). `users` 도메인/매퍼의 SELECT 컬럼 목록은 건드리지 않는다(`featured_badge_code` 는 `BadgeMapper` 에서만 읽고 쓴다).
 
 ## Constraints
 
@@ -68,6 +70,7 @@
 - 매퍼: `insertIgnore` 신규/중복(영향 행 1/0), 사용자별 조회 정렬, 유니크 위반 없음.
 - `BadgeAwardService`: 신규 획득 true / 중복 false / 미등록 코드 거부 / 체인 off 시 상태 `ISSUED_OFFCHAIN`, on 시 `EARNED`.
 - 카탈로그 일관성: 코드 중복 없음, `target`·tier 값 유효.
+- 대표 배지: 선택값 저장/해제, 자동 선정 규칙(등급 우선 → 최근 획득, 획득 0건이면 없음), 일괄 조회가 사용자 수와 무관하게 쿼리 수 일정.
 
 ## Validation Steps
 

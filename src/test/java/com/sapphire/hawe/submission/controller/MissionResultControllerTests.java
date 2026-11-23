@@ -79,6 +79,7 @@ class MissionResultControllerTests {
                 jdbc.update("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", groupId, member);
                 groups.leaveGroup(owner, groupId, null);
             }
+            jdbc.update("DELETE FROM user_badges WHERE user_id IN (?, ?)", owner, member);
             jdbc.update("DELETE FROM users WHERE id IN (?, ?)", owner, member);
         }
     }

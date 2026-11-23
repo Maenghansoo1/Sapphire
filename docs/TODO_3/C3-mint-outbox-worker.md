@@ -84,7 +84,7 @@
 
 ## Validation Steps
 
-`./mvnw test` 통과. 로컬 노드(Anvil) + C1 통합 프로필로 실제 민팅이 `CONFIRMED` 되는지 1건 확인(결과 첨부). 못 했으면 "실체인 미검증".
+`./mvnw test` 통과. 로컬 노드(Hardhat node) + C1 통합 프로필로 실제 민팅이 `CONFIRMED` 되는지 1건 확인(결과 첨부). 못 했으면 "실체인 미검증".
 
 ## Potential Merge Conflicts
 

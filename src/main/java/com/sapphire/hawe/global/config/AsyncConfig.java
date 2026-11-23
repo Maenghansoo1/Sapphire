@@ -34,4 +34,15 @@ public class AsyncConfig {
         executor.setRejectedExecutionHandler((task, pool) -> log.warn("Insight queue full; generation discarded"));
         return executor;
     }
+
+    @Bean("badgeExecutor")
+    public ThreadPoolTaskExecutor badgeExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("badge-");
+        executor.setRejectedExecutionHandler((task, pool) -> log.warn("Badge queue full; evaluation discarded"));
+        return executor;
+    }
 }

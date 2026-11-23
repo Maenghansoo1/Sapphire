@@ -16,12 +16,12 @@
 
 | ID | 파일 | 내용 | 규모 | 선행 |
 |---|---|---|---|---|
-| A1 | `A1-schema-and-catalog.md` | `user_badges` 스키마, 업적 카탈로그(코드/설정), 도메인 | M | — |
+| A1 | `A1-schema-and-catalog.md` | `user_badges` 스키마, 업적 카탈로그(코드/설정), 도메인, 대표 배지 컬럼 | M | — |
 | A2 | `A2-event-evaluator.md` | 제출 이벤트 기반 판정(첫 제출·누적·얼리버드·전 틀) | M | A1 |
 | A3 | `A3-scheduled-evaluator.md` | 일/월 스케줄 판정(스트릭·개근·인기·기념일·찰떡) + 누락 보정 스윕 | M | A1 (A2 와 로직 공유) |
-| A4 | `A4-badge-api-and-notification.md` | `GET /api/me/badges`, `/api/badges/catalog`(진행도), `BADGE_EARNED` 알림 | M | A1, A2 |
+| A4 | `A4-badge-api-and-notification.md` | `GET /api/me/badges`, `/api/badges/catalog`(진행도), `BADGE_EARNED` 알림, 대표 배지 설정 API·멤버 목록 노출 | M | A1, A2 |
 | A5 | `A5-backfill-job.md` | 기존 사용자 소급 발급 잡 | S | A2, A3 |
-| A6 | `A6-android-achievements-screen.md` | Android 업적 화면 | M | A4 |
+| A6 | `A6-android-achievements-screen.md` | Android 업적 화면 + 대표 배지 선택·멤버 프로필 노출 | M | A4 |
 | A7 | `A7-ios-achievements-port.md` | iOS 업적 화면 이식 | M | A6, Mac |
 | B1 | `B1-contract-and-tests.md` | 컨트랙트 + 단위 테스트(`chain/`) | M | 결정 1·7 |
 | B2 | `B2-deploy-scripts.md` | 로컬/테스트넷 배포 스크립트, `deployments/*.json` | S | B1 |
@@ -46,21 +46,23 @@
 
 BLOCKCHAIN_BADGES.md §15 의 순서(1. 오프체인 업적, 2. 컨트랙트, 3. 발급 워커, 4. 탈퇴·운영)와 같다. **결정 10**(처음엔 `ISSUED_OFFCHAIN` 으로 배포) 기본값을 따른다.
 
-## 먼저 정할 결정 (BLOCKCHAIN_BADGES.md §11)
+## 확정된 결정 (2026-11-23, BLOCKCHAIN_BADGES.md §11)
 
-| # | 질문 | 영향 단위 | 기본값 |
+11개 모두 확정했다. 기본값 제안과 **다른 것은 3번(지각 제외)과 8번(대표 배지를 멤버에게 노출)** 이다.
+
+| # | 질문 | 영향 단위 | 확정 |
 |---|---|---|---|
-| 1 | 체인/네트워크 | B1, B2, C1 | 퍼블릭 EVM 테스트넷(Base Sepolia 또는 Polygon Amoy) |
-| 2 | 사용자 주소 방식: (a) 무작위 주소+키 폐기 / (b) xpub 파생 / (c) 시드 보관 HD(원안) | C2, D1 | **(a) 권장** — 배지가 양도 불가라 사용자 주소는 서명할 일이 없어 시드 보관이 불필요. 원안(c)과 달라지므로 **확인 필요**. 어느 쪽이든 API 비노출 |
-| 3 | 스트릭 기준(하루 1개라도? 지각 포함?) | A3 | 하루 1개라도, 지각 포함, `mission_date` 기준 |
+| 1 | 체인/네트워크 | B1, B2, C1 | **Base Sepolia 테스트넷** (메인넷은 별도 후속, §17) |
+| 2 | 사용자 주소 방식 | C2, D1 | **(a) 무작위 주소 + 키 폐기.** 시드·xpub 보관 없음. 주소는 API 비노출 (원안 HD 파생에서 변경) |
+| 3 | 스트릭 기준 | A3 | **하루 1개라도 제때 제출, 지각 제출은 제외**, `mission_date` 기준 (제안: 지각 포함 → 변경) |
 | 4 | 어뷰징(1인 그룹 제외) | A2, A3 | 멤버 ≥ 2 인 그룹의 제출만 카운트 |
 | 5 | 기존 사용자 소급 발급 | A5 | 소급한다, `earned_at` 은 실제 달성일 |
-| 6 | 메타데이터/이미지 호스팅 | B3 | 서버 정적 경로(IPFS 제외) |
-| 7 | 컨트랙트 툴체인 | B1 | Foundry 또는 Hardhat — 팀이 익숙한 쪽 |
-| 8 | 다른 멤버에게 내 배지 공개 | A4, A6 | 1차 본인에게만 |
+| 6 | 메타데이터/이미지 호스팅 | B3 | 서버 정적 경로(IPFS 제외, 필요해지면 고정) |
+| 7 | 컨트랙트 툴체인 | B1, B2 | **Hardhat** (Node.js 필요) |
+| 8 | 다른 멤버에게 내 배지 공개 | A1, A4, A6, A7 | **멤버 목록/프로필에 대표 배지 1개 노출.** 사용자가 직접 고르고, 안 고르면 최고 등급(동점 시 최근) 자동. 전체 목록은 본인만. 상태·체인 정보는 비노출 (제안: 본인만 → 변경) |
 | 9 | 반복 가능 배지 | A1 | 1차 1회성만 |
-| 10 | 온체인 민팅 ON 시점 | D2 | 먼저 `ISSUED_OFFCHAIN` 배포 → 체인은 다음 배포 |
-| 11 | web3j 와 Java 25 호환 | C1 | 구현 시 확인, 비호환이면 JSON-RPC 직접 호출/소형 별도 서비스 |
+| 10 | 온체인 민팅 ON 시점 | D2 | 먼저 `ISSUED_OFFCHAIN` 배포(A묶음) → 체인(B·C·D)은 다음 배포 |
+| 11 | web3j 와 Java 25 호환 | C1 | C1 에서 확인, 비호환이면 JSON-RPC 직접 호출/소형 별도 서비스 |
 
 ## 코드로 확인한 현재 상태 (계획의 전제)
 
@@ -79,6 +81,8 @@ BLOCKCHAIN_BADGES.md §15 의 순서(1. 오프체인 업적, 2. 컨트랙트, 3.
 | `WithdrawService`/`WithdrawMapper` | D1 | 다른 탈퇴 로직 변경과 순차 |
 | `AsyncConfig` | C3 (+ TODO_2 B5/D3) | 실행기 빈 이름 충돌 주의 |
 | `NotificationType` / 알림 화면 | A4 | 앱 파싱 확인 후 enum 추가 |
+| `GroupMemberResponse`·그룹 멤버 조회, 앱 멤버 모델 | A4, A6, A7 | 대표 배지 필드 추가(nullable). 다른 그룹 작업과 순차 |
+| `users` 테이블 | A1 | `featured_badge_code` 컬럼 추가(마이그레이션 번호 충돌 주의) |
 | `SubmissionCreatedEvent` 리스너 | A2 | 기존 리스너(마스코트·알림·비전)와 독립, 순서 의존 금지 |
 | Android 마이페이지/내비게이션 | A6 | 다른 Android 작업과 순차 |
 
@@ -100,6 +104,7 @@ BLOCKCHAIN_BADGES.md §15 의 순서(1. 오프체인 업적, 2. 컨트랙트, 3.
 
 ## 사용자가 직접 해야 하는 일 (코드 밖)
 
-- 결정 1~11 확정.
+- ~~결정 1~11 확정~~ (2026-11-23 완료).
+- Hardhat 용 Node.js 설치(B1 전).
 - RPC 제공자 계정/키 발급, 테스트넷 faucet 충전, 시크릿 매니저에 시드·발급 키 등록(저장소 비커밋).
 - 배지 이름·이미지 디자인(Figma 확정 전엔 임시), 개인정보 처리방침 문구 확정, 스토어 심사 정책·법적 검토 여부 결정.

@@ -70,6 +70,7 @@ public class WithdrawService {
         withdraw.deleteMySubmissions(userId);
         withdraw.deleteMyPokes(userId);
         withdraw.deleteMyNotifications(userId);
+        withdraw.deleteMyBadges(userId);
         if (withdraw.deleteUserById(userId) == 0) throw new BusinessException(TokenErrorCode.INVALID_TOKEN);
 
         Runnable cleanup = () -> {

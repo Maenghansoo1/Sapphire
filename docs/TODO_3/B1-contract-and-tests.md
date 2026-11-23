@@ -1,6 +1,6 @@
 # B1. 스마트 컨트랙트 — 양도 불가 배지(ERC-721 + ERC-5192) 와 테스트
 
-> 범위: 저장소 신규 디렉터리 `chain/`(Solidity). 서버·앱 코드 변경 없음. **선행: 결정 1(체인), 결정 7(툴체인).** 근거: `docs/FEATURE/BLOCKCHAIN_BADGES.md` §5·§14. 테스트: 선택한 툴체인(Foundry `forge test` 또는 Hardhat `npx hardhat test`).
+> 범위: 저장소 신규 디렉터리 `chain/`(Solidity). 서버·앱 코드 변경 없음. **확정: 결정 1(Base Sepolia 테스트넷), 결정 7(Hardhat).** 근거: `docs/FEATURE/BLOCKCHAIN_BADGES.md` §5·§14. 테스트: `npx hardhat test`(Node.js 필요, 버전은 `chain/README.md` 에 고정).
 
 ## Goal
 
@@ -35,7 +35,7 @@
 |---|---|
 | `chain/contracts/HaweBadge.sol` (신규) | 컨트랙트 |
 | `chain/test/*` (신규) | 테스트 |
-| `chain/{foundry.toml 또는 hardhat.config.*, package.json 또는 remappings}` (신규) | 툴체인 설정(버전 고정) |
+| `chain/{hardhat.config.*, package.json}` (신규) | Hardhat 설정(버전 고정) |
 | `chain/README.md` (신규) | 사용법 |
 | `.gitignore` | `chain/node_modules`, `chain/out`, `chain/cache`, `.env` 등 빌드 산출물 |
 
@@ -43,7 +43,7 @@
 
 ## Constraints
 
-- 개인키·시드·RPC 키를 저장소에 넣지 않는다. 테스트는 툴체인 내장 로컬 체인(Anvil/Hardhat network)만 사용.
+- 개인키·시드·RPC 키를 저장소에 넣지 않는다. 테스트는 툴체인 내장 로컬 체인(Hardhat network)만 사용.
 - OpenZeppelin 코드를 복사·수정하지 않는다(의존성으로 사용). 새 암호/보안 로직 작성 금지.
 - 컨트랙트에 사용자 식별·개인정보 필드를 넣지 않는다.
 - 업그레이드 가능(프록시) 구조는 만들지 않는다(복잡도 대비 이득 작음).
@@ -62,7 +62,7 @@
 ## Tests Required
 
 - 발급(토큰 ID 증가, 이벤트 `BadgeIssued`/`Locked`, `locked()==true`, `badgeCodeOf`/`issuedAtOf`), 중복 revert, 비-MINTER revert, 양도·승인 전부 revert, `burn` 권한과 재발급, 열거(발급 3개 → 소각 1개 → 남은 2개), `supportsInterface`(ERC-721, ERC-5192, AccessControl), `setBaseURI` 권한, `tokenURI` 포맷.
-- 퍼징/속성(선택, Foundry 이면): "어떤 호출 순서에서도 소유자 이동 불가" 불변식.
+- (선택) "어떤 호출 순서에서도 소유자 이동 불가" 불변식을 무작위 호출 순서 테스트로 확인(Hardhat 에는 내장 퍼저가 없으므로 반복 테스트로 대체).
 
 ## Validation Steps
 

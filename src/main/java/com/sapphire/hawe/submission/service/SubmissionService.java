@@ -21,6 +21,7 @@ import com.sapphire.hawe.submission.dao.SubmissionInsertRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
 import com.sapphire.hawe.submission.domain.SubmissionCreatedEvent;
+import com.sapphire.hawe.submission.domain.SubmissionRecordedEvent;
 import com.sapphire.hawe.submission.dto.SubmissionResponse;
 import com.sapphire.hawe.submission.dto.ReactionSummary;
 import java.io.IOException;
@@ -153,6 +154,8 @@ public class SubmissionService {
             if (key != null) storage.delete(key);
             throw new BusinessException(SubmissionErrorCode.ALREADY_SUBMITTED);
         }
+        try { events.publishEvent(new SubmissionRecordedEvent(row.getId(), userId)); }
+        catch (RuntimeException e) { log.warn("Badge event failed for submission {}", row.getId(), e); }
         if (key != null && ("PHOTO_NOW".equals(template) || "PHOTO_COLOR".equals(template)
                 || "DRAW_SKETCH".equals(template) || "DRAW_A_TO_B".equals(template))) {
             try { events.publishEvent(new SubmissionCreatedEvent(row.getId(), template, aiGuess)); }

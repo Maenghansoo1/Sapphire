@@ -82,6 +82,7 @@ class WithdrawServiceTests {
             order.verify(mapper).deleteMySubmissions(1L);
             order.verify(mapper).deleteMyPokes(1L);
             order.verify(mapper).deleteMyNotifications(1L);
+            order.verify(mapper).deleteMyBadges(1L);
             order.verify(mapper).deleteUserById(1L);
             for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) sync.afterCommit();
             verify(storage).delete("submissions/me.jpg");

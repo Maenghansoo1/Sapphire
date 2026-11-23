@@ -66,6 +66,7 @@ class SubmissionIntegrationTests {
                     .errorCode().code());
         } finally {
             if (groupId != null) groups.leaveGroup(userId, groupId, null);
+            jdbc.update("DELETE FROM user_badges WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
     }
@@ -101,6 +102,7 @@ class SubmissionIntegrationTests {
                 jdbc.update("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", groupId, member);
                 groups.leaveGroup(owner, groupId, null);
             }
+            jdbc.update("DELETE FROM user_badges WHERE user_id IN (?, ?)", owner, member);
             jdbc.update("DELETE FROM users WHERE id IN (?, ?)", owner, member);
         }
     }

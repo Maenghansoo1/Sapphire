@@ -17,6 +17,7 @@ A6 과 같은 업적 화면(그리드·진행도·상세·상태 문구·탐색�
 1. 모델(`Codable`), 저장소 메서드, 뷰모델.
 2. 업적 화면 + 상세 시트, 상태 문구(과장 금지), "블록체인에서 확인" 은 `SFSafariViewController`/`openURL`.
 3. 마이페이지 진입 항목, 알림 `badge` 타입 표시.
+3-1. 대표 배지(결정 8 확정): 업적 상세에서 설정/해제(`PUT /api/me/badges/featured`), 그룹 멤버 모델의 `featuredBadge`(nullable) 디코딩 + 닉네임 옆 아이콘. A6 의 3-1·3-2 와 같은 규칙.
 4. 임시 에셋은 에셋 카탈로그 한 곳에 모아 `임시` 표기.
 
 ## Files / Functions to Change

@@ -9,6 +9,7 @@ import com.sapphire.hawe.submission.dao.SubmissionInsertRow;
 import com.sapphire.hawe.submission.dao.SubmissionMapper;
 import com.sapphire.hawe.submission.dao.SubmissionRow;
 import com.sapphire.hawe.submission.domain.SubmissionCreatedEvent;
+import com.sapphire.hawe.submission.domain.SubmissionRecordedEvent;
 import com.sapphire.hawe.submission.dto.SubmissionResponse;
 import com.sapphire.hawe.reaction.dao.ReactionMapper;
 import com.sapphire.hawe.comment.dao.CommentMapper;
@@ -176,17 +177,26 @@ class SubmissionServiceTests {
         submitForEvent("PHOTO_GALLERY");
         submitForEvent("DRAW_SKETCH");
         submitForEvent("TEXT_FILL_BLANK");
-        ArgumentCaptor<SubmissionCreatedEvent> emitted = ArgumentCaptor.forClass(SubmissionCreatedEvent.class);
-        verify(events, times(3)).publishEvent(emitted.capture());
+        ArgumentCaptor<Object> emitted = ArgumentCaptor.forClass(Object.class);
+        verify(events, times(8)).publishEvent(emitted.capture());
+        verify(events, times(5)).publishEvent(new SubmissionRecordedEvent(99L, 3L));
         assertEquals(List.of(new SubmissionCreatedEvent(99L, "PHOTO_NOW", null),
                 new SubmissionCreatedEvent(99L, "PHOTO_COLOR", null),
-                new SubmissionCreatedEvent(99L, "DRAW_SKETCH", null)), emitted.getAllValues());
+                new SubmissionCreatedEvent(99L, "DRAW_SKETCH", null)), emitted.getAllValues().stream()
+                .filter(SubmissionCreatedEvent.class::isInstance).toList());
     }
 
     @Test void eventPublicationFailureDoesNotFailSubmission() {
         doThrow(new IllegalStateException("event bus failed")).when(events).publishEvent(any(SubmissionCreatedEvent.class));
+        doThrow(new IllegalStateException("badge event failed")).when(events).publishEvent(any(SubmissionRecordedEvent.class));
         SubmissionResponse created = assertDoesNotThrow(() -> submitForEvent("PHOTO_NOW"));
         assertEquals(99L, created.id());
+    }
+
+    @Test void duplicateInsertDoesNotPublishRecordedEvent() {
+        doThrow(new DuplicateKeyException("duplicate")).when(submissions).insert(any());
+        assertEquals("ALREADY_SUBMITTED", error(fields("text", "hello"), new LinkedMultiValueMap<>()));
+        verify(events, never()).publishEvent(any(SubmissionRecordedEvent.class));
     }
 
     @Test void drawingAcceptsOptionalGuessButPhotoRejectsIt() {

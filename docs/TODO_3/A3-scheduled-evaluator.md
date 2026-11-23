@@ -9,8 +9,8 @@
 ## Findings
 
 - 스트릭·개근은 "닫힌 미션" 기준이 필요하다(B9/B11 과 같은 정의: 마감이 지났고 같은 슬롯에 다음 미션이 열렸거나 없어진 슬롯).
-- **결정 3 기본값**: 스트릭은 하루에 제출이 하나라도 있으면 그날을 센다(하루 여러 미션이어도), 지각 제출 포함(도장 기준과 동일), 날짜는 서버 시간대 일관의 **`missions.mission_date`**.
-- 도장은 `SUBMISSIONS` 존재 여부로 계산한다(`CLAUDE.md`). 스트릭 판정도 같은 입력을 쓴다.
+- **결정 3 확정 (2026-11-23)**: 스트릭은 하루에 **제때(마감 안에) 낸 제출이 하나라도** 있으면 그날을 센다(하루 여러 미션이어도). **지각 제출(`submissions.is_late = TRUE`)은 스트릭에서 제외**한다 — 지각 제출만 있는 날은 연속이 끊긴다. 날짜는 서버 시간대 일관의 **`missions.mission_date`**.
+- 도장은 `SUBMISSIONS` 존재 여부와 `is_late` 로 계산한다(`CLAUDE.md`, 지각 도장 구분). 스트릭은 도장 중 "제때 낸 날"과 같은 기준이다. (`SUBMISSIONS` 존재만 보던 초안과 달라졌으므로 `is_late` 컬럼을 확인하고 사용한다.) 다른 업적(누적 제출 등)의 지각 처리는 변경 없음: 지각 제출도 센다. `EARLY_BIRD_10` 은 원래 지각이 아닌 제출만 센다.
 - 데이터: `missions`(`mission_date`, `group_id`, `slot_no`, `deadline_at`), `submissions`, `reactions`, `comments`, `groups`(`created_at`, `start_date`, `relation_type`), `submission_ai_reviews`(찰떡 판정; 점수는 API 비노출 규칙 → **개수만** 센다. 판정은 `badge='PERFECT_FIT'` 같은 저장 컬럼이 있는지 확인; 없으면 `fit_score ≥ 템플릿별 perfect 임계` 를 `hawe.vision.*` 설정으로 계산 — 구현 시 컬럼을 확인하고 보고서에 기록).
 - 스케줄러 선례: `mission/service/MissionScheduler.java`(`@Scheduled`). 시간대 유틸 `SeoulTime`(global) 사용.
 - 규칙(초안):
@@ -51,7 +51,7 @@
 
 ## Edge Cases
 
-- 스트릭: 자정 경계, 하루에 여러 미션 제출(1일로), 그룹 여러 개에서 같은 날 제출(1일), 지각 포함, 하루 건너뜀 → 리셋.
+- 스트릭: 자정 경계, 하루에 여러 미션 제출(1일로), 그룹 여러 개에서 같은 날 제출(1일), **지각 제출만 있는 날은 연속 끊김**(제때+지각 섞인 날은 인정), 하루 건너뜀 → 리셋.
 - 월 개근: 월 중간에 그룹 가입(가입 전 미션은 제외 — "미션이 열릴 때 있던 사람" 기준 B9 정의), 월 중 미션이 0개인 그룹 제외.
 - 기념일: 2월 29일 시작은 평년 2월 28일(`EXPERIMENT_TOPIC.md`/`AnniversaryResolver` 규칙과 일치시킬 것 — 기존 `AnniversaryResolver` 재사용 검토).
 - 인기 글 20개 경계, 자기 반응/댓글을 세는지 → 본인 반응·댓글은 제외(어뷰징 방지).

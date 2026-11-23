@@ -78,6 +78,9 @@ public interface WithdrawMapper {
     @Delete("DELETE FROM notifications WHERE from_user_id = #{userId} OR to_user_id = #{userId}")
     void deleteMyNotifications(@Param("userId") Long userId);
 
+    @Delete("DELETE FROM user_badges WHERE user_id = #{userId}")
+    void deleteMyBadges(@Param("userId") Long userId);
+
     @Delete("DELETE FROM users WHERE id = #{userId}")
     int deleteUserById(@Param("userId") Long userId);
 }

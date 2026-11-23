@@ -8,7 +8,7 @@
 
 ## Findings
 
-- **Java 25 호환 확인이 첫 작업이다(결정 11).** web3j 등 라이브러리가 Java 25·Spring Boot 4.1 과 호환되는지, 의존성(BouncyCastle 등)이 충돌하지 않는지 확인한다. 비호환/무거우면 대안: ① JSON-RPC 를 `RestClient` 로 직접 호출하고 서명만 작은 라이브러리(BouncyCastle 기반)로 구현 ② 별도 소형 서비스. 선택 근거와 의존성 추가 목록을 보고서에 기록하고, **새 의존성은 이 단위에서만 추가**한다.
+- **Java 25 호환 확인이 첫 작업이다(결정 11 확정: 이 단계에서 확인하고, 안 되면 우회).** web3j 등 라이브러리가 Java 25·Spring Boot 4.1 과 호환되는지, 의존성(BouncyCastle 등)이 충돌하지 않는지 확인한다. 비호환/무거우면 대안: ① JSON-RPC 를 `RestClient` 로 직접 호출하고 서명만 작은 라이브러리(BouncyCastle 기반)로 구현 ② 별도 소형 서비스. 선택 근거와 의존성 추가 목록을 보고서에 기록하고, **새 의존성은 이 단위에서만 추가**한다.
 - 컨트랙트 인터페이스(B1): `mint(address, string) → tokenId`, `burn(uint256)`, `has(address, string)`, `tokensOfOwner/balanceOf/tokenOfOwnerByIndex`, 이벤트 `BadgeIssued(to, tokenId, badgeCode, issuedAt)`, `BadgeBurned`.
 - 설정 선례: `MissionAiProperties`(`hawe.mission.ai.*`, 타임아웃·`usable()`), `hawe.vision.*`. 같은 스타일로 `hawe.chain.*`.
 - 발급 키(MINTER) 개인키는 환경변수/시크릿 매니저에서만 로드. 사용자 지갑 키는 서버에 필요 없다(C2).
@@ -70,7 +70,7 @@
 - `FakeBadgeChainClient` 시나리오 테스트(성공/중복 revert/지연/타임아웃).
 - 영수증 로그 파싱(`BadgeIssued`) 단위 테스트(고정 로그 샘플).
 - 설정 검증(`usable()`, 체인 ID 불일치), 예외 분류 매핑, 로그 마스킹 테스트(키/URL 비노출).
-- (선택, 별도 프로필) 로컬 노드(Anvil/Hardhat)에 B2 로 배포한 컨트랙트와 실제 민팅·소각·영수증 확인.
+- (선택, 별도 프로필) 로컬 노드(Hardhat node)에 B2 로 배포한 컨트랙트와 실제 민팅·소각·영수증 확인.
 
 ## Validation Steps
 

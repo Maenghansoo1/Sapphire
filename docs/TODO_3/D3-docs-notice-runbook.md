@@ -9,7 +9,7 @@
 ## Findings
 
 - 갱신 대상 문서: `docs/BACKEND/BACKEND_DB.md`(테이블: `user_badges`, `badge_mint_jobs`, `user_chain_accounts`, `chain_burn_jobs`, 삭제 순서), `docs/BACKEND/API_DESIGN.md`/`MISSIONS_API.md` 형식의 API 절(`GET /api/me/badges`, `GET /api/badges/catalog`, `GET /badges/meta/{code}.json`, 내부 `/internal/badges/*`), `docs/FEATURE/PROJECT_OVERVIEW.md`(기능 소개·AI/체인 역할 원칙), `docs/FEATURE/BLOCKCHAIN_BADGES.md`(상태를 "설계 초안"에서 "구현됨"으로, 구현과 달라진 점 정정).
-- 구현 중 달라질 가능성이 큰 곳: 사용자 주소 할당 방식(C2: 키 폐기 방식 vs HD 파생), 라이브러리 선택(C1), 알림 타입 처리(A4), 마이그레이션 방식, 상태 정규화 이름. 문서는 **실제 구현**을 따른다.
+- 구현 중 달라질 가능성이 큰 곳: 라이브러리 선택(C1; 주소 할당은 결정 2 로 "무작위 주소+키 폐기" 확정), 알림 타입 처리(A4), 마이그레이션 방식, 상태 정규화 이름. 문서는 **실제 구현**을 따른다.
 - 정직한 표현 규칙(BLOCKCHAIN_BADGES.md §2): 블록체인은 발급 기록의 변조 방지·이식 가능한 증명을 주고, **판정·발급 주체는 서버**라는 점을 숨기지 않는다. "탈중앙 보증"·"영구 보관" 같은 과장 금지.
 - 처리방침/약관 문구 확정은 팀의 몫(초안만 제공). 스토어 정책 확인은 사용자 작업.
 
