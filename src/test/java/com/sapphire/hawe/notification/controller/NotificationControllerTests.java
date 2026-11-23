@@ -65,6 +65,19 @@ class NotificationControllerTests {
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/notifications/unread-count").header("Authorization", auth))
                 .andExpect(jsonPath("$.unreadCount").value(0));
+        notifications.insertBadge(receiver, "FIRST_SUBMISSION", now.plusSeconds(1));
+        mvc.perform(get("/api/notifications").header("Authorization", auth))
+                .andExpect(jsonPath("$.totalElements").value(2));
+        mvc.perform(get("/api/notifications/unread-count").header("Authorization", auth))
+                .andExpect(jsonPath("$.unreadCount").value(0));
+        mvc.perform(get("/api/notifications").header("Authorization", auth).param("includeBadge", "true"))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.content[0].type").value("badge"))
+                .andExpect(jsonPath("$.content[0].badgeCode").value("FIRST_SUBMISSION"))
+                .andExpect(jsonPath("$.content[0].groupId").isEmpty());
+        mvc.perform(get("/api/notifications/unread-count").header("Authorization", auth)
+                .param("includeBadge", "true"))
+                .andExpect(jsonPath("$.unreadCount").value(1));
     }
 
     private Long user(String nickname) {

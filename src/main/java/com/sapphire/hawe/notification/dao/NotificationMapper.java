@@ -18,27 +18,36 @@ public interface NotificationMapper {
             @Param("type") String type, @Param("groupId") Long groupId, @Param("missionId") Long missionId,
             @Param("submissionId") Long submissionId, @Param("createdAt") LocalDateTime createdAt);
 
+    @Insert("INSERT INTO notifications (to_user_id, type, payload, created_at) "
+            + "VALUES (#{toUserId}, 'badge', #{badgeCode}, #{createdAt})")
+    void insertBadge(@Param("toUserId") Long toUserId, @Param("badgeCode") String badgeCode,
+            @Param("createdAt") LocalDateTime createdAt);
+
     @Select("SELECT n.id, n.type, n.group_id, g.name AS group_name, n.from_user_id, "
             + GroupMemberMapper.DISPLAY_NICKNAME + ", " + GroupMemberMapper.DISPLAY_CHARACTER + ", "
             + GroupMemberMapper.DISPLAY_IMAGE + ", n.mission_id, n.submission_id, "
-            + "n.is_read AS `read`, n.created_at FROM notifications n "
-            + "JOIN `groups` g ON g.id=n.group_id "
+            + "n.is_read AS `read`, n.created_at, "
+            + "CASE WHEN n.type='badge' THEN n.payload ELSE NULL END AS badge_code FROM notifications n "
+            + "LEFT JOIN `groups` g ON g.id=n.group_id "
             + "LEFT JOIN users u ON u.id=n.from_user_id "
             + "LEFT JOIN characters c ON c.id=u.character_id "
             + "LEFT JOIN group_members gm ON gm.group_id=n.group_id AND gm.user_id=n.from_user_id "
             + GroupMemberMapper.GROUP_CHARACTER_JOIN
-            + "WHERE n.to_user_id=#{userId} ORDER BY n.created_at DESC, n.id DESC "
+            + "WHERE n.to_user_id=#{userId} AND (g.id IS NOT NULL OR n.type='badge') "
+            + "AND (#{includeBadge} OR n.type!='badge') ORDER BY n.created_at DESC, n.id DESC "
             + "LIMIT #{limit} OFFSET #{offset}")
     List<NotificationRow> findPage(@Param("userId") Long userId, @Param("offset") long offset,
-            @Param("limit") int limit);
+            @Param("limit") int limit, @Param("includeBadge") boolean includeBadge);
 
-    @Select("SELECT COUNT(*) FROM notifications n JOIN `groups` g ON g.id=n.group_id "
-            + "WHERE n.to_user_id=#{userId}")
-    long count(@Param("userId") Long userId);
+    @Select("SELECT COUNT(*) FROM notifications n LEFT JOIN `groups` g ON g.id=n.group_id "
+            + "WHERE n.to_user_id=#{userId} AND (g.id IS NOT NULL OR n.type='badge') "
+            + "AND (#{includeBadge} OR n.type!='badge')")
+    long count(@Param("userId") Long userId, @Param("includeBadge") boolean includeBadge);
 
-    @Select("SELECT COUNT(*) FROM notifications n JOIN `groups` g ON g.id=n.group_id "
-            + "WHERE n.to_user_id=#{userId} AND n.is_read=0")
-    long countUnread(@Param("userId") Long userId);
+    @Select("SELECT COUNT(*) FROM notifications n LEFT JOIN `groups` g ON g.id=n.group_id "
+            + "WHERE n.to_user_id=#{userId} AND n.is_read=0 AND (g.id IS NOT NULL OR n.type='badge') "
+            + "AND (#{includeBadge} OR n.type!='badge')")
+    long countUnread(@Param("userId") Long userId, @Param("includeBadge") boolean includeBadge);
 
     @Update("UPDATE notifications SET is_read=1 WHERE id=#{id} AND to_user_id=#{userId}")
     int markRead(@Param("id") Long id, @Param("userId") Long userId);

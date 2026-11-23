@@ -15,6 +15,7 @@ public class NotificationRow {
     private Long submissionId;
     private boolean isRead;
     private LocalDateTime createdAt;
+    private String badgeCode;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -40,4 +41,6 @@ public class NotificationRow {
     public void setRead(boolean read) { isRead = read; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getBadgeCode() { return badgeCode; }
+    public void setBadgeCode(String badgeCode) { this.badgeCode = badgeCode; }
 }

@@ -16,7 +16,7 @@ public final class BadgeCatalog {
 		badge("STREAK_30", "30일 연속", "30일 연속 제때 미션을 제출했어요.", BadgeTier.RARE, 30, BadgeKind.SCHEDULED),
 		badge("PERFECT_MONTH", "한 달 개근", "한 달 동안 모든 미션을 제출했어요.", BadgeTier.EPIC, 1, BadgeKind.SCHEDULED),
 		badge("EARLY_BIRD_10", "빠른 제출 10회", "발행 후 1시간 안에 10회 제출했어요.", BadgeTier.RARE, 10, BadgeKind.EVENT),
-		badge("PHOTO_PERFECT_5", "찰떡 사진 5회", "찰떡 사진 배지를 5회 받았어요.", BadgeTier.RARE, 5, BadgeKind.EVENT),
+		badge("PHOTO_PERFECT_5", "찰떡 사진 5회", "찰떡 사진 배지를 5회 받았어요.", BadgeTier.RARE, 5, BadgeKind.SCHEDULED),
 		badge("CROWD_FAVORITE", "인기 게시물", "한 게시물에 반응과 댓글을 합쳐 20개를 받았어요.", BadgeTier.RARE, 20, BadgeKind.SCHEDULED),
 		badge("GROUP_100_DAYS", "그룹 100일", "그룹이 100일을 맞았어요.", BadgeTier.RARE, 100, BadgeKind.SCHEDULED),
 		badge("GROUP_1_YEAR", "그룹 1주년", "그룹이 1주년을 맞았어요.", BadgeTier.EPIC, 365, BadgeKind.SCHEDULED),

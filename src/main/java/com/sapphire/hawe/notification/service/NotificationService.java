@@ -1,5 +1,7 @@
 package com.sapphire.hawe.notification.service;
 
+import com.sapphire.hawe.badge.domain.BadgeAwardedEvent;
+import com.sapphire.hawe.badge.domain.BadgeCatalog;
 import com.sapphire.hawe.comment.domain.CommentCreatedEvent;
 import com.sapphire.hawe.global.dto.PageResponse;
 import com.sapphire.hawe.global.exception.BusinessException;
@@ -30,18 +32,18 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<NotificationResponse> list(Long userId, int page, int size) {
+    public PageResponse<NotificationResponse> list(Long userId, int page, int size, boolean includeBadge) {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(100, size));
-        long total = notifications.count(userId);
-        List<NotificationResponse> content = notifications.findPage(userId, (long) safePage * safeSize, safeSize)
+        long total = notifications.count(userId, includeBadge);
+        List<NotificationResponse> content = notifications.findPage(userId, (long) safePage * safeSize, safeSize, includeBadge)
                 .stream().map(this::response).toList();
         return PageResponse.of(content, safePage, safeSize, total);
     }
 
     @Transactional(readOnly = true)
-    public UnreadCountResponse unreadCount(Long userId) {
-        return new UnreadCountResponse(notifications.countUnread(userId));
+    public UnreadCountResponse unreadCount(Long userId, boolean includeBadge) {
+        return new UnreadCountResponse(notifications.countUnread(userId, includeBadge));
     }
 
     @Transactional
@@ -83,6 +85,11 @@ public class NotificationService {
                 insert(null, userId, NotificationType.topic, event.groupId(), missionId, null, now);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createBadge(BadgeAwardedEvent event) {
+        notifications.insertBadge(event.userId(), event.badgeCode(), SeoulTime.now().withNano(0));
+    }
+
     private void insert(Long fromUserId, Long toUserId, NotificationType type, Long groupId,
             Long missionId, Long submissionId, LocalDateTime now) {
         notifications.insert(fromUserId, toUserId, type.name(), groupId, missionId, submissionId, now);
@@ -98,9 +105,12 @@ public class NotificationService {
             case poke -> nickname + "님이 콕 찔렀어요";
             case comment -> nickname + "님이 내 작품에 댓글을 남겼어요";
             case mention -> nickname + "님이 댓글에서 나를 언급했어요";
+            case badge -> BadgeCatalog.byCode(row.getBadgeCode())
+                    .map(definition -> "새 업적을 달성했어요: " + definition.nameKo())
+                    .orElse("새 업적을 달성했어요");
         };
         return new NotificationResponse(row.getId(), row.getType(), row.getGroupId(), row.getGroupName(),
                 fromUser, row.getMissionId(), row.getSubmissionId(), body, row.isRead(),
-                SeoulTime.toOffset(row.getCreatedAt()));
+                SeoulTime.toOffset(row.getCreatedAt()), "badge".equals(row.getType()) ? row.getBadgeCode() : null);
     }
 }

@@ -1,5 +1,6 @@
 package com.sapphire.hawe.notification.service;
 
+import com.sapphire.hawe.badge.domain.BadgeAwardedEvent;
 import com.sapphire.hawe.comment.domain.CommentCreatedEvent;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.storage.FileStorage;
@@ -21,11 +22,11 @@ class NotificationServiceTests {
     NotificationService service = new NotificationService(mapper, storage);
 
     @Test void listBuildsAllBodiesAndClampsPage() {
-        when(mapper.count(8L)).thenReturn(4L);
-        when(mapper.findPage(8L, 0, 1)).thenReturn(List.of(row("topic"), row("poke"),
+        when(mapper.count(8L, false)).thenReturn(4L);
+        when(mapper.findPage(8L, 0, 1, false)).thenReturn(List.of(row("topic"), row("poke"),
                 row("comment"), row("mention")));
         when(storage.publicUrl("profiles/a.png")).thenReturn("/files/profiles/a.png");
-        var page = service.list(8L, -3, 0);
+        var page = service.list(8L, -3, 0, false);
         assertEquals(0, page.page());
         assertEquals(1, page.size());
         assertEquals(4, page.totalPages());
@@ -35,8 +36,8 @@ class NotificationServiceTests {
         assertNull(page.content().getFirst().fromUser());
         assertEquals("/files/profiles/a.png", page.content().get(1).fromUser().profileImageUrl());
         assertEquals("+09:00", page.content().getFirst().createdAt().getOffset().toString());
-        service.list(8L, 2, 999);
-        verify(mapper).findPage(8L, 200, 100);
+        service.list(8L, 2, 999, false);
+        verify(mapper).findPage(8L, 200, 100, false);
     }
 
     @Test void readIsOwnedAndIdempotent() {
@@ -48,8 +49,8 @@ class NotificationServiceTests {
                 assertThrows(BusinessException.class, () -> service.read(8L, 1L)).errorCode());
         service.readAll(8L);
         verify(mapper).markAllRead(8L);
-        when(mapper.countUnread(8L)).thenReturn(3L);
-        assertEquals(3, service.unreadCount(8L).unreadCount());
+        when(mapper.countUnread(8L, false)).thenReturn(3L);
+        assertEquals(3, service.unreadCount(8L, false).unreadCount());
     }
 
     @Test void creationRespectsRecipientsAndMentionPriority() {
@@ -66,6 +67,25 @@ class NotificationServiceTests {
         assertEquals(List.of("poke", "mention", "mention", "comment", "topic", "topic", "topic", "topic"),
                 types.getAllValues());
         assertEquals(List.of(2L, 2L, 3L, 2L, 1L, 2L, 1L, 2L), recipients.getAllValues());
+    }
+
+    @Test void badgeNotificationUsesCatalogNameAndSafeFields() {
+        service.createBadge(new BadgeAwardedEvent(8L, "FIRST_SUBMISSION"));
+        verify(mapper).insertBadge(eq(8L), eq("FIRST_SUBMISSION"), any(LocalDateTime.class));
+        NotificationRow earned = row("badge");
+        earned.setGroupId(null); earned.setGroupName(null); earned.setFromUserId(null);
+        earned.setMissionId(null); earned.setSubmissionId(null); earned.setBadgeCode("FIRST_SUBMISSION");
+        when(mapper.count(8L, true)).thenReturn(1L);
+        when(mapper.findPage(8L, 0, 20, true)).thenReturn(List.of(earned));
+        var response = service.list(8L, 0, 20, true).content().getFirst();
+        assertEquals("새 업적을 달성했어요: 첫 제출", response.body());
+        assertEquals("FIRST_SUBMISSION", response.badgeCode());
+        assertNull(response.groupId());
+        assertNull(response.fromUser());
+        assertNull(response.missionId());
+        assertNull(response.submissionId());
+        earned.setBadgeCode("REMOVED");
+        assertEquals("새 업적을 달성했어요", service.list(8L, 0, 20, true).content().getFirst().body());
     }
 
     private static NotificationRow row(String type) {

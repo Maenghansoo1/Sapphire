@@ -1,5 +1,8 @@
 package com.sapphire.hawe.group.service;
 
+import com.sapphire.hawe.badge.service.BadgeQueryService;
+import com.sapphire.hawe.badge.dto.FeaturedBadgeView;
+import com.sapphire.hawe.group.dao.GroupMemberRow;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
@@ -57,6 +60,7 @@ class GroupServiceTests {
     @Mock FileCleanup fileCleanup;
     @Mock AttemptLimiter inviteLimiter;
     @Mock NotificationMapper notifications;
+    @Mock BadgeQueryService badges;
 
     private GroupService service;
 
@@ -64,7 +68,7 @@ class GroupServiceTests {
     void setUp() {
         service = new GroupService(groupMapper, groupMemberMapper, slotMapper,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, MissionTemplateSelector.MVP_POOL), "https://hawe.app/invite",
-                missionService, events, storage, inviteLimiter, fileCleanup, notifications);
+                missionService, events, storage, inviteLimiter, fileCleanup, notifications, badges);
     }
 
     @Test
@@ -191,6 +195,23 @@ class GroupServiceTests {
                 .thenReturn(List.of());
         service.listMembers(7L, 11L, Integer.MAX_VALUE, 100);
         verify(groupMemberMapper).findMembersByGroupId(eq(11L), eq(214748364700L), eq(100), any());
+        verify(badges).featuredBadges(List.of());
+    }
+
+    @Test
+    void memberPageLoadsFeaturedBadgesOnceAndLeavesUnownedNull() {
+        when(groupMapper.findById(11L)).thenReturn(group(11L, 7L));
+        when(groupMemberMapper.existsByGroupIdAndUserId(11L, 7L)).thenReturn(true);
+        GroupMemberRow first = new GroupMemberRow(); first.setUserId(7L);
+        GroupMemberRow second = new GroupMemberRow(); second.setUserId(8L);
+        when(groupMemberMapper.findMembersByGroupId(eq(11L), eq(0L), eq(20), any()))
+                .thenReturn(List.of(first, second));
+        var view = new FeaturedBadgeView("STREAK_7", "7일 연속", "COMMON", "streak_7");
+        when(badges.featuredBadges(List.of(7L, 8L))).thenReturn(java.util.Map.of(7L, view));
+        var members = service.listMembers(7L, 11L, 0, 20).content();
+        assertEquals(view, members.getFirst().featuredBadge());
+        assertEquals(null, members.get(1).featuredBadge());
+        verify(badges).featuredBadges(List.of(7L, 8L));
     }
 
     @Test

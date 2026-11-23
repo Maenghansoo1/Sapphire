@@ -35,30 +35,41 @@ class NotificationMapperTests {
         Long newest = jdbc.queryForObject("SELECT MAX(id) FROM notifications WHERE to_user_id=? AND group_id=?",
                 Long.class, receiver, group);
 
-        assertEquals(3, notifications.count(receiver));
-        assertEquals(3, notifications.countUnread(receiver));
+        assertEquals(3, notifications.count(receiver, false));
+        assertEquals(3, notifications.countUnread(receiver, false));
         assertEquals(List.of("comment", "poke", "topic"),
-                notifications.findPage(receiver, 0, 20).stream().map(NotificationRow::getType).toList());
-        var first = notifications.findPage(receiver, 0, 1).getFirst();
+                notifications.findPage(receiver, 0, 20, false).stream().map(NotificationRow::getType).toList());
+        var first = notifications.findPage(receiver, 0, 1, false).getFirst();
         assertEquals("그룹닉", first.getNickname());
         assertEquals("profiles/group.png", first.getProfileImageUrl());
         assertEquals(group, first.getGroupId());
         assertEquals(mission, first.getMissionId());
         assertEquals(100L, first.getSubmissionId());
-        assertEquals("topic", notifications.findPage(receiver, 2, 1).getFirst().getType());
-        assertNull(notifications.findPage(receiver, 2, 1).getFirst().getFromUserId());
+        assertEquals("topic", notifications.findPage(receiver, 2, 1, false).getFirst().getType());
+        assertNull(notifications.findPage(receiver, 2, 1, false).getFirst().getFromUserId());
         assertFalse(first.isRead());
+        notifications.insertBadge(receiver, "FIRST_SUBMISSION", now.plusSeconds(1));
+        assertEquals(3, notifications.count(receiver, false));
+        assertEquals(3, notifications.countUnread(receiver, false));
+        assertEquals(4, notifications.count(receiver, true));
+        assertEquals(4, notifications.countUnread(receiver, true));
+        var badge = notifications.findPage(receiver, 0, 1, true).getFirst();
+        assertEquals("badge", badge.getType());
+        assertEquals("FIRST_SUBMISSION", badge.getBadgeCode());
+        assertNull(badge.getGroupId());
+        assertNull(badge.getFromUserId());
+        assertEquals(3, notifications.findPage(receiver, 0, 20, false).size());
         assertEquals(0, notifications.markRead(newest, sender));
         assertFalse(notifications.existsOwned(newest, sender));
         assertEquals(1, notifications.markRead(newest, receiver));
         assertTrue(notifications.existsOwned(newest, receiver));
-        assertEquals(2, notifications.countUnread(receiver));
+        assertEquals(2, notifications.countUnread(receiver, false));
         notifications.markAllRead(receiver);
-        assertEquals(0, notifications.countUnread(receiver));
+        assertEquals(0, notifications.countUnread(receiver, false));
 
         jdbc.update("DELETE FROM group_members WHERE group_id=? AND user_id=?", group, sender);
         sqlSession.clearCache();
-        var fallback = notifications.findPage(receiver, 0, 1).getFirst();
+        var fallback = notifications.findPage(receiver, 0, 1, false).getFirst();
         assertEquals("기본닉", fallback.getNickname());
         assertEquals("profiles/base.png", fallback.getProfileImageUrl());
     }
@@ -74,12 +85,12 @@ class NotificationMapperTests {
         notifications.insert(sender, second, "comment", group, null, 12L, now);
         notifications.insert(sender, first, "poke", otherGroup, null, null, now);
         notifications.deleteByGroupIdAndToUserId(group, first);
-        assertEquals(1, notifications.count(first));
-        assertEquals(1, notifications.count(second));
+        assertEquals(1, notifications.count(first, false));
+        assertEquals(1, notifications.count(second, false));
         notifications.deleteBySubmissionIds(List.of(12L));
-        assertEquals(0, notifications.count(second));
+        assertEquals(0, notifications.count(second, false));
         notifications.deleteByGroupId(otherGroup);
-        assertEquals(0, notifications.count(first));
+        assertEquals(0, notifications.count(first, false));
     }
 
     private Long user(String nickname, String image) {

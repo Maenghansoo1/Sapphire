@@ -3,6 +3,7 @@ package com.sapphire.hawe.badge.domain;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -60,6 +61,7 @@ class BadgeRulesTests {
 		ninePlusEarlyClockSkew.add(beforePublication);
 		assertEquals(beforePublication.submittedAt(),
 				find(BadgeRules.evaluateSubmissionBadges(ninePlusEarlyClockSkew), "EARLY_BIRD_10").earnedAt());
+		assertEquals(10, BadgeRules.earlyBirdCount(ninePlusEarlyClockSkew));
 		var sameTime = new ArrayList<>(count(10));
 		sameTime.replaceAll(s -> new ValidSubmission(s.submissionId(), START, false, START.minusHours(1), s.template()));
 		Collections.reverse(sameTime);
@@ -83,5 +85,64 @@ class BadgeRulesTests {
 		var result = BadgeRules.evaluateSubmissionBadges(submissions);
 		assertEquals(List.of("FIRST_SUBMISSION", "ALL_TEMPLATES"), result.stream().map(EarnedBadge::code).toList());
 		assertEquals(result.size(), Set.copyOf(result.stream().map(EarnedBadge::code).toList()).size());
+	}
+
+	@Test
+	void scheduledRulesUseCatalogOrderAndThresholds() {
+		LocalDate today = LocalDate.of(2026, 4, 1);
+		var days = IntStream.range(0, 30).mapToObj(i ->
+			new DaySubmission(today.minusDays(40).plusDays(i), today.minusDays(40).plusDays(i).atTime(9, 0))).toList();
+		var fitTimes = IntStream.range(0, 5).mapToObj(i -> START.plusDays(4 - i)).toList();
+		var activity = new ScheduledActivity(days, fitTimes, 20,
+				List.of(new GroupBase(1L, today.minusDays(366), today.minusDays(366), false)),
+				List.of(new PerfectMonthRow(1L, 5, 5, 0, 2)), today.minusDays(1), 5);
+		var result = BadgeRules.evaluateScheduledBadges(activity, today);
+		assertEquals(List.of("STREAK_7", "STREAK_30", "PERFECT_MONTH", "PHOTO_PERFECT_5",
+				"CROWD_FAVORITE", "GROUP_100_DAYS", "GROUP_1_YEAR"), result.stream().map(EarnedBadge::code).toList());
+		assertEquals(START.plusDays(4), find(result, "PHOTO_PERFECT_5").earnedAt());
+		assertNull(find(result, "CROWD_FAVORITE").earnedAt());
+		assertEquals(today.atStartOfDay(), find(result, "PERFECT_MONTH").earnedAt());
+	}
+
+	@Test
+	void scheduledMissingConditionsAndMonthGuards() {
+		LocalDate today = LocalDate.of(2026, 4, 1);
+		var fourFits = IntStream.range(0, 4).mapToObj(i -> START.plusDays(i)).toList();
+		var insufficient = new ScheduledActivity(List.of(), fourFits, 19, List.of(),
+				List.of(new PerfectMonthRow(1L, 4, 4, 0, 2)), today.minusDays(1), 5);
+		assertTrue(BadgeRules.evaluateScheduledBadges(insufficient, today).isEmpty());
+		for (PerfectMonthRow row : List.of(new PerfectMonthRow(1L, 5, 4, 0, 2),
+				new PerfectMonthRow(1L, 5, 5, 1, 2), new PerfectMonthRow(1L, 5, 5, 0, 1))) {
+			var activity = new ScheduledActivity(List.of(), List.of(), 0, List.of(), List.of(row),
+					today.minusDays(1), 5);
+			assertNull(find(BadgeRules.evaluateScheduledBadges(activity, today), "PERFECT_MONTH"));
+		}
+		var noMonth = new ScheduledActivity(List.of(), List.of(), 0, List.of(),
+				List.of(new PerfectMonthRow(1L, 5, 5, 0, 2)), null, 5);
+		assertNull(find(BadgeRules.evaluateScheduledBadges(noMonth, today), "PERFECT_MONTH"));
+	}
+
+	private ScheduledActivity withGroup(GroupBase group) {
+		return new ScheduledActivity(List.of(), List.of(), 0, List.of(group), List.of(), null, 5);
+	}
+
+	@Test
+	void groupMilestonesRequireMembershipByMilestoneExceptCoupleStartDate() {
+		LocalDate base = LocalDate.of(2025, 1, 1);
+		LocalDate today = LocalDate.of(2026, 2, 1);
+		var lateJoin = withGroup(new GroupBase(1L, base, LocalDate.of(2026, 1, 2), false));
+		assertNull(find(BadgeRules.evaluateScheduledBadges(lateJoin, today), "GROUP_100_DAYS"));
+		assertNull(find(BadgeRules.evaluateScheduledBadges(lateJoin, today), "GROUP_1_YEAR"));
+		var earlyJoin = withGroup(new GroupBase(1L, base, base.plusDays(1), false));
+		assertNotNull(find(BadgeRules.evaluateScheduledBadges(earlyJoin, today), "GROUP_100_DAYS"));
+		assertNotNull(find(BadgeRules.evaluateScheduledBadges(earlyJoin, today), "GROUP_1_YEAR"));
+		var anniversaryJoin = withGroup(new GroupBase(1L, base, base.plusYears(1), false));
+		assertNull(find(BadgeRules.evaluateScheduledBadges(anniversaryJoin, today), "GROUP_100_DAYS"));
+		assertNotNull(find(BadgeRules.evaluateScheduledBadges(anniversaryJoin, today), "GROUP_1_YEAR"));
+		var hundredthDayJoin = withGroup(new GroupBase(1L, base, base.plusDays(99), false));
+		assertNotNull(find(BadgeRules.evaluateScheduledBadges(hundredthDayJoin, today), "GROUP_100_DAYS"));
+		var coupleStart = withGroup(new GroupBase(1L, base, LocalDate.of(2026, 1, 2), true));
+		assertNotNull(find(BadgeRules.evaluateScheduledBadges(coupleStart, today), "GROUP_100_DAYS"));
+		assertNotNull(find(BadgeRules.evaluateScheduledBadges(coupleStart, today), "GROUP_1_YEAR"));
 	}
 }

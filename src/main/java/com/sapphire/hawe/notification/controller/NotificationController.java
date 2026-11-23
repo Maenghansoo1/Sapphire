@@ -25,13 +25,15 @@ public class NotificationController {
 
     @GetMapping
     public PageResponse<NotificationResponse> list(@AuthenticationPrincipal Long userId,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-        return notifications.list(userId, page, size);
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "false") boolean includeBadge) {
+        return notifications.list(userId, page, size, includeBadge);
     }
 
     @GetMapping("/unread-count")
-    public UnreadCountResponse unreadCount(@AuthenticationPrincipal Long userId) {
-        return notifications.unreadCount(userId);
+    public UnreadCountResponse unreadCount(@AuthenticationPrincipal Long userId,
+            @RequestParam(defaultValue = "false") boolean includeBadge) {
+        return notifications.unreadCount(userId, includeBadge);
     }
 
     @PatchMapping("/{id}/read")

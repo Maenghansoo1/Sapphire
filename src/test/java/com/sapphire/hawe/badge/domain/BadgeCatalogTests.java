@@ -20,6 +20,7 @@ class BadgeCatalogTests {
 		}
 		assertEquals(13, codes.size());
 		assertEquals(6, BadgeCatalog.byCode("ALL_TEMPLATES").orElseThrow().target());
+		assertEquals(BadgeKind.SCHEDULED, BadgeCatalog.byCode("PHOTO_PERFECT_5").orElseThrow().kind());
 		assertTrue(BadgeCatalog.byCode("UNKNOWN").isEmpty());
 		assertTrue(BadgeCatalog.byCode(null).isEmpty());
 		assertThrows(UnsupportedOperationException.class, () -> BadgeCatalog.all().clear());

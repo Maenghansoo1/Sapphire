@@ -80,6 +80,8 @@ class MissionResultControllerTests {
                 groups.leaveGroup(owner, groupId, null);
             }
             jdbc.update("DELETE FROM user_badges WHERE user_id IN (?, ?)", owner, member);
+            jdbc.update("DELETE FROM notifications WHERE to_user_id IN (?, ?) OR from_user_id IN (?, ?)",
+                    owner, member, owner, member);
             jdbc.update("DELETE FROM users WHERE id IN (?, ?)", owner, member);
         }
     }

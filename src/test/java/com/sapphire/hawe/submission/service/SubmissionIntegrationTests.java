@@ -67,6 +67,7 @@ class SubmissionIntegrationTests {
         } finally {
             if (groupId != null) groups.leaveGroup(userId, groupId, null);
             jdbc.update("DELETE FROM user_badges WHERE user_id = ?", userId);
+            jdbc.update("DELETE FROM notifications WHERE to_user_id = ? OR from_user_id = ?", userId, userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
     }
@@ -103,6 +104,8 @@ class SubmissionIntegrationTests {
                 groups.leaveGroup(owner, groupId, null);
             }
             jdbc.update("DELETE FROM user_badges WHERE user_id IN (?, ?)", owner, member);
+            jdbc.update("DELETE FROM notifications WHERE to_user_id IN (?, ?) OR from_user_id IN (?, ?)",
+                    owner, member, owner, member);
             jdbc.update("DELETE FROM users WHERE id IN (?, ?)", owner, member);
         }
     }

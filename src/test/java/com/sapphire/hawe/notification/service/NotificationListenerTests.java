@@ -1,5 +1,6 @@
 package com.sapphire.hawe.notification.service;
 
+import com.sapphire.hawe.badge.domain.BadgeAwardedEvent;
 import com.sapphire.hawe.comment.domain.CommentCreatedEvent;
 import com.sapphire.hawe.mission.domain.MissionsPublishedEvent;
 import com.sapphire.hawe.poke.domain.PokeSentEvent;
@@ -22,5 +23,10 @@ class NotificationListenerTests {
         listener.onMissionsPublished(topic);
         verify(service).createComment(comment);
         verify(service).createTopics(topic);
+        var badge = new BadgeAwardedEvent(3L, "FIRST_SUBMISSION");
+        listener.onBadgeAwarded(badge);
+        verify(service).createBadge(badge);
+        doThrow(new IllegalStateException("database down")).when(service).createBadge(badge);
+        assertDoesNotThrow(() -> listener.onBadgeAwarded(badge));
     }
 }

@@ -1,5 +1,6 @@
 package com.sapphire.hawe.group.service;
 
+import com.sapphire.hawe.badge.service.BadgeQueryService;
 import com.sapphire.hawe.mission.domain.MissionTemplateSelector;
 import com.sapphire.hawe.global.config.MissionProperties;
 import com.sapphire.hawe.global.exception.BusinessException;
@@ -51,13 +52,14 @@ class GroupContractServiceTests {
     @Mock FileCleanup fileCleanup;
     @Mock AttemptLimiter inviteLimiter;
     @Mock NotificationMapper notifications;
+    @Mock BadgeQueryService badges;
     GroupService service;
 
     @BeforeEach
     void setUp() {
         service = new GroupService(groups, members, slots,
                 new MissionProperties(LocalTime.of(9, 0), LocalTime.of(23, 0), 5, MissionTemplateSelector.MVP_POOL), "https://hawe.app/invite",
-                missionService, events, storage, inviteLimiter, fileCleanup, notifications);
+                missionService, events, storage, inviteLimiter, fileCleanup, notifications, badges);
     }
 
     @Test

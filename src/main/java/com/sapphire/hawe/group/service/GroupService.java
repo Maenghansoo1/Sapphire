@@ -1,5 +1,6 @@
 package com.sapphire.hawe.group.service;
 
+import com.sapphire.hawe.badge.service.BadgeQueryService;
 import com.sapphire.hawe.global.dto.PageResponse;
 import com.sapphire.hawe.global.exception.BusinessException;
 import com.sapphire.hawe.global.exception.CommonErrorCode;
@@ -69,12 +70,14 @@ public class GroupService {
     private final AttemptLimiter inviteLimiter;
     private final FileCleanup fileCleanup;
     private final NotificationMapper notifications;
+    private final BadgeQueryService badges;
 
     public GroupService(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper,
             GroupMissionSlotMapper slotMapper, MissionProperties missionProperties,
             @Value("${hawe.invite.base-url:https://hawe.app/invite}") String inviteBaseUrl,
             MissionService missionService, ApplicationEventPublisher events, FileStorage storage,
-            AttemptLimiter inviteLimiter, FileCleanup fileCleanup, NotificationMapper notifications) {
+            AttemptLimiter inviteLimiter, FileCleanup fileCleanup, NotificationMapper notifications,
+            BadgeQueryService badges) {
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.slotMapper = slotMapper;
@@ -85,6 +88,7 @@ public class GroupService {
         this.inviteLimiter = inviteLimiter;
         this.fileCleanup = fileCleanup;
         this.notifications = notifications;
+        this.badges = badges;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
@@ -209,11 +213,14 @@ public class GroupService {
                 safeSize, SeoulTime.today().withDayOfMonth(1));
         long total = groupMemberMapper.countByGroupId(groupId);
 
+        Map<Long, com.sapphire.hawe.badge.dto.FeaturedBadgeView> featured = badges.featuredBadges(
+                rows.stream().map(GroupMemberRow::getUserId).toList());
+
         List<GroupMemberResponse> content = rows.stream()
                 .map(row -> new GroupMemberResponse(row.getUserId(), row.getNickname(), row.getCharacterKey(),
                         row.getProfileImageUrl() == null ? null : storage.publicUrl(row.getProfileImageUrl()),
                         row.isGroupProfile(), row.getRole(),
-                        row.getSubmissionCountThisMonth(), row.isStampedToday()))
+                        row.getSubmissionCountThisMonth(), row.isStampedToday(), featured.get(row.getUserId())))
                 .toList();
         return PageResponse.of(content, safePage, safeSize, total);
     }
