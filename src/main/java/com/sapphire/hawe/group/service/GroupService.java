@@ -342,6 +342,8 @@ public class GroupService {
         groupMapper.deleteAiReviewsByGroupId(groupId);
         groupMapper.deleteSubmissionsByGroupId(groupId);
         groupMapper.deletePokesByGroupId(groupId);
+        groupMapper.deleteBanditAppliedByGroupId(groupId);
+        groupMapper.deleteBanditStatsByGroupId(groupId);
         groupMapper.deleteMissionsByGroupId(groupId);
         slotMapper.deleteByGroupId(groupId);
         groupMapper.deleteInsightsByGroupId(groupId);

@@ -226,6 +226,9 @@ erDiagram
 - `submission_ai_reviews` — 사진 주제 적합도 비동기 결과(`kind` 기본 `TOPIC_FIT`, `status` 최대 10자, `attempts`, `model_version`). `(submission_id, kind)` UNIQUE, `submissions.id` FK. `fit_score`는 DB에만 저장하고 API에는 `badge`·`comment`(배지·칭찬 문구, 100자)만 보낸다. 그룹 삭제·탈퇴 시 제출물보다 먼저 삭제한다 (`VISION_TOPIC_FIT.md`).
 - `USERS.is_ai` (V4) — `TINYINT(1) NOT NULL DEFAULT 0`. AI 마스코트 계정 표시. V4가 마스코트 `별이`(`byeol@hawe.invalid`, 비밀번호 해시 `!`라 로그인 불가, `is_ai = 1`) 한 명을 시드한다.
 - `COMMENTS.ai_detail` (V4) — `LONGTEXT`(JSON 검사), NULL 허용. 마스코트 댓글의 부가 정보(점수·추측 후보 등)이며 일반 댓글은 NULL.
+- `template_bandit_stats` (V6, TODO_2/D2) — 미션 틀(팔)별 Beta 통계 `alpha_real`·`beta_real`(실측), `alpha_syn`·`beta_syn`(합성 prior, 지금은 0), `n_missions`. `(scope, group_id, template)` UNIQUE. 전역 행은 `scope='GLOBAL'`, `group_id=0`(UNIQUE 가 NULL 을 여러 개 허용해서 0 센티넬) — 그룹을 알아볼 값 없는 합계라 그룹을 지워도 남긴다. 그룹 행(`scope='GROUP'`)은 FK 없이 그룹 삭제 시 서비스가 먼저 지운다.
+- `template_bandit_applied` (V6) — 보상을 이미 반영한 미션(`mission_id` PK, `missions.id` FK). 같은 미션을 두 번 반영하지 않게 한다. 그룹 삭제 시 미션보다 먼저 지운다.
+- `MISSIONS.template_policy`·`selection_prob` (V6, NULL 가능) — 틀을 고른 정책(`BANDIT`/`RANDOM`)과 그때의 선택 확률. 선택기 연결(D4)이 채운다.
 - `SUBMISSIONS.media_url` — 이미지 파일 위치(음성은 2026-10-12 제거). 개발 환경은 로컬 경로 저장, 운영 환경은 S3 URL로 전환 예정. 파일이 없는 틀(글)에서는 NULL
 - `COMMENTS.image_url` — 첨부 이미지의 저장 키. API에는 공개 파일 URL을 내려준다. 이미지만 있는 댓글은 `content = ''`로 저장한다.
 - `REACTIONS` — `(submission_id, user_id, sticker_type)` 유니크 키로 같은 멤버의 같은 스티커 중복을 막는다. 서로 다른 스티커는 각각 누를 수 있다.
@@ -244,7 +247,7 @@ ERD와 컬럼 변경 상세는 이 문서의 위 ERD와 아래 "스키마 변경
 
 ### 미션/제출/그룹 스케줄 스키마 상세 (현재 V1에 통합됨)
 
-근거: `docs/BACKEND/MISSIONS_API.md` §2 (그룹 설정 연동), §9. 아래 컬럼·테이블은 모두 **`V1__initial_schema.sql`에 이미 합쳐져 있다** (개발 DB를 재초기화하는 방식으로 통합). 표의 "추가/삭제/이름 변경"은 설계 당시의 변경 이력이다. `V2`는 캐릭터 시드, `V3`는 알림 참조 컬럼, `V4`는 AI 마스코트다.
+근거: `docs/BACKEND/MISSIONS_API.md` §2 (그룹 설정 연동), §9. 아래 컬럼·테이블은 모두 **`V1__initial_schema.sql`에 이미 합쳐져 있다** (개발 DB를 재초기화하는 방식으로 통합). 표의 "추가/삭제/이름 변경"은 설계 당시의 변경 이력이다. `V2`는 캐릭터 시드, `V3`는 알림 참조 컬럼, `V4`는 AI 마스코트, `V5`는 배지(`user_badges`), `V6`는 미션 틀 선택 밴딧(`template_bandit_stats`, `template_bandit_applied`, `missions.template_policy`·`selection_prob`)이다.
 
 **`groups`**
 

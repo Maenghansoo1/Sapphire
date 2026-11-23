@@ -103,6 +103,14 @@ public interface GroupMapper {
     @Delete("DELETE s FROM submissions s JOIN missions m ON m.id = s.mission_id WHERE m.group_id = #{groupId}")
     void deleteSubmissionsByGroupId(@Param("groupId") Long groupId);
 
+    /** 밴딧 반영 기록(TODO_2/D2). 미션을 참조하므로 미션보다 먼저 지운다. */
+    @Delete("DELETE a FROM template_bandit_applied a JOIN missions m ON m.id = a.mission_id WHERE m.group_id = #{groupId}")
+    void deleteBanditAppliedByGroupId(@Param("groupId") Long groupId);
+
+    /** 그 그룹의 밴딧 통계. 전역 통계(그룹을 알아볼 수 없는 합계)는 남긴다. */
+    @Delete("DELETE FROM template_bandit_stats WHERE scope = 'GROUP' AND group_id = #{groupId}")
+    void deleteBanditStatsByGroupId(@Param("groupId") Long groupId);
+
     @Delete("DELETE FROM missions WHERE group_id = #{groupId}")
     void deleteMissionsByGroupId(@Param("groupId") Long groupId);
 
