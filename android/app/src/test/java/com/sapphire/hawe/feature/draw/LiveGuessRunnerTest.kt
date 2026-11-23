@@ -10,53 +10,53 @@ class LiveGuessRunnerTest {
     private fun guesses(vararg pairs: Pair<String, Float>) = pairs.map { (ko, p) -> AiGuess(categories.first { it.ko == ko }, p) }
 
     @Test fun emptyAndThinking() {
-        val empty = liveGuessCopy(LiveGuessState(), judged = true)
-        assertEquals("그리면 AI가 맞혀 볼게요", empty.title)
-        assertNull(empty.detail)
+        val empty = liveGuessCopy(LiveGuessState())
+        assertEquals("그리면 별이가 맞혀 볼게요", empty.title)
+        assertEquals("그리는 동안 계속 추측해요", empty.detail)
+        assertTrue(empty.candidates.isEmpty())
         assertNull(empty.badge)
         assertFalse(empty.celebrate)
-        assertEquals("AI가 지켜보는 중…", liveGuessCopy(LiveGuessState(LiveGuessStatus.Thinking), judged = true).title)
+        assertEquals("별이가 지켜보는 중…", liveGuessCopy(LiveGuessState(LiveGuessStatus.Thinking)).title)
     }
 
     @Test fun unsureShowsCandidatesWithoutBlame() {
-        val copy = liveGuessCopy(LiveGuessState(LiveGuessStatus.Unsure, guesses("고양이" to 0.31f, "강아지" to 0.24f, "토끼" to 0.1f)),
-            judged = true)
+        val copy = liveGuessCopy(LiveGuessState(LiveGuessStatus.Unsure, guesses("고양이" to 0.31f, "강아지" to 0.24f, "토끼" to 0.1f)))
         assertEquals("음… 아직 모르겠어요", copy.title)
-        assertEquals("고양이 31% · 강아지 24%", copy.detail)  // 상위 2개만
+        assertEquals(listOf("고양이", "강아지"), copy.candidates.map { it.category.ko })  // 상위 2개만 칩으로
+        assertEquals("음… 아직 모르겠어요, 고양이 31%, 강아지 24%", copy.description)
     }
 
-    @Test fun guessedAsksWhenJudgedAndStatesWhenNot() {
+    @Test fun guessedSaysWhatByeolThinks() {
         val state = LiveGuessState(LiveGuessStatus.Guessed, guesses("강아지" to 0.7f, "고양이" to 0.2f))
-        assertEquals("‘강아지’인가요?", liveGuessCopy(state, judged = true).title)
-        // 주제를 범주로 모르거나 [대상] 미션: 판정 없이 추측만, 받침에 맞춘 조사
-        assertEquals("AI는 ‘강아지’라고 생각해요", liveGuessCopy(state, judged = false).title)
+        assertEquals("별이는 ‘강아지’라고 생각해요", liveGuessCopy(state).title)
+        // 받침에 맞춘 조사
         val moon = LiveGuessState(LiveGuessStatus.Guessed, guesses("달" to 0.8f))
-        assertEquals("AI는 ‘달’이라고 생각해요", liveGuessCopy(moon, judged = false).title)
-        assertEquals("강아지 70% · 고양이 20%", liveGuessCopy(state, judged = true).detail)
+        assertEquals("별이는 ‘달’이라고 생각해요", liveGuessCopy(moon).title)
+        assertEquals(listOf("강아지", "고양이"), liveGuessCopy(state).candidates.map { it.category.ko })
     }
 
     @Test fun correctCelebratesWithElapsedTime() {
         val state = LiveGuessState(LiveGuessStatus.Correct, guesses("고양이" to 0.8f), guessed = true,
             guessedAtMillis = 5000, elapsedMillis = 3400)
-        val copy = liveGuessCopy(state, judged = true)
-        assertEquals("AI가 맞혔어요! 🎉", copy.title)
+        val copy = liveGuessCopy(state)
+        assertEquals("별이가 맞혔어요!", copy.title)
         assertEquals("‘고양이’ · 3초 만에", copy.detail)
+        assertTrue(copy.candidates.isEmpty())
         assertNull(copy.badge)
         assertTrue(copy.celebrate)
-        assertEquals("AI가 맞혔어요! 🎉, ‘고양이’ · 3초 만에", copy.description)
-        assertEquals("‘고양이’", liveGuessCopy(state.copy(elapsedMillis = null), judged = true).detail)
+        assertEquals("별이가 맞혔어요!, ‘고양이’ · 3초 만에", copy.description)
+        assertEquals("‘고양이’", liveGuessCopy(state.copy(elapsedMillis = null)).detail)
     }
 
     @Test fun badgeKeepsEarlierHitAfterDrawingChanges() {
         val changed = LiveGuessState(LiveGuessStatus.Guessed, guesses("강아지" to 0.7f), guessed = true,
             guessedAtMillis = 5000, elapsedMillis = 2600)
-        val copy = liveGuessCopy(changed, judged = true)
+        val copy = liveGuessCopy(changed)
         assertEquals("3초 만에 맞혔어요", copy.badge)
         assertFalse(copy.celebrate)
         // 지우개로 다 지워도 남아요
-        assertEquals("3초 만에 맞혔어요", liveGuessCopy(changed.copy(status = LiveGuessStatus.TooEmpty, guesses = emptyList()),
-            judged = true).badge)
-        assertEquals("맞혔어요", liveGuessCopy(changed.copy(elapsedMillis = null), judged = true).badge)
+        assertEquals("3초 만에 맞혔어요", liveGuessCopy(changed.copy(status = LiveGuessStatus.TooEmpty, guesses = emptyList())).badge)
+        assertEquals("맞혔어요", liveGuessCopy(changed.copy(elapsedMillis = null)).badge)
     }
 
     @Test fun elapsedRoundsToWholeSecondsAtLeastOne() {
@@ -74,8 +74,8 @@ class LiveGuessRunnerTest {
         val probabilities = FloatArray(categories.size).also { it[categories.first { c -> c.ko == "고양이" }.id] = 0.9f }
         tracker.onStrokeStart(0)
         tracker.onInference(probabilities, categories, 1000)
-        assertEquals("‘고양이’인가요?", liveGuessCopy(tracker.state, judged = true).title)
+        assertEquals("별이는 ‘고양이’라고 생각해요", liveGuessCopy(tracker.state).title)
         tracker.onInference(probabilities, categories, 2000)
-        assertEquals("‘고양이’ · 2초 만에", liveGuessCopy(tracker.state, judged = true).detail)
+        assertEquals("‘고양이’ · 2초 만에", liveGuessCopy(tracker.state).detail)
     }
 }

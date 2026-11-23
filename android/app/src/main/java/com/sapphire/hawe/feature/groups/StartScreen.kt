@@ -70,7 +70,7 @@ private fun MissionPreview() {
                 modifier = Modifier.offset(x = (-55).dp, y = 10.dp).rotate(7f))
             MissionPreviewCard(MissionType.PHOTO, front = false,
                 modifier = Modifier.offset(x = 53.dp, y = 4.dp).rotate(-7f))
-            MissionPreviewCard(MissionType.DRAW, front = true, prompt = "30초 안에 서로의\n얼굴을 그려보세요",
+            MissionPreviewCard(MissionType.DRAW, front = true, prompt = "지금 기분을 그림으로\n표현해 보세요",
                 modifier = Modifier.offset(y = (-18).dp).rotate(1.5f))
         }
         Text("매일 이런 미션 중 하나가 랜덤으로 도착해요",

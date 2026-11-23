@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -22,7 +23,7 @@ import kotlinx.coroutines.withContext
 class LiveInk(val strokes: List<DrawStroke>, val widthDp: Float, val heightDp: Float)
 
 /**
- * 그리는 중 계속 AI가 추측하게 해요(TODO_2/A2). 획이 끝나면 바로, 그리는 도중에는 0.5초에 한 번만 추론하고([InferenceGate]),
+ * 그리는 중 계속 별이(AI)가 추측하게 해요(TODO_2/A2). 획이 끝나면 바로, 그리는 도중에는 0.5초에 한 번만 추론하고([InferenceGate]),
  * 결과를 [LiveGuessTracker] 로 안정화해서 [state] 에 둬요. 메인 스레드에서만 불러 주세요.
  * 그림·추론 결과는 메모리에만 있고 저장·전송하지 않아요. 올릴 때는 지금처럼 [guessForUpload] 를 따로 불러요.
  */
@@ -33,9 +34,6 @@ class LiveGuessRunner internal constructor(
     private val now: () -> Long,
 ) {
     var state by mutableStateOf(LiveGuessState())
-        private set
-    /** 주제를 범주로 알아서 맞힘 판정을 하는지. 모르면(`[대상]` 미션 등) 추측만 보여 줘요. */
-    var judged by mutableStateOf(false)
         private set
     /** 모델을 불러오지 못하면 false — 말풍선을 숨겨요. */
     var available by mutableStateOf(true)
@@ -82,7 +80,6 @@ class LiveGuessRunner internal constructor(
                 startedAtMillis?.let(created::onStrokeStart)
                 startedAtMillis = null
                 tracker = created
-                judged = subjects.isNotEmpty()
             }
         }
         val ink = latest?.invoke() ?: return
@@ -90,6 +87,14 @@ class LiveGuessRunner internal constructor(
         state = if (input == null) active.onEmpty()
             else active.onInference(classifier.classify(input), classifier.categories, now())
     }
+}
+
+/** 모델을 쓸 수 있을 때만 true. 불러오지 못하면 말풍선을 숨겨요. */
+@Composable
+fun rememberAiGuessAvailable(): Boolean {
+    val context = LocalContext.current.applicationContext
+    val available by produceState(false, context) { value = QuickDrawClassifier.get(context) != null }
+    return available
 }
 
 /** 그림 미션 화면용. 주제(틀·문장·명세)가 같으면 같은 인스턴스를 돌려줘요. 화면을 떠나면 진행 중 추론도 취소돼요. */
@@ -103,33 +108,33 @@ fun rememberLiveGuess(template: String, topic: String, spec: MissionSpec): LiveG
 }
 
 /**
- * 말풍선 문구. [badge] 는 이미 맞힌 뒤 그림이 바뀌었을 때 남기는 표시예요.
- * 그린 사람을 탓하지 않는 말투로(못 알아봐도 AI가 헷갈리는 걸로).
+ * 말풍선 문구. 앱 안에서 AI 는 '별이'예요(이모지는 쓰지 않아요).
+ * [candidates] 는 말풍선 아래 칩으로 보여 줄 상위 후보(최대 2개), [badge] 는 이미 맞힌 뒤 그림이 바뀌었을 때 남기는 표시예요.
+ * 그린 사람을 탓하지 않는 말투로(못 알아봐도 별이가 헷갈리는 걸로).
  */
-data class LiveGuessCopy(val title: String, val detail: String?, val badge: String?, val celebrate: Boolean) {
+data class LiveGuessCopy(val title: String, val detail: String?, val candidates: List<AiGuess>, val badge: String?,
+    val celebrate: Boolean) {
     /** 화면 낭독용 설명 */
-    val description: String get() = listOfNotNull(title, detail, badge).joinToString(", ")
+    val description: String get() = listOfNotNull(title, detail,
+        candidates.joinToString(", ") { "${it.category.ko} ${percentText(it.probability)}" }.ifEmpty { null }, badge)
+        .joinToString(", ")
 }
 
-fun liveGuessCopy(state: LiveGuessState, judged: Boolean): LiveGuessCopy {
+fun liveGuessCopy(state: LiveGuessState): LiveGuessCopy {
     val top = state.guesses.firstOrNull()?.category?.ko
-    val candidates = state.guesses.take(2).joinToString(" · ") { "${it.category.ko} ${percentText(it.probability)}" }
-        .ifEmpty { null }
+    val candidates = state.guesses.take(2)
     val badge = if (state.guessed && state.status != LiveGuessStatus.Correct)
         state.elapsedMillis?.let { "${elapsedSeconds(it)}초 만에 맞혔어요" } ?: "맞혔어요" else null
     return when (state.status) {
-        LiveGuessStatus.TooEmpty -> LiveGuessCopy("그리면 AI가 맞혀 볼게요", null, badge, false)
-        LiveGuessStatus.Thinking -> LiveGuessCopy("AI가 지켜보는 중…", null, badge, false)
-        LiveGuessStatus.Unsure -> LiveGuessCopy("음… 아직 모르겠어요", candidates, badge, false)
+        LiveGuessStatus.TooEmpty -> LiveGuessCopy("그리면 별이가 맞혀 볼게요", "그리는 동안 계속 추측해요", emptyList(), badge, false)
+        LiveGuessStatus.Thinking -> LiveGuessCopy("별이가 지켜보는 중…", null, emptyList(), badge, false)
+        LiveGuessStatus.Unsure -> LiveGuessCopy("음… 아직 모르겠어요", null, candidates, badge, false)
         LiveGuessStatus.Guessed -> LiveGuessCopy(
-            when {
-                top == null -> "음… 아직 모르겠어요"
-                judged -> "‘$top’인가요?"
-                else -> "AI는 ‘$top’${josa(top, "이라고", "라고")} 생각해요"
-            }, candidates, badge, false)
-        LiveGuessStatus.Correct -> LiveGuessCopy("AI가 맞혔어요! 🎉",
+            if (top == null) "음… 아직 모르겠어요" else "별이는 ‘$top’${josa(top, "이라고", "라고")} 생각해요",
+            null, candidates, badge, false)
+        LiveGuessStatus.Correct -> LiveGuessCopy("별이가 맞혔어요!",
             listOfNotNull(top?.let { "‘$it’" }, state.elapsedMillis?.let { "${elapsedSeconds(it)}초 만에" })
-                .joinToString(" · ").ifEmpty { null }, null, true)
+                .joinToString(" · ").ifEmpty { null }, emptyList(), null, true)
     }
 }
 

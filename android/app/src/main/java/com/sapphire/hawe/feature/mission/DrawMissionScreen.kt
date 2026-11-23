@@ -35,19 +35,13 @@ import com.sapphire.hawe.designsystem.assets.HIcon
 import com.sapphire.hawe.designsystem.assets.HIconView
 import com.sapphire.hawe.designsystem.components.HButton
 import com.sapphire.hawe.designsystem.components.HChip
-import com.sapphire.hawe.designsystem.components.HToastHost
-import com.sapphire.hawe.designsystem.components.rememberHToastState
 import com.sapphire.hawe.designsystem.layout.ctaBottomPadding
 import com.sapphire.hawe.designsystem.tokens.HColors
 import com.sapphire.hawe.designsystem.tokens.HRadius
 import com.sapphire.hawe.designsystem.tokens.HType
-import com.sapphire.hawe.feature.draw.AiGuessDialog
-import com.sapphire.hawe.feature.draw.AiShowButton
-import com.sapphire.hawe.feature.draw.DrawSubjectMatcher
 import com.sapphire.hawe.feature.draw.LiveGuessBubble
 import com.sapphire.hawe.feature.draw.LiveInk
 import com.sapphire.hawe.feature.draw.rememberAiGuessAvailable
-import com.sapphire.hawe.feature.draw.rememberAiGuessRunner
 import com.sapphire.hawe.feature.draw.rememberLiveGuess
 import com.sapphire.hawe.feature.draw.strokeInkImage
 import com.sapphire.hawe.feature.draw.guessForUpload
@@ -55,22 +49,11 @@ import com.sapphire.hawe.core.model.AiGuessEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
 
 @Composable
 fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClose: () -> Unit,
     onSubmit: suspend (ByteArray, List<AiGuessEntry>) -> Boolean) {
     val model = remember { DrawingModel() }
-    val timer = remember(spec.seconds) { spec.seconds?.let { SketchTimer(it) } }
-    val toast = rememberHToastState()
-    var remaining by remember(timer) { mutableIntStateOf(timer?.totalSeconds ?: 0) }
-    LaunchedEffect(timer) {
-        while (timer != null) {
-            remaining = timer.remainingSeconds()
-            if (timer.expired) { toast.show("시간이 끝났어요"); break }
-            delay(200)
-        }
-    }
     var version by remember { mutableIntStateOf(0) }
     val drawVersion = version
     val hasDraft = drawVersion.let { !model.isEmpty }
@@ -85,9 +68,8 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val aiAvailable = rememberAiGuessAvailable()
-    val aiGuess = rememberAiGuessRunner()
     val liveGuess = rememberLiveGuess(template, topic, spec)
-    // 그림이 바뀔 때마다 그리는 중 AI 추측을 요청해요(간격 제한은 LiveGuessRunner 가). 그림은 추론을 시작할 때 떠요
+    // 그림이 바뀔 때마다 그리는 중 별이 추측을 요청해요(간격 제한은 LiveGuessRunner 가). 그림은 추론을 시작할 때 떠요
     fun requestLiveGuess(strokeEnded: Boolean) {
         liveGuess.request(strokeEnded, hasInk = !model.isEmpty) {
             canvasSize.takeIf { it.width > 0 && it.height > 0 }?.let {
@@ -100,8 +82,6 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
     Column(Modifier.fillMaxSize().background(HColors.bg).padding(horizontal = 20.dp)) {
         MissionHeader(hasDraft, onClose, trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (timer != null) Text("0:${remaining.toString().padStart(2, '0')}",
-                    style = HType.caption13, color = HColors.textSecondary)
                 DrawHistoryButton(HIcon.UNDO, "되돌리기", canUndo) { model.undo(); version++; requestLiveGuess(strokeEnded = true) }
                 DrawHistoryButton(HIcon.REDO, "다시 실행", canRedo) { model.redo(); version++; requestLiveGuess(strokeEnded = true) }
             }
@@ -111,8 +91,8 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
         templateGuideText(template, spec)?.let { Text(it, style = HType.caption13, color = HColors.textSecondary) }
         Spacer(Modifier.height(16.dp))
         if (aiAvailable && liveGuess.available) {
-            LiveGuessBubble(liveGuess.state, liveGuess.judged)
-            Spacer(Modifier.height(8.dp))
+            LiveGuessBubble(liveGuess.state)
+            Spacer(Modifier.height(10.dp))
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val canvasHeight = minOf(maxHeight, 400.dp)
@@ -121,21 +101,17 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
                 .border(1.dp, HColors.line, RoundedCornerShape(HRadius.card))) {
                 Canvas(Modifier.fillMaxSize().graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
                     .onSizeChanged { canvasSize = it }
-                    .pointerInput(model, density, timer) {
+                    .pointerInput(model, density) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
-                            if (timer?.expired == true) return@awaitEachGesture
-                            timer?.start()
                             if (model.tool == DrawTool.PEN) liveGuess.onStrokeStart()
                             model.begin(StrokePoint(down.position.x / density, down.position.y / density))
                             version++
                             down.consume()
                             drag(down.id) { change ->
-                                if (timer?.expired != true) {
-                                    model.append(StrokePoint(change.position.x / density, change.position.y / density))
-                                    version++
-                                    requestLiveGuess(strokeEnded = false)
-                                }
+                                model.append(StrokePoint(change.position.x / density, change.position.y / density))
+                                version++
+                                requestLiveGuess(strokeEnded = false)
                                 change.consume()
                             }
                             model.end()
@@ -180,15 +156,8 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
             }
         }
         Spacer(Modifier.height(16.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // 미리보기는 계속 로컬에서 실행해요.
-            if (aiAvailable) AiShowButton(enabled = hasDraft && canvasSize.width > 0) {
-                val strokes = model.strokes
-                val width = canvasSize.width / density
-                val height = canvasSize.height / density
-                aiGuess.guess(mine = true, load = { withContext(Dispatchers.Default) { strokeInkImage(strokes, width, height) } },
-                    subjectOf = { DrawSubjectMatcher.subjects(template, topic, spec, it) })
-            }
+        // 별이 추측은 위 말풍선이 그리는 내내 보여 줘서 따로 보여주기 버튼이 없어요.
+        Row(Modifier.fillMaxWidth()) {
             HButton(if (submitted) "올리는 중..." else "올리기", Modifier.weight(1f),
                 enabled = hasDraft && !submitted && canvasSize.width > 0) {
                 if (submitted) return@HButton
@@ -208,8 +177,6 @@ fun DrawMissionScreen(topic: String, template: String, spec: MissionSpec, onClos
         }
         Spacer(Modifier.height(bottom))
     }
-    HToastHost(toast)
-    AiGuessDialog(aiGuess)
     }
 }
 

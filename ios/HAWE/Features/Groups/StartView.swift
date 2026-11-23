@@ -59,7 +59,7 @@ struct StartView: View {
                 MissionPreviewCard(type: .photo, isFront: false)
                     .rotationEffect(.degrees(-7))
                     .offset(x: 53, y: 4)
-                MissionPreviewCard(type: .draw, isFront: true, prompt: "30초 안에 서로의\n얼굴을 그려보세요")
+                MissionPreviewCard(type: .draw, isFront: true, prompt: "지금 기분을 그림으로\n표현해 보세요")
                     .rotationEffect(.degrees(1.5))
                     .offset(y: -18)
             }
